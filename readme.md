@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/wiviocode/cutline/main/docs/cutline-mark.png" width="40" alt="">
+<img src="assets/cutline-mark-256.png" width="40" alt="">
 
 **cut·line** · *noun* · the line of type beneath a photograph.<br>
 A picture, and the rule under it — which is the mark.
