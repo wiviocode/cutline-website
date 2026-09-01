@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  html, body { height: 100%; } body { margin: 0; background: #1b1e23; }
+  a { color: #e8b00a; } a:hover { color: #f0c235; }
+</style>
+</helmet>
+<div data-screen-label="Setup screen" style="width: 100%; height: 100%; min-height: 640px; display: flex; flex-direction: column; background: #1b1e23; color: #e9ecf0; font: 12.5px/1.5 -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; -webkit-font-smoothing: antialiased; user-select: none; cursor: default; overflow: hidden;">
+  <nav style="display: flex; align-items: center; gap: 8px; padding: 0 10px 0 16px; background: #24282f; border-bottom: 1px solid #31363f; flex: 0 0 45px; height: 45px; box-sizing: border-box;">
+    <span style="display: flex; gap: 8px; margin-right: 12px;">
+      <i style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; display: block;"></i>
+      <i style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e; display: block;"></i>
+      <i style="width: 12px; height: 12px; border-radius: 50%; background: #28c840; display: block;"></i>
+    </span>
+    <svg viewBox="0 0 128 128" aria-hidden="true" style="width: 19px; height: 19px; border-radius: 5px; display: block; flex: 0 0 auto;">
+      <rect width="128" height="128" rx="29" fill="#15181d"></rect>
+      <rect x="26" y="26" width="76" height="50" rx="4" fill="#8d97a5"></rect>
+      <rect x="26" y="88" width="76" height="9" rx="3" fill="#e8b00a"></rect>
+      <rect x="26" y="103" width="47" height="9" rx="3" fill="#4a525e"></rect>
+    </svg>
+    <span style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em;">Cutline</span>
+    <span style="margin-left: auto;"></span>
+    <button style="height: 28px; flex: 0 0 auto; border: 1px solid #454d59; border-radius: 7px; background: #313842; color: #dfe4ea; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 11px 0 9px; min-width: 96px; font: 500 12.5px/1 -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; cursor: default;" style-hover="background: #3d4652; border-color: #e8b00a; color: #fff;">
+      <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 15px; height: 15px; display: block; fill: currentColor;">
+        <path fill-rule="evenodd" d="M12 4.6a7.4 7.4 0 1 0 0 14.8 7.4 7.4 0 0 0 0-14.8zm0 10.6a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4z"></path>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(45 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(90 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(135 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(180 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(225 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(270 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(315 12 12)"></rect>
+      </svg><span>Settings</span>
+    </button>
+  </nav>
+  <main style="flex: 1; min-height: 0; overflow-y: auto;">
+    <div style="max-width: 960px; margin: 0 auto; min-height: 100%; padding: 30px; display: flex; flex-direction: column; justify-content: center; gap: 22px; box-sizing: border-box;">
+      <div style="display: grid; grid-template-columns: 20px 1fr; gap: 14px; align-items: start;">
+        <span style="font-size: 12px; color: #e8b00a; padding-top: 2px; text-align: center;">✓</span>
+        <div style="display: flex; flex-direction: column; gap: 9px; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 9px;"><b style="font-size: 13px; font-weight: 600;">Photographs</b><span style="font-size: 11.5px; color: #8b939f;">read off the card</span></div>
+          <div style="background: #2a2f37; border: 1px solid #31363f; border-radius: 9px; padding: 11px 13px; display: flex; align-items: center; gap: 13px;">
+            <span style="display: flex; gap: 4px; flex: 0 0 auto;">
+              <i style="width: 40px; height: 27px; border-radius: 3px; display: block; background: linear-gradient(160deg, #5c6878, #333a44);"></i>
+              <i style="width: 40px; height: 27px; border-radius: 3px; display: block; background: linear-gradient(160deg, #6b5f52, #3a3630);"></i>
+              <i style="width: 40px; height: 27px; border-radius: 3px; display: block; background: linear-gradient(160deg, #4e6070, #2e3843);"></i>
+              <i style="width: 40px; height: 27px; border-radius: 3px; display: block; background: linear-gradient(160deg, #5c6878, #333a44);"></i>
+            </span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <b style="font-size: 13px;">2024-09-14 NEB vs OSU — 128 photographs</b>
+              <span style="font-family: 'SF Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; color: #8b939f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">/Volumes/CARD_A/DCIM</span>
+            </span>
+            <span style="margin-left: auto;"></span>
+            <button style="border: 1px solid #31363f; border-radius: 6px; background: #2a2f37; color: #e9ecf0; font-size: 12px; line-height: 1.2; padding: 4px 10px; cursor: default; font-family: inherit;" style-hover="background: #333944;">Change</button>
+          </div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 20px 1fr; gap: 14px; align-items: start;">
+        <span style="font-size: 12px; color: #e8b00a; padding-top: 2px; text-align: center;">✓</span>
+        <div style="display: flex; flex-direction: column; gap: 9px; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 9px;"><b style="font-size: 13px; font-weight: 600;">Matchup</b><span style="font-size: 11.5px; color: #8b939f;">rosters and kit colours come with the teams</span></div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span style="background: #2a2f37; color: #e9ecf0; border: 1px solid #31363f; border-radius: 6px; padding: 5px 9px; font-size: 12px;">College ▾</span>
+            <span style="background: #2a2f37; color: #e9ecf0; border: 1px solid #31363f; border-radius: 6px; padding: 5px 9px; font-size: 12px;">Football ▾</span>
+            <span style="background: #2a2f37; color: #e9ecf0; border: 1px solid #31363f; border-radius: 6px; padding: 5px 9px; font-size: 12px;">Match by roster ▾</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 46px 1fr; align-items: stretch;">
+            <div style="background: #2a2f37; border: 1px solid #31363f; border-radius: 9px; padding: 12px 13px; display: flex; align-items: center; gap: 12px; min-width: 0;" style-hover="border-color: #e8b00a;">
+              <span style="width: 40px; height: 40px; border-radius: 9px; flex: 0 0 auto; display: grid; place-items: center; font: 700 12px/1 'SF Mono', ui-monospace, monospace; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.14); background: #b3202c; color: #fff;">N</span>
+              <span style="min-width: 0;">
+                <span style="font-size: 14px; font-weight: 700; line-height: 1.25; display: block;">Nebraska</span>
+                <span style="font-size: 11.5px; color: #8b939f; display: flex; align-items: center; gap: 6px; margin-top: 3px;"><span style="width: 11px; height: 11px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); background: #b3202c;"></span>red · 112 players</span>
+              </span>
+            </div>
+            <span style="display: grid; place-items: center; font: 700 10px/1 'SF Mono', monospace; color: #8b939f; letter-spacing: 0.1em;">VS</span>
+            <div style="background: #2a2f37; border: 1px solid #31363f; border-radius: 9px; padding: 12px 13px; display: flex; align-items: center; gap: 12px; min-width: 0;" style-hover="border-color: #e8b00a;">
+              <span style="width: 40px; height: 40px; border-radius: 9px; flex: 0 0 auto; display: grid; place-items: center; font: 700 12px/1 'SF Mono', ui-monospace, monospace; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.14); background: #9aa1ab; color: #000;">OS</span>
+              <span style="min-width: 0;">
+                <span style="font-size: 14px; font-weight: 700; line-height: 1.25; display: block;">Ohio State</span>
+                <span style="font-size: 11.5px; color: #8b939f; display: flex; align-items: center; gap: 6px; margin-top: 3px;"><span style="width: 11px; height: 11px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); background: #9aa1ab;"></span>grey · 98 players</span>
+              </span>
+            </div>
+          </div>
+          <div style="font-size: 11.5px; color: #8b939f; display: flex; align-items: center; gap: 8px;">
+            <button style="border: 1px solid #31363f; border-radius: 6px; background: #2a2f37; color: #e9ecf0; font-family: inherit; font-size: 11.5px; padding: 3px 9px; cursor: default;" style-hover="background: #333944;">Use a roster file…</button>
+          </div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 20px 1fr; gap: 14px; align-items: start;">
+        <span style="font-size: 12px; color: #8b939f; padding-top: 2px; text-align: center;">3</span>
+        <div style="display: flex; flex-direction: column; gap: 9px; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 9px;"><b style="font-size: 13px; font-weight: 600;">Venue and notes</b></div>
+          <div style="background: #2a2f37; border: 1px solid #31363f; border-radius: 9px; padding: 11px 13px; display: flex; flex-direction: column; gap: 10px;">
+            <label style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0;">
+              <span style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8b939f;">Venue</span>
+              <span style="background: #1b1e23; color: #e9ecf0; border: 1px solid #31363f; border-radius: 6px; padding: 6px 8px; font-size: 12px;">Memorial Stadium</span>
+            </label>
+            <div style="display: flex; gap: 10px;">
+              <label style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0;">
+                <span style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8b939f;">City</span>
+                <span style="background: #1b1e23; color: #e9ecf0; border: 1px solid #31363f; border-radius: 6px; padding: 6px 8px; font-size: 12px;">Lincoln</span>
+              </label>
+              <label style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0;">
+                <span style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8b939f;">State</span>
+                <span style="background: #1b1e23; color: #e9ecf0; border: 1px solid #31363f; border-radius: 6px; padding: 6px 8px; font-size: 12px;">Nebraska</span>
+              </label>
+            </div>
+            <label style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0;">
+              <span style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8b939f;">Notes</span>
+              <span style="background: #1b1e23; color: #8b939f; border: 1px solid #31363f; border-radius: 6px; padding: 6px 8px; font-size: 12px; min-height: 34px; box-sizing: border-box;">A change kit, the occasion, which end a side attacks</span>
+            </label>
+            <div style="display: flex; flex-direction: column; gap: 5px; padding-top: 9px; border-top: 1px solid #31363f;">
+              <div style="display: flex; gap: 10px; align-items: baseline;">
+                <span style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8b939f; flex: 0 0 66px;">Headline</span>
+                <span style="font-size: 11.5px; line-height: 1.45; min-width: 0; word-break: break-word;">Ohio State Buckeyes at Nebraska Cornhuskers</span>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: baseline;">
+                <span style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8b939f; flex: 0 0 66px;">Codes</span>
+                <span style="font-size: 11px; line-height: 1.45; min-width: 0; word-break: break-word; font-family: 'SF Mono', ui-monospace, Menlo, monospace;">Category S · Supp Cat FBC · Hurrdat template</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <footer style="display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #24282f; border-top: 1px solid #31363f; flex: 0 0 46px; height: 46px; box-sizing: border-box; font-size: 12px; overflow: hidden;">
+    <span style="flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #34c759; display: inline-block; margin-right: 7px;"></span>Ready — 128 photos, rosters loaded</span>
+    <button style="flex: none; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0 13px; line-height: 1; white-space: nowrap; border: 1px solid #31363f; border-radius: 6px; background: #2a2f37; color: #e9ecf0; font-family: inherit; font-size: 12px; cursor: default;" style-hover="background: #333944;">Start over</button>
+    <button style="flex: none; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0 13px; line-height: 1; white-space: nowrap; border: 0; border-radius: 6px; background: #e8b00a; color: #1e1700; font-size: 12.5px; font-weight: 600; cursor: default; font-family: inherit;">Continue</button>
+  </footer>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,2 @@
+# Cutline marketing site — UI kit
+Recreation of the one-page marketing site (source: Cutline.dc.html in this project). Sections: sticky nav, centered hero with cycling caption demo, five steps, review section (embeds the app kit's ReviewScreen), download, footer.

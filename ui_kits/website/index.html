@@ -1,0 +1,17 @@
+<!-- @dsCard group="Website" viewport="1280x800" subtitle="Marketing one-pager — interactive" name="Home" -->
+<!-- @startingPoint section="Website" subtitle="The marketing one-pager" viewport="1280x800" -->
+<link rel="stylesheet" href="../../styles.css">
+<style>body{margin:0;background:var(--surface-page);color:var(--text-1);font-family:var(--font-body)}a{color:var(--gold)}a:hover{color:var(--gold-hover)}@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:0}}</style>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script>window.__dsRoot="../../";</script>
+<script src="../../ds-loader.js"></script>
+<script>
+window.loadDS(["ui_kits/website/WebsiteHome.jsx"], function (v) { return v.WebsiteHome; }).then(function (ns) {
+  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(ns.WebsiteHome));
+}).catch(function (e) {
+  document.getElementById('root').textContent = 'Failed to load components: ' + e.message;
+});
+</script>

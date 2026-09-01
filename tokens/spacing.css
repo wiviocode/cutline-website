@@ -1,0 +1,14 @@
+:root {
+  /* Spacing — the site and app use these steps */
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --space-5: 24px;
+  --space-6: 34px;
+  --space-7: 44px;
+  --space-8: 70px;   /* section padding, min */
+  --space-9: 110px;  /* section padding, max */
+  --page-gutter: clamp(24px, 6vw, 84px);
+  --page-max: 1160px;
+}

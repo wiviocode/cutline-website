@@ -1,0 +1,30 @@
+:root {
+  /* Families */
+  --font-display: 'Newsreader', Georgia, serif;      /* headlines + set captions; optical sizing on */
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  --font-mono: 'Spline Sans Mono', 'SF Mono', ui-monospace, monospace; /* meta, labels, filenames */
+
+  /* Display (marketing) */
+  --type-hero-size: clamp(48px, 7vw, 96px);
+  --type-hero-weight: 500;
+  --type-hero-leading: 1.02;
+  --type-hero-tracking: -0.025em;
+  --type-h2-size: clamp(34px, 4.4vw, 58px);
+  --type-h2-leading: 1.08;
+  --type-h2-tracking: -0.02em;
+  --type-caption-size: clamp(20px, 2.3vw, 28px); /* a set caption, as display */
+  --type-caption-leading: 1.5;
+
+  /* Body */
+  --type-lede-size: clamp(17px, 1.6vw, 20px);
+  --type-lede-leading: 1.65;
+  --type-body-size: 15px;
+  --type-ui-size: 12.5px;   /* app chrome */
+  --type-ui-leading: 1.5;
+
+  /* Mono meta */
+  --type-mono-size: 12px;
+  --type-mono-note: 11.5px;
+  --type-overline-size: 10px;   /* uppercase section labels in the app */
+  --type-overline-tracking: 0.05em;
+}

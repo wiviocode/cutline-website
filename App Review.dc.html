@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  html, body { height: 100%; } body { margin: 0; background: #1b1e23; }
+  a { color: #e8b00a; } a:hover { color: #f0c235; }
+</style>
+</helmet>
+<div data-screen-label="Review screen" tabIndex="0" onKeyDown="{{ keydown }}" style="width: 100%; height: 100%; min-height: 640px; display: flex; flex-direction: column; background: #1b1e23; color: #e9ecf0; font: 12.5px/1.5 -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; -webkit-font-smoothing: antialiased; user-select: none; cursor: default; overflow: hidden; outline: none; position: relative;">
+  <nav style="display: flex; align-items: center; gap: 8px; padding: 0 10px 0 16px; background: #24282f; flex: 0 0 44px; height: 44px; box-sizing: border-box;">
+    <span style="display: flex; gap: 8px; margin-right: 12px;">
+      <i style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; display: block;"></i>
+      <i style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e; display: block;"></i>
+      <i style="width: 12px; height: 12px; border-radius: 50%; background: #28c840; display: block;"></i>
+    </span>
+    <svg viewBox="0 0 128 128" aria-hidden="true" style="width: 19px; height: 19px; border-radius: 5px; display: block; flex: 0 0 auto;">
+      <rect width="128" height="128" rx="29" fill="#15181d"></rect>
+      <rect x="26" y="26" width="76" height="50" rx="4" fill="#8d97a5"></rect>
+      <rect x="26" y="88" width="76" height="9" rx="3" fill="#e8b00a"></rect>
+      <rect x="26" y="103" width="47" height="9" rx="3" fill="#4a525e"></rect>
+    </svg>
+    <span style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em;">Cutline</span>
+    <span style="margin-left: auto;"></span>
+    <button style="height: 28px; flex: 0 0 auto; border: 1px solid #454d59; border-radius: 7px; background: #313842; color: #dfe4ea; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 11px 0 9px; min-width: 96px; font: 500 12.5px/1 -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; cursor: default;" style-hover="background: #3d4652; border-color: #e8b00a; color: #fff;">
+      <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 15px; height: 15px; display: block; fill: currentColor;">
+        <path fill-rule="evenodd" d="M12 4.6a7.4 7.4 0 1 0 0 14.8 7.4 7.4 0 0 0 0-14.8zm0 10.6a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4z"></path>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(45 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(90 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(135 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(180 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(225 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(270 12 12)"></rect>
+        <rect x="10.9" y="1.4" width="2.2" height="4.8" rx="1.1" transform="rotate(315 12 12)"></rect>
+      </svg><span>Settings</span>
+    </button>
+  </nav>
+  <header style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 14px 9px; background: #24282f; border-bottom: 1px solid #31363f; flex: 0 0 auto;">
+    <button style="border: 1px solid #31363f; border-radius: 6px; background: #2a2f37; color: #e9ecf0; font-size: 12px; line-height: 1.2; padding: 4px 10px; cursor: default; font-family: inherit;" style-hover="background: #333944;">‹ Game</button>
+    <span style="width: 1px; height: 16px; background: #31363f; margin: 0 2px; flex: 0 0 auto;"></span>
+    <span style="width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; font: 700 8.5px/1 'SF Mono', ui-monospace, monospace; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.14); flex: 0 0 auto; background: #b3202c; color: #fff;">N</span>
+    <span style="font-weight: 600; font-size: 13px;">Nebraska</span>
+    <span style="color: #8b939f;">vs</span>
+    <span style="width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; font: 700 8.5px/1 'SF Mono', ui-monospace, monospace; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.14); flex: 0 0 auto; background: #9aa1ab; color: #000;">OS</span>
+    <span style="font-weight: 600; font-size: 13px;">Ohio State</span>
+    <span style="color: #8b939f;">|</span>
+    <span style="color: #8b939f;">Football · College</span>
+    <span style="color: #8b939f;">Memorial Stadium</span>
+    <span style="margin-left: auto;"></span>
+    <span style="color: #8b939f;">AP style</span>
+  </header>
+  <div style="display: flex; align-items: center; gap: 9px; padding: 8px 14px; background: #1b1e23; border-bottom: 1px solid #31363f; flex: 0 0 auto; font-size: 12px;">
+    <div style="display: flex; background: #2a2f37; border-radius: 6px; padding: 2px; gap: 2px;">
+      <sc-for list="{{ filters }}" as="fl" hint-placeholder-count="3">
+        <button onClick="{{ fl.pick }}" style="{{ fl.style }}">{{ fl.label }}</button>
+      </sc-for>
+    </div>
+    <span style="color: #8b939f; font-family: 'SF Mono', ui-monospace, Menlo, monospace;">{{ counter }}</span>
+    <span style="margin-left: auto;"></span>
+    <span style="color: #8b939f; font-family: 'SF Mono', ui-monospace, Menlo, monospace;">{{ filename }}</span>
+  </div>
+  <main style="display: flex; flex: 1; min-height: 0;">
+    <div onClick="{{ stageClick }}" style="flex: 1; min-width: 0; min-height: 0; position: relative; background: #1b1e23; overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 8px; cursor: {{ stageCursor }};">
+      <div style="aspect-ratio: 3 / 2; max-width: 100%; max-height: 100%; width: 100%; margin: auto; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.45); background: {{ photoGrad }}; display: grid; place-items: center; transform: {{ photoTransform }}; transition: transform 0.18s cubic-bezier(0.2, 0.7, 0.3, 1);">
+        <span style="font: 11px/1.4 'SF Mono', ui-monospace, Menlo, monospace; color: #6b7480; letter-spacing: 0.06em;">{{ photoLabel }}</span>
+      </div>
+    </div>
+    <aside style="width: 300px; flex: 0 0 300px; background: #20242a; border-left: 1px solid #31363f; display: flex; flex-direction: column; min-height: 0;">
+      <div style="padding: 13px 13px 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; min-height: 0;">
+        <div style="flex: 0 0 auto;">
+          <div style="font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #8b939f; margin-bottom: 6px;">Caption</div>
+          <sc-if value="{{ notEditing }}" hint-placeholder-val="{{ true }}">
+            <div onClick="{{ beginEdit }}" title="Click to edit — or press e" style="font-size: 12.5px; background: #2a2f37; border: 1px solid #31363f; border-radius: 7px; padding: 10px; line-height: 1.5; user-select: text; cursor: text;" style-hover="border-color: #4a525e;"><sc-for list="{{ capParts }}" as="cp" hint-placeholder-count="3"><span style="{{ cp.style }}">{{ cp.text }}</span></sc-for></div>
+          </sc-if>
+          <sc-if value="{{ editing }}" hint-placeholder-val="{{ false }}">
+            <textarea autoFocus="{{ true }}" value="{{ editText }}" onChange="{{ editChange }}" onKeyDown="{{ editKey }}" spellCheck="true" style="width: 100%; min-height: 110px; resize: none; box-sizing: border-box; background: #2a2f37; color: #e9ecf0; border: 1px solid #e8b00a; border-radius: 7px; padding: 10px; line-height: 1.5; font: inherit; font-size: 12.5px; outline: none; user-select: text;"></textarea>
+            <div style="display: flex; gap: 10px; font-size: 10.5px; color: #8b939f; margin-top: 6px;"><span>⏎ save</span><span>esc cancel</span></div>
+          </sc-if>
+        </div>
+        <div style="flex: 0 0 auto;">
+          <div style="font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #8b939f; margin-bottom: 6px;">Numbers read</div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <sc-for list="{{ chips }}" as="ch" hint-placeholder-count="2">
+              <span onClick="{{ ch.click }}" title="Click to correct — or press n" style="{{ ch.style }}"><span style="width: 11px; height: 11px; border-radius: 3px; border: 1px solid rgba(128,128,128,0.55); flex: 0 0 auto; background: {{ ch.colour }};"></span>{{ ch.label }}</span>
+            </sc-for>
+          </div>
+          <sc-if value="{{ popOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top: 9px; background: #24282f; border: 1px solid #31363f; border-radius: 9px; box-shadow: 0 10px 34px rgba(0,0,0,0.55); padding: 12px; display: flex; flex-direction: column; gap: 9px;">
+              <h4 style="font-size: 12.5px; font-weight: 600; margin: 0;">Jersey number</h4>
+              <input autoFocus="{{ true }}" value="{{ popVal }}" onChange="{{ popChange }}" onKeyDown="{{ popKey }}" type="text" inputMode="numeric" autoComplete="off" style="background: #2a2f37; color: #e9ecf0; border: 1px solid #e8b00a; border-radius: 6px; padding: 6px 9px; font: 13px/1.2 'SF Mono', ui-monospace, monospace; outline: none; width: 100%; box-sizing: border-box; user-select: text;">
+              <p style="font-size: 10.5px; color: #8b939f; line-height: 1.4; margin: 0;">The caption is rebuilt from the roster — no new request to the model.</p>
+              <div style="display: flex; gap: 7px; justify-content: flex-end;">
+                <button onClick="{{ popCancel }}" style="height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; line-height: 1; flex: none; white-space: nowrap; border: 1px solid #31363f; border-radius: 6px; background: transparent; color: #e9ecf0; font-family: inherit; font-size: 12px; cursor: pointer;">Cancel</button>
+                <button onClick="{{ popSet }}" style="height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; line-height: 1; flex: none; white-space: nowrap; border: 0; border-radius: 6px; background: #e8b00a; color: #1e1700; font-weight: 600; font-family: inherit; font-size: 12px; cursor: pointer;">Set</button>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+        <div style="flex: 0 0 auto;">
+          <div style="font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #8b939f; margin-bottom: 6px;">Not quite right?</div>
+          <div style="width: 100%; min-height: 52px; background: #2a2f37; border: 1px solid #31363f; border-radius: 7px; padding: 8px; font-size: 12px; color: #8b939f; box-sizing: border-box;">Tell the model what it missed — a change kit, a borrowed number, who is who…</div>
+          <button style="margin-top: 7px; width: 100%; height: 26px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #31363f; border-radius: 6px; background: #2a2f37; color: #e9ecf0; font-family: inherit; font-size: 12px; cursor: default;" style-hover="background: #333944;">Caption this frame again</button>
+        </div>
+      </div>
+      <div style="padding: 12px; border-top: 1px solid #31363f; display: flex; flex-direction: column; gap: 7px; flex: 0 0 auto;">
+        <button onClick="{{ approve }}" style="{{ approveStyle }}">{{ approveLabel }}</button>
+        <div style="font-size: 10.5px; color: #8b939f; text-align: center; min-height: 14px;">{{ stateText }}</div>
+      </div>
+    </aside>
+  </main>
+  <div style="flex: 0 0 auto; display: flex; gap: 5px; padding: 7px; background: #24282f; border-top: 1px solid #31363f; overflow: hidden;">
+    <sc-for list="{{ thumbs }}" as="th" hint-placeholder-count="5">
+      <i onClick="{{ th.click }}" style="{{ th.style }}"></i>
+    </sc-for>
+  </div>
+  <nav style="display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #24282f; border-top: 1px solid #31363f; flex: 0 0 46px; height: 46px; box-sizing: border-box; font-size: 12px; overflow: hidden;">
+    <span style="color: #8b939f; flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ runStatus }}</span>
+    <span style="margin-left: auto;"></span>
+    <span style="color: #8b939f; font-family: 'SF Mono', ui-monospace, Menlo, monospace;" title="Estimated cost for this run">$1.84</span>
+    <span style="display: flex; align-items: center; gap: 7px; flex: none;">
+      <button style="height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; line-height: 1; flex: none; white-space: nowrap; border: 0; border-radius: 6px; background: #e8b00a; color: #1e1700; font-weight: 600; font-family: inherit; font-size: 12px; cursor: default;">Caption photos</button>
+      <button style="height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; line-height: 1; flex: none; white-space: nowrap; border: 1px solid #31363f; border-radius: 6px; background: #2a2f37; color: #e9ecf0; font-family: inherit; font-size: 12px; cursor: default;" style-hover="background: #333944;">Redo all</button>
+      <button style="height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; line-height: 1; flex: none; white-space: nowrap; border: 1px solid #31363f; border-radius: 6px; background: #2a2f37; color: #e9ecf0; font-family: inherit; font-size: 12px; cursor: default;" style-hover="background: #333944;">Rename photos…</button>
+    </span>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  roster = { "2": "Adrian Martinez", "7": "Malik Reed", "15": "Case Nelson", "22": "D. Walker", "88": "T. Osei" };
+  pos = { "2": "quarterback", "7": "wide receiver", "15": "tight end", "22": "running back", "88": "wide receiver" };
+  grads = ["linear-gradient(160deg, #5c6878, #333a44)", "linear-gradient(160deg, #6b5f52, #3a3630)", "linear-gradient(160deg, #4e6070, #2e3843)"];
+
+  constructor(props) {
+    super(props);
+    const defs = [
+      ["2", "throws a pass in the first quarter", [], true],
+      ["22", "takes the handoff up the middle", [], false],
+      ["2", "throws a pass in the third quarter", ["?"], false],
+      ["7", "hauls in a deep pass along the sideline", [], false],
+      ["88", "celebrates after a touchdown", [], false],
+    ];
+    this.state = {
+      current: 3, filter: "all", zoomed: false,
+      editing: false, editText: "", popOpen: false, popVal: "", popSlot: 0,
+      frames: defs.map((d, i) => ({
+        num: String(41 + i).padStart(4, "0"),
+        caption: this.compose(d[0], d[1]),
+        jerseys: [{ number: d[0], colour: "#b3202c" }].concat(d[2].map(() => ({ number: "?", colour: "#9aa1ab" }))),
+        approved: d[3], edited: false, grad: this.grads[i % 3],
+      })),
+    };
+  }
+
+  compose(num, action) {
+    return "Nebraska Cornhuskers " + this.pos[num] + " " + this.roster[num] + " (" + num + ") " + action + " during an NCAA college football game against the Ohio State Buckeyes, Saturday, Sept. 14, 2024, in Lincoln, Neb. (AP Photo/John Doe)";
+  }
+
+  visible() {
+    const { frames, filter } = this.state;
+    return frames.map((f, i) => i).filter((i) => {
+      const f = this.state.frames[i];
+      if (filter === "needs") return f.jerseys.some((j) => j.number === "?");
+      if (filter === "approved") return f.approved;
+      return true;
+    });
+  }
+
+  go(i) {
+    const n = Math.max(0, Math.min(this.state.frames.length - 1, i));
+    this.setState({ current: n, zoomed: false, editing: false, popOpen: false });
+  }
+
+  saveEdit() {
+    const text = this.state.editText.replace(/\s*\n+\s*/g, " ").trim();
+    const frames = this.state.frames.slice();
+    if (text) { frames[this.state.current] = { ...frames[this.state.current], caption: text, edited: true }; }
+    this.setState({ frames, editing: false });
+  }
+
+  applyPop() {
+    const value = this.state.popVal.trim();
+    if (!value) { this.setState({ popOpen: false }); return; }
+    const frames = this.state.frames.slice();
+    const f = { ...frames[this.state.current] };
+    f.jerseys = f.jerseys.slice();
+    f.jerseys[this.state.popSlot] = { number: value, colour: f.jerseys[this.state.popSlot].colour };
+    frames[this.state.current] = f;
+    this.setState({ frames, popOpen: false });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const f = s.frames[s.current];
+    const needs = s.frames.filter((x) => x.jerseys.some((j) => j.number === "?")).length;
+    const approved = s.frames.filter((x) => x.approved).length;
+    const segBase = "border: 0; font-family: inherit; font-size: inherit; padding: 3px 11px; border-radius: 4px; cursor: pointer;";
+    const filename = "JD20240914_FB_NEB_v_OSU_" + f.num + ".jpg";
+
+    const name = this.roster[f.jerseys[0].number] || "";
+    const idx = name ? f.caption.indexOf(name) : -1;
+    const capParts = idx >= 0
+      ? [{ text: f.caption.slice(0, idx), style: "" }, { text: name, style: "font-weight: 600; border-bottom: 1.5px dotted #e8b00a;" }, { text: f.caption.slice(idx + name.length), style: "" }]
+      : [{ text: f.caption, style: "" }];
+
+    return {
+      filters: [["needs", "Needs review " + needs], ["approved", "Approved " + approved], ["all", "All " + s.frames.length]].map(([id, label]) => ({
+        label,
+        pick: () => this.setState({ filter: id }),
+        style: s.filter === id ? segBase + "background: #e8b00a; color: #1e1700; font-weight: 600;" : segBase + "background: none; color: #8b939f;",
+      })),
+      counter: (s.current + 1) + " of " + s.frames.length,
+      filename,
+      stageClick: () => this.setState({ zoomed: !s.zoomed }),
+      stageCursor: s.zoomed ? "zoom-out" : "zoom-in",
+      photoGrad: f.grad,
+      photoTransform: s.zoomed ? "scale(2.1)" : "none",
+      photoLabel: "action photo — " + f.num + (s.zoomed ? " · 1:1" : ""),
+      notEditing: !s.editing,
+      editing: s.editing,
+      editText: s.editText,
+      beginEdit: () => this.setState({ editing: true, editText: f.caption }),
+      editChange: (e) => this.setState({ editText: e.target.value }),
+      editKey: (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.saveEdit(); }
+        if (e.key === "Escape") { e.preventDefault(); this.setState({ editing: false }); }
+      },
+      capParts,
+      chips: f.jerseys.map((j, slot) => ({
+        label: "#" + j.number + (this.roster[j.number] ? " · " + this.roster[j.number] : ""),
+        colour: j.colour,
+        click: () => this.setState({ popOpen: true, popSlot: slot, popVal: j.number === "?" ? "" : j.number }),
+        style: "display: inline-flex; align-items: center; gap: 6px; border-radius: 99px; padding: 3px 9px; font-size: 11.5px; cursor: pointer; " +
+          (j.number === "?" ? "background: rgba(232,176,10,0.16); border: 1px solid rgba(232,176,10,0.5);" : "background: #2a2f37; border: 1px solid #31363f;"),
+      })),
+      popOpen: s.popOpen,
+      popVal: s.popVal,
+      popChange: (e) => this.setState({ popVal: e.target.value }),
+      popKey: (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") { e.preventDefault(); this.applyPop(); }
+        if (e.key === "Escape") { e.preventDefault(); this.setState({ popOpen: false }); }
+      },
+      popSet: () => this.applyPop(),
+      popCancel: () => this.setState({ popOpen: false }),
+      approve: () => {
+        if (f.approved) return;
+        const frames = s.frames.slice();
+        frames[s.current] = { ...f, approved: true };
+        this.setState({ frames });
+        this.go(s.current + 1);
+        this.setState({ frames });
+      },
+      approveLabel: f.approved ? "✓  Approved" : "Approve and next  ⏎",
+      approveStyle: f.approved
+        ? "display: block; width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #31363f; border-radius: 6px; background: transparent; color: #8b939f; font-size: 13px; font-weight: 500; line-height: 1.25; text-align: center; cursor: default; font-family: inherit;"
+        : "display: block; width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid transparent; border-radius: 6px; background: #e8b00a; color: #1e1700; font-size: 13px; font-weight: 600; line-height: 1.25; text-align: center; cursor: pointer; font-family: inherit;",
+      stateText: f.edited ? "Edited · written to the file" : "Written to the file · IPTC + XMP",
+      thumbs: this.visible().map((i) => {
+        const t = s.frames[i];
+        return {
+          click: () => this.go(i),
+          style: "width: 104px; height: 70px; border-radius: 4px; flex: 0 0 auto; cursor: pointer; background: " + t.grad + ";" +
+            (i === s.current ? " outline: 3px solid #e8b00a; outline-offset: -3px;" : "") +
+            (t.approved && i !== s.current ? " opacity: 0.55;" : ""),
+        };
+      }),
+      runStatus: "Captioned " + s.frames.length + " of " + s.frames.length + " · " + approved + " approved · try the arrow keys",
+      keydown: (e) => {
+        if (s.editing || s.popOpen) return;
+        if (e.key === "ArrowRight") { e.preventDefault(); this.go(s.current + 1); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); this.go(s.current - 1); }
+        if (e.key === "Enter") { e.preventDefault(); this.renderVals().approve(); }
+        if (e.key === "e") { e.preventDefault(); this.setState({ editing: true, editText: f.caption }); }
+        if (e.key === "n") {
+          e.preventDefault();
+          let slot = f.jerseys.findIndex((j) => j.number === "?");
+          if (slot < 0) slot = 0;
+          this.setState({ popOpen: true, popSlot: slot, popVal: f.jerseys[slot].number === "?" ? "" : f.jerseys[slot].number });
+        }
+        if (e.key === " ") { e.preventDefault(); this.setState({ zoomed: !s.zoomed }); }
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

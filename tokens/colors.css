@@ -1,0 +1,43 @@
+:root {
+  /* Ink scale — the dark ground, deepest to lightest (from make-brand.swift + the app) */
+  --ink-0: #15181d;   /* page ground; the mark's tile ("ink") */
+  --ink-1: #1b1e23;   /* raised panel ("page") */
+  --ink-2: #24282f;   /* window chrome, bars */
+  --ink-3: #2a2f37;   /* controls, wells */
+  --ink-4: #31363f;   /* hairlines on chrome, control borders */
+  --ink-5: #3a4150;   /* large dim numerals */
+  --ink-hairline: #23272e; /* section hairlines on the page ground */
+
+  /* Text scale */
+  --text-1: #e9ecf0;  /* primary ("text") */
+  --text-2: #b6bdc7;  /* body on marketing pages */
+  --text-3: #9aa2ad;  /* secondary */
+  --text-4: #8b939f;  /* muted labels */
+  --text-5: #5d6570;  /* faint mono notes */
+  --text-dim: #4a525e; /* the mark's second rule ("dim") */
+
+  /* Accent — the cutline gold */
+  --gold: #e8b00a;
+  --gold-hover: #f2c235;
+  --on-gold: #1e1700;
+
+  /* Brand grays from the mark */
+  --photo-frame: #8d97a5; /* the photo rectangle ("frame") */
+  --photo-edge: #b9c2ce;  /* its keyline ("edge") */
+
+  /* Sport red — kit swatches, warnings of the jersey kind */
+  --kit-red: #b3202c;
+
+  /* Semantic aliases */
+  --surface-page: var(--ink-0);
+  --surface-panel: var(--ink-1);
+  --surface-chrome: var(--ink-2);
+  --surface-control: var(--ink-3);
+  --border-hairline: var(--ink-hairline);
+  --border-control: var(--ink-4);
+  --text-body: var(--text-2);
+  --text-heading: var(--text-1);
+  --accent: var(--gold);
+  --gold-wash: rgba(232, 176, 10, 0.16);
+  --gold-wash-border: rgba(232, 176, 10, 0.5);
+}

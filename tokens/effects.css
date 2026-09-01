@@ -1,0 +1,18 @@
+:root {
+  /* Radii */
+  --radius-control: 6px;   /* app buttons, inputs */
+  --radius-button: 8px;    /* marketing CTAs */
+  --radius-card: 12px;     /* panels, wells */
+  --radius-window: 14px;   /* framed windows */
+  --radius-pill: 99px;     /* tabs, chips */
+  --radius-mark: 22.37%;   /* the mark's tile corner, as a fraction of its width */
+
+  /* Shadows — one deep drop for framed windows; hairlines do the rest */
+  --shadow-window: 0 30px 80px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 10px 34px rgba(0, 0, 0, 0.55);
+
+  /* Motion */
+  --ease-brand: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --dur-rise: 0.7s;      /* entrance rise-in */
+  --dur-control: 0.18s;  /* zooms, small transitions */
+}

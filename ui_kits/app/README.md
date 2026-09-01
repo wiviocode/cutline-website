@@ -1,0 +1,2 @@
+# Cutline app — UI kit
+Recreation of the macOS app's Review screen (source: Sources/CutlineApp/ReviewUI.swift, via App Review.dc.html in this project). Interactive: arrow through frames, zoom, edit the caption, correct a jersey number, approve. Composes core/forms primitives.
