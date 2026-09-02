@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#15181d"/><g transform="translate(307,307) scale(0.4)"><rect x="61" y="61" width="901" height="901" rx="202" fill="#24282f"/><rect x="195" y="195" width="634" height="417" rx="25" fill="#8d97a5"/><rect x="195" y="679" width="634" height="75" rx="17" fill="#e8b00a"/><rect x="195" y="804" width="392" height="75" rx="17" fill="#4a525e"/></g></svg></template>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="docs/cutline-mark.svg">
+<link rel="apple-touch-icon" href="docs/cutline-mark-256.png">
 <script src="./support.js"></script>
 </head>
 <body>
@@ -20,6 +22,11 @@
   @keyframes ruleGrow100 { from { width: 0; } to { width: 634.39px; } }
   @keyframes ruleGrow62 { from { width: 0; } to { width: 391.99px; } }
   @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+  @media (max-width: 720px) {
+    [data-mq="split"] { grid-template-columns: 1fr !important; }
+    [data-mq="hero-h1"] { font-size: clamp(36px, 11vw, 48px) !important; }
+    [data-runlog] { padding: 20px 16px !important; font-size: 12px !important; }
+  }
 </style>
 </helmet>
 <div data-screen-label="Home" style="background: #15181d; color: #e9ecf0; font: 16px/1.6 -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; -webkit-font-smoothing: antialiased; min-height: 100vh;">
@@ -35,7 +42,7 @@
 
   <section style="padding: clamp(64px, 10vh, 110px) clamp(24px, 6vw, 84px) clamp(70px, 10vh, 110px); max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center;">
     <img src="docs/cutline-wordmark-onDark.png" alt="Cutline" style="width: clamp(180px, 22vw, 250px); display: block; animation: riseIn 0.7s cubic-bezier(0.2, 0.7, 0.3, 1) both;">
-    <h1 style="font-family: 'Newsreader', serif; font-optical-sizing: auto; font-weight: 500; font-size: clamp(48px, 7vw, 96px); line-height: 1.02; letter-spacing: -0.025em; margin: 38px 0 0; text-wrap: balance; animation: riseIn 0.7s 0.08s cubic-bezier(0.2, 0.7, 0.3, 1) both;">Shoot the game.<br>Skip the <em style="font-style: italic; color: #e8b00a;">typing</em>.</h1>
+    <h1 data-mq="hero-h1" style="font-family: 'Newsreader', serif; font-optical-sizing: auto; font-weight: 500; font-size: clamp(48px, 7vw, 96px); line-height: 1.02; letter-spacing: -0.025em; margin: 38px 0 0; text-wrap: balance; animation: riseIn 0.7s 0.08s cubic-bezier(0.2, 0.7, 0.3, 1) both;">Shoot the game.<br>Skip the <em style="font-style: italic; color: #e8b00a;">typing</em>.</h1>
     <p style="max-width: 560px; font-size: clamp(17px, 1.6vw, 20px); line-height: 1.65; color: #b6bdc7; margin: 26px 0 0; animation: riseIn 0.7s 0.2s cubic-bezier(0.2, 0.7, 0.3, 1) both;">Drop in your photos. Cutline names the players, writes the captions, and files them into your images.</p>
     <div style="display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 36px; flex-wrap: wrap; animation: riseIn 0.7s 0.3s cubic-bezier(0.2, 0.7, 0.3, 1) both;">
       <a href="https://github.com/wiviocode/cutline/releases" style="background: #e8b00a; color: #1e1700; font-weight: 600; font-size: 15.5px; padding: 14px 28px; border-radius: 8px;" style-hover="background: #f2c235; color: #1e1700;">Download for macOS</a>
@@ -47,7 +54,7 @@
           <div style="border: 1px solid #2a2f37; border-radius: 14px;">
             <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #31363f;">
               <i style="width: 11px; height: 11px; border-radius: 50%; display: block;"></i>
-              <span style="margin-left: 8px; font-family: 'Spline Sans Mono', monospace; font-size: 11.5px;">jersey #2</span>
+              <span style="margin-left: 8px; font-family: 'Spline Sans Mono', monospace; font-size: 11.5px; min-width: 0; flex: 1; white-space: nowrap; overflow: hidden;">jersey #2</span>
             </div>
             <div style="padding: clamp(22px, 3vw, 34px);">
               <div style="display: flex; gap: 6px; flex-wrap: wrap;"><span style="border: 1px solid transparent; border-radius: 99px; padding: 6px 15px; font-family: 'Spline Sans Mono', monospace; font-size: 12px; line-height: 1.3;">AP</span></div>
@@ -63,7 +70,7 @@
               <i style="width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; display: block;"></i>
               <i style="width: 11px; height: 11px; border-radius: 50%; background: #febc2e; display: block;"></i>
               <i style="width: 11px; height: 11px; border-radius: 50%; background: #28c840; display: block;"></i>
-              <span style="margin-left: 8px; font-family: 'Spline Sans Mono', monospace; font-size: 11.5px; color: #8b939f;">jersey #2 · red · throws a pass · Sat, Sept. 14 · Memorial Stadium</span>
+              <span style="margin-left: 8px; font-family: 'Spline Sans Mono', monospace; font-size: 11.5px; color: #8b939f; min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">jersey #2 · red · throws a pass · Sat, Sept. 14 · Memorial Stadium</span>
             </div>
             <div style="padding: clamp(22px, 3vw, 34px);">
               <div style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -85,7 +92,7 @@
   </section>
 
   <section style="border-top: 1px solid #23272e; padding: clamp(70px, 10vh, 110px) clamp(24px, 6vw, 84px); ">
-    <div style="max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: clamp(36px, 6vw, 80px); align-items: center;">
+    <div data-mq="split" style="max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: clamp(36px, 6vw, 80px); align-items: center;">
       <div>
         <h2 style="font-family: 'Newsreader', serif; font-weight: 500; font-size: clamp(34px, 4.4vw, 58px); line-height: 1.08; letter-spacing: -0.02em; margin: 0;">A night's work, in one run.</h2>
         <p style="color: #9aa2ad; font-size: 15px; line-height: 1.65; margin: 18px 0 0;">You drop the folder and pick the teams. Cutline captions, waits for your review, and files the metadata into every photograph.</p>
@@ -104,8 +111,10 @@
   <section style="border-top: 1px solid #23272e; background: #1b1e23; padding: clamp(70px, 10vh, 110px) clamp(24px, 6vw, 84px); ">
     <div style="max-width: 1160px; margin: 0 auto;">
       <h2 style="font-family: 'Newsreader', serif; font-weight: 500; font-size: clamp(34px, 4.4vw, 58px); line-height: 1.08; letter-spacing: -0.02em; margin: 0;">You stay the editor.</h2>
-      <div style="margin-top: 40px; border: 1px solid #2a2f37; border-radius: 14px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,0.5);">
-        <dc-import name="App Review" hint-size="100%,680px" style="display: block; width: 100%; height: 680px;"></dc-import>
+      <div data-app-scroll="1" style="margin-top: 40px; border: 1px solid #2a2f37; border-radius: 14px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,0.5); height: {{ appBoxH }};">
+        <div style="width: {{ appInnerW }}; height: 680px; transform: {{ appTransform }}; transform-origin: 0 0;">
+          <dc-import name="App Review" hint-size="100%,680px" style="display: block; width: 100%; height: 680px;"></dc-import>
+        </div>
       </div>
       <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px;">
         <sc-for list="{{ keys }}" as="k" hint-placeholder-count="6">
@@ -140,7 +149,7 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script>
 class Component extends DCLogic {
-  state = { style: 0, typed: "", logShown: 0, markShown: false, capH: 0 };
+  state = { style: 0, typed: "", logShown: 0, markShown: false, capH: 0, appW: 0 };
 
   componentDidUpdate() {
     const m = document.querySelector("[data-cap-measure]");
@@ -181,7 +190,7 @@ class Component extends DCLogic {
             if (n >= 6) clearInterval(this.logTimer);
             return { logShown: n };
           });
-        }, 380);
+        }, 200);
       }
     }, { threshold: 0.3 });
     const logEl = document.querySelector("[data-runlog]");
@@ -196,6 +205,14 @@ class Component extends DCLogic {
     const markEl = document.querySelector("[data-mark]");
     if (markEl) this.markIo.observe(markEl);
     else this.setState({ markShown: true });
+    const appEl = document.querySelector("[data-app-scroll]");
+    if (appEl && window.ResizeObserver) {
+      this.appRo = new ResizeObserver(() => {
+        const w = appEl.clientWidth;
+        if (w && w !== this.state.appW) this.setState({ appW: w });
+      });
+      this.appRo.observe(appEl);
+    }
   }
 
   componentWillUnmount() {
@@ -205,6 +222,7 @@ class Component extends DCLogic {
     if (this.io) this.io.disconnect();
     if (this.logIo) this.logIo.disconnect();
     if (this.markIo) this.markIo.disconnect();
+    if (this.appRo) this.appRo.disconnect();
   }
 
   type(i) {
@@ -232,7 +250,13 @@ class Component extends DCLogic {
   renderVals() {
     const active = this.state.style;
     const base = "border-radius: 99px; padding: 6px 15px; font-family: 'Spline Sans Mono', monospace; font-size: 12px; cursor: pointer;";
+    const APPW = 980;
+    const w = this.state.appW;
+    const fit = w > 0 && w < APPW;
     return {
+      appBoxH: fit ? Math.round(680 * w / APPW) + "px" : "680px",
+      appInnerW: fit ? APPW + "px" : "100%",
+      appTransform: fit ? "scale(" + (w / APPW) + ")" : "none",
       typed: this.state.typed,
       typedMeasure: this.state.typed + "\u00A0",
       capH: this.state.capH ? this.state.capH + "px" : "1.5em",
