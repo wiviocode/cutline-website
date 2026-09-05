@@ -152,7 +152,7 @@ interface State {
   continueToReview(): Promise<void>;
 
   // run
-  run(opts?: { redo?: boolean; limit?: number }): Promise<void>;
+  run(opts?: { redo?: boolean; limit?: number; failed?: boolean }): Promise<void>;
   cancel(): void;
 
   // review
@@ -274,6 +274,7 @@ export const derive = {
   },
   estimatedCost: (s: State) => VisionModel.cost(VisionModel.byID(s.settings.model), s.tokensIn, s.tokensOut),
   pendingCount: (s: State) => s.frames.filter((f) => f.state === "pending").length,
+  failedCount: (s: State) => s.frames.filter((f) => f.state === "failed").length,
   anyDone: (s: State) => s.frames.some((f) => f.state === "done"),
   readyToRun: (s: State) => !!s.folder && !!s.apiKey && !s.isRunning && s.frames.length > 0,
 
@@ -684,7 +685,7 @@ export const useStore = create<State>()((set, get) => {
       const s = get();
       if (!s.folder) return;
       if (!s.apiKey) { get().notify("Add your Anthropic API key in Settings first."); return; }
-      let todo = s.frames.filter((f) => opts.redo || f.state === "pending");
+      let todo = s.frames.filter((f) => opts.redo || f.state === "pending" || (opts.failed && f.state === "failed"));
       if (opts.limit) todo = todo.slice(0, opts.limit);
       if (!todo.length) { set({ statusLine: "Nothing to do." }); return; }
 

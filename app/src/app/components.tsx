@@ -3,7 +3,7 @@
  * colour change is the stylesheet's job, so no component re-renders to show one.
  */
 
-import React, { useEffect, useRef, type CSSProperties, type ReactNode, type MouseEventHandler, type KeyboardEventHandler, type ChangeEventHandler } from "react";
+import React, { useEffect, useRef, useState, type CSSProperties, type ReactNode, type MouseEventHandler, type KeyboardEventHandler, type ChangeEventHandler } from "react";
 
 type ButtonProps = {
   variant?: "primary" | "secondary" | "ghost" | "danger";
@@ -165,6 +165,30 @@ export function Sheet({ title, onClose, children, footer, size = "md", busy = fa
         <div className="sheet-body">{children}</div>
         {footer && <footer className="sheet-foot">{footer}</footer>}
       </div>
+    </div>
+  );
+}
+
+/** A button that opens a short list of rarer actions. Closes on a click elsewhere or Escape. */
+export function Menu({ label, items }: { label: ReactNode; items: { label: string; onSelect: () => void; disabled?: boolean }[] }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey, true);
+    return () => { document.removeEventListener("mousedown", onDown); window.removeEventListener("keydown", onKey, true); };
+  }, [open]);
+  return (
+    <div className="menu" ref={box}>
+      <button type="button" className="btn btn-secondary btn-md" aria-haspopup="menu" aria-expanded={open} onClick={(e) => { e.currentTarget.blur(); setOpen((o) => !o); }}>{label} <span aria-hidden="true">▾</span></button>
+      {open && (
+        <div className="menu-list" role="menu">
+          {items.map((it) => <button key={it.label} type="button" role="menuitem" disabled={it.disabled} onClick={() => { setOpen(false); it.onSelect(); }}>{it.label}</button>)}
+        </div>
+      )}
     </div>
   );
 }

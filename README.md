@@ -15,7 +15,7 @@
 Drop in a folder of photographs and tell it who was playing. Cutline reads every frame, names
 the players by jersey number against a roster, writes the caption in your desk's house style,
 and files the metadata into the photograph where Photo Mechanic and every wire ingest can read
-it. The photographs never leave your machine.
+it. No server of ours is in the middle: the photographs go to the model you chose, and nowhere else.
 
 Nothing to install. It runs as a web page, calls the model with your own key, and writes the
 metadata back into the JPEGs in place.

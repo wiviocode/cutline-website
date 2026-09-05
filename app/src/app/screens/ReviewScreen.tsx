@@ -9,15 +9,16 @@
  */
 
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useStore, derive, thumbnails, previews, THUMB_EDGE, PREVIEW_EDGE, type Frame } from "../store";
-import { Button, Callout, Crest, KitChip, Overline, Segmented, TextArea, TextInput, swatchColour } from "../components";
+import { Button, Callout, Crest, KitChip, Menu, Overline, Segmented, TextArea, TextInput, swatchColour } from "../components";
 import { useShortcuts } from "../shortcuts";
 import { CaptionParts } from "@core/caption/CaptionParts";
 import { CaptionRecord, type ReviewStatus } from "@core/records/CaptionRecord";
 import { RosterPlayer } from "@core/roster/Roster";
 import { RosterMatcher } from "@core/roster/RosterMatcher";
 import { asSport } from "@core/caption/CompositionContext";
-import { WireStyle } from "@core/caption/WireStyle";
+import { VisionModel } from "@core/anthropic/VisionModel";
 
 function visible(frames: Frame[], filter: ReviewStatus): Frame[] {
   if (filter === "approved") return frames.filter((f) => f.approved);
@@ -87,13 +88,11 @@ function Header({ list, position, frame }: { list: Frame[]; position: number; fr
           <Crest name={s.away.name} colour={s.away.colour} logoURL={s.away.team ? s.logoURLs[s.away.team.id] : null} /><span className="team">{s.away.name}</span>
         </>
       )}
-      <span className="dim">{[derive.sportLabel(s), s.venue].filter(Boolean).join(" · ")}</span>
       <span className="spacer" />
       <Segmented<ReviewStatus> ariaLabel="Filter" value={s.filter} onChange={(f) => s.setFilter(f)}
         options={[{ id: "needsReview", label: `Needs review ${counts.needsReview}` }, { id: "approved", label: `Approved ${counts.approved}` }, { id: "all", label: `All ${counts.all}` }]} />
       <span className="pos">{frame ? `${position} of ${list.length}` : "—"}</span>
-      {counts.needsNumber > 0 && <button type="button" className="linky" onClick={() => s.nextNeedingNumber()}>next unread number →</button>}
-      <span className="dim">{WireStyle.displayName(s.settings.style)}</span>
+      {counts.needsNumber > 0 && <button type="button" className="linky" onClick={(e) => { e.currentTarget.blur(); s.nextNeedingNumber(); }}>next unread number →</button>}
     </header>
   );
 }
@@ -139,6 +138,27 @@ function Stage({ frame, zoom, onToggleZoom }: { frame: Frame | null; zoom: boole
     <div className={"stage" + (zoom ? " zoomed" : "")} onClick={onClick} title={zoom ? "Click to fit" : "Click to zoom in at that point — or press space"}>
       {url ? <img src={url} alt={frame?.name ?? ""} style={{ transformOrigin: origin, transform: zoom ? "scale(2.4)" : "none" }} /> : <div className="stage-empty">{frame ? "Loading…" : "Nothing selected"}</div>}
       {frame && <span className="stage-name">{frame.name}</span>}
+      <StartCard />
+    </div>
+  );
+}
+
+/** On a fresh shoot the one thing to do is start, so it sits where the eye is. */
+function StartCard() {
+  const v = useStore(useShallow((s) => ({
+    pending: derive.pendingCount(s), ready: derive.readyToRun(s), touched: s.frames.some((f) => f.state !== "pending"), running: s.isRunning,
+    hasKey: !!s.apiKey, total: s.frames.length, model: VisionModel.byID(s.settings.model).name,
+  })));
+  const run = useStore((s) => s.run);
+  if (v.running || v.touched || v.pending === 0) return null;
+  return (
+    <div className="stage-cta" role="group" aria-label="Start captioning" onClick={(e) => e.stopPropagation()}>
+      <b>{v.total} photograph{v.total === 1 ? "" : "s"} ready.</b>
+      <span>{v.hasKey ? `${v.model} reads each one, and the caption is written into the file as it comes back.` : "Add your Anthropic API key in Settings to begin."}</span>
+      <div className="stage-cta-actions">
+        <Button size="lg" disabled={!v.ready} onClick={(e) => { e.currentTarget.blur(); void run(); }}>Caption them</Button>
+        {v.pending > 10 && <Button variant="secondary" size="lg" disabled={!v.ready} onClick={(e) => { e.currentTarget.blur(); void run({ limit: 10 }); }} title="Caption ten, check them, then do the rest">Try 10 first</Button>}
+      </div>
     </div>
   );
 }
@@ -176,7 +196,7 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
     setPop(null);
   };
   const state = frame.state === "failed" ? `Failed: ${frame.error}` : frame.state === "working" ? "Captioning…" : frame.state === "pending" ? "Not captioned yet"
-    : frame.writeError ? `Not written: ${frame.writeError}` : frame.edited ? "Edited · written to the file" : "Written to the file · IPTC + XMP";
+    : frame.writeError ? `Not written: ${frame.writeError}` : frame.edited ? "Edited and written into the photograph" : "Written into the photograph";
 
   return (
     <>
@@ -185,7 +205,7 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
           <Overline style={{ marginBottom: 6 }}>Caption</Overline>
           {!editing ? (
             <div className="caption" role="button" tabIndex={0} title="Click to edit — or press e" onClick={() => setEditing(true)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); setEditing(true); } }}>
-              {frame.caption ? spans.map((sp) => (sp.player ? <b key={sp.id} title={sp.team?.name ?? ""}>{sp.text}</b> : <span key={sp.id}>{sp.text}</span>)) : <span className="placeholder">{frame.state === "pending" ? "Caption the photographs to fill this in." : "—"}</span>}
+              {frame.caption ? spans.map((sp) => (sp.player ? <b key={sp.id} title={sp.team?.name ?? ""}>{sp.text}</b> : <span key={sp.id}>{sp.text}</span>)) : <span className="placeholder">{frame.state === "pending" ? "Not captioned yet." : frame.state === "working" ? "Captioning…" : "—"}</span>}
             </div>
           ) : (
             <div>
@@ -196,10 +216,9 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
           )}
         </div>
 
-        <div>
+        {frame.record && players.length > 0 && <div>
           <Overline style={{ marginBottom: 6 }}>Numbers read</Overline>
           <div className="chips">
-            {players.length === 0 && <span className="dim small">none read</span>}
             {players.map((p, slot) => {
               const m = p.jerseyNumber ? matcher.match(p.jerseyNumber, p.jerseyColor, p.action) : null;
               const name = m?.ok ? RosterPlayer.fullName(m.match.player) : null;
@@ -217,19 +236,19 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
               <div className="pop-row"><Button variant="ghost" onClick={() => setPop(null)}>Cancel</Button><Button onClick={applyPop}>Set</Button></div>
             </div>
           )}
-        </div>
+        </div>}
 
         {frame.record && (
           <div>
             {!noteOpen ? (
-              <button type="button" className="redo-open" onClick={() => setNoteOpen(true)}>Tell the model what it missed, then redo…</button>
+              <button type="button" className="redo-open" onClick={(e) => { e.currentTarget.blur(); setNoteOpen(true); }}>Redo with a note to the model…</button>
             ) : (
               <>
                 <TextArea value={note} autoFocus minHeight={62} rows={3} placeholder="A change kit, a borrowed number, who is who…" ariaLabel="Note to the model" onChange={(e) => setNote(e.target.value)}
                   onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") { setNoteOpen(false); setNote(""); } }} />
                 <div className="redo-row">
                   <Button variant="secondary" disabled={frame.state === "working"} onClick={() => { void recaption(frame.id, note); setNoteOpen(false); setNote(""); }}>{frame.state === "working" ? "Captioning…" : note.trim() ? "Redo with this note" : "Redo caption"}</Button>
-                  <button type="button" className="linky" onClick={() => setNoteOpen(false)}>cancel</button>
+                  <button type="button" className="linky" onClick={() => { setNoteOpen(false); setNote(""); }}>cancel</button>
                 </div>
               </>
             )}
@@ -287,24 +306,32 @@ const Thumb = memo(function Thumb({ frame, on }: { frame: Frame; on: boolean }) 
 });
 
 function ActionBar() {
-  const s = useStore();
-  const pending = derive.pendingCount(s);
-  const ready = derive.readyToRun(s);
+  const v = useStore(useShallow((s) => ({
+    running: s.isRunning, done: s.progressDone, total: s.progressTotal, status: s.statusLine, bulk: s.bulkLabel, hasKey: !!s.apiKey, tokens: s.tokensIn,
+    pending: derive.pendingCount(s), failed: derive.failedCount(s), ready: derive.readyToRun(s), anyDone: derive.anyDone(s), count: s.frames.length, cost: derive.estimatedCost(s),
+  })));
+  const run = useStore((s) => s.run);
+  const cancel = useStore((s) => s.cancel);
+  const setPanel = useStore((s) => s.setPanel);
+  const go = (fn: () => void) => (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.blur(); fn(); };
   return (
     <nav className="bar run-bar" aria-label="Captioning">
-      <span className={"status " + (!s.apiKey ? "problem" : "dim")}>{!s.apiKey ? "Add your Anthropic API key in Settings" : s.statusLine}{s.bulkLabel ? ` · ${s.bulkLabel}` : ""}</span>
-      {s.tokensIn > 0 && <span className="dim mono small" title="Estimated cost for this run, at the list price of the model that ran">${derive.estimatedCost(s).toFixed(2)}</span>}
-      {s.isRunning ? (
+      <span className={"status " + (!v.hasKey ? "problem" : "dim")} role="status">{!v.hasKey ? "Add your Anthropic API key in Settings to caption." : v.status}{v.bulk ? ` · ${v.bulk}` : ""}</span>
+      {v.tokens > 0 && <span className="dim mono small" title="Estimated cost of this run so far, at the list price of the model that ran">${v.cost.toFixed(2)}</span>}
+      {v.running ? (
         <>
-          <progress max={Math.max(s.progressTotal, 1)} value={s.progressDone} aria-label="Progress" />
-          <Button variant="secondary" onClick={(e) => { e.currentTarget.blur(); s.cancel(); }}>Stop</Button>
+          <progress max={Math.max(v.total, 1)} value={v.done} aria-label="Progress" />
+          <Button variant="secondary" onClick={go(cancel)}>Stop</Button>
         </>
       ) : (
         <>
-          {derive.anyDone(s) && <Button variant="ghost" onClick={() => s.setPanel("rename")}>Rename photos…</Button>}
-          {derive.anyDone(s) && <Button variant="secondary" disabled={!ready} onClick={() => { if (window.confirm(`Caption all ${s.frames.length} photographs again? Each one is a new request to the model.`)) void s.run({ redo: true }); }}>Redo all</Button>}
-          {pending > 10 && <Button variant="secondary" disabled={!ready} onClick={() => void s.run({ limit: 10 })}>Test 10</Button>}
-          <Button disabled={!ready || pending === 0} onClick={() => void s.run()}>{pending > 0 ? `Caption ${pending} photo${pending === 1 ? "" : "s"}` : "All captioned"}</Button>
+          {v.anyDone && <Menu label="More" items={[
+            { label: "Redo every caption…", disabled: !v.ready, onSelect: () => { if (window.confirm(`Caption all ${v.count} photographs again? Each one is a new request to the model.`)) void run({ redo: true }); } },
+            { label: "Rename photographs…", onSelect: () => setPanel("rename") },
+          ]} />}
+          {v.pending > 10 && <Button variant="secondary" disabled={!v.ready} onClick={go(() => void run({ limit: 10 }))} title="Caption ten, check them, then do the rest">Try 10 first</Button>}
+          {v.pending > 0 && <Button disabled={!v.ready} onClick={go(() => void run())}>Caption {v.pending} photograph{v.pending === 1 ? "" : "s"}</Button>}
+          {v.pending === 0 && v.failed > 0 && <Button disabled={!v.ready} onClick={go(() => void run({ failed: true }))}>Retry {v.failed} failed</Button>}
         </>
       )}
     </nav>

@@ -8,8 +8,8 @@
 
 Point it at a folder, tell it who was playing, and it reads every frame, identifies players by
 jersey number against a roster, writes the caption in your desk's house style, and files the
-metadata into the photograph where Photo Mechanic can read it — without the photographs ever
-leaving your machine.
+metadata into the photograph where Photo Mechanic can read it — with no server of ours in the
+middle: the photographs go to the model you chose, and nowhere else.
 
 </div>
 

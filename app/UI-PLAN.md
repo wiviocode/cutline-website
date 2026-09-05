@@ -143,3 +143,30 @@ Same day, in Chromium at 1280 and at 800 pixels wide, with the console open:
 - **Back and out.** ‹ Game keeps every field; Start over clears the fixture and lists the
   shoot under Recent; "Run it again" in Settings reopens Welcome on the byline step.
 - Zero console errors from the app. `tsc` clean, 159 checks passing, `vite build` clean.
+
+## Second pass on Review
+
+Same day, after the first walk-through, on the brief "streamline it more":
+
+- **The header is the matchup, the filter and the position.** The house style and the
+  sport-and-venue line were settings and context, not review; they are gone.
+- **A fresh shoot opens with a card on the photograph:** "N photographs ready. <Model> reads
+  each one, and the caption is written into the file as it comes back. Caption them." — with
+  "Try 10 first" when there are more than ten. The card leaves the moment anything has run.
+- **The rail shows a block only when it has something.** No "Numbers read · none read" on an
+  uncaptioned frame. "Redo with a note to the model…" replaces the longer sentence. The state
+  line says "Written into the photograph" and no more.
+- **The bar has one primary action.** "Caption N photographs" while there is work; "Retry N
+  failed" when only failures remain (a new `run({ failed })`); nothing when all is done.
+  "Redo every caption…" and "Rename photographs…" sit under **More ▾**.
+- Buttons here let go of focus after a click, so Return always means approve.
+
+Checked in the browser: the card on a fresh shoot; seeded records showing chips, a flagged
+number corrected through the pop and the caption rebuilt locally; the note-redo editor; the
+More menu, Escape, and the rename sheet from it; Retry on a failed frame ending in "Done — 0
+captioned, 1 failed"; zero console errors from the app.
+
+Also corrected while here: four places said the photographs never leave your machine. They do
+leave it — resized copies go to Anthropic to be read. The copy now says what is true: no server
+of ours is in the middle; the photographs go to the model you chose, and nowhere else.
+

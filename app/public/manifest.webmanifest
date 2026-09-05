@@ -1,7 +1,7 @@
 {
   "name": "Cutline",
   "short_name": "Cutline",
-  "description": "Captions for sports photographs. Runs in your browser; your photos stay on your machine.",
+  "description": "Captions for sports photographs. Runs in your browser; your files stay on your disk and only the model you choose sees them.",
   "start_url": "/app/",
   "scope": "/app/",
   "display": "standalone",
