@@ -13,7 +13,7 @@
  * Everything after the bytes arrive is here.
  */
 
-import type { AnthropicClient } from "../anthropic/AnthropicClient";
+import type { AnthropicClient, Usage } from "../anthropic/AnthropicClient";
 import { CaptionResponseParser } from "../vision/CaptionResponseParser";
 
 export interface ImportedPlayer {
@@ -117,6 +117,11 @@ export const RosterImporter = {
 
   /** Extract players from already-fetched text. */
   async extract(text: string, client: AnthropicClient): Promise<ImportedPlayer[]> {
+    return (await RosterImporter.extractWithUsage(text, client)).players;
+  },
+
+  /** The same, with what the call cost in tokens, so the import can say so. */
+  async extractWithUsage(text: string, client: AnthropicClient): Promise<{ players: ImportedPlayer[]; usage: Usage }> {
     const clipped = text.slice(0, 120_000);
     const reply = await client.describeText(EXTRACTION_PROMPT, `Roster page text:\n\n${clipped}`, 8000);
     const unwrapped = CaptionResponseParser.unwrapFence(reply.text);
@@ -138,7 +143,7 @@ export const RosterImporter = {
       } as ImportedPlayer;
     });
     if (players.length === 0) throw new ImportError("noPlayersFound", unwrapped.slice(0, 200));
-    return players;
+    return { players, usage: reply.usage };
   },
 
   /**
@@ -147,21 +152,29 @@ export const RosterImporter = {
    * Each step costs more than the last, so the cheapest sufficient one wins.
    */
   async importRoster(html: string, client: AnthropicClient, onEscalate?: (source: ImportSource) => void):
-    Promise<{ players: ImportedPlayer[]; source: ImportSource }> {
+    Promise<{ players: ImportedPlayer[]; source: ImportSource; usage: Usage }> {
     const plain = RosterImporter.strip(html);
+    let spent: Usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: null, cacheReadInputTokens: null };
+    const add = (u: Usage) => { spent = { ...spent, inputTokens: spent.inputTokens + u.inputTokens, outputTokens: spent.outputTokens + u.outputTokens }; };
     if (!RosterImporter.looksLikeEmptyShell(plain)) {
       try {
-        const players = await RosterImporter.extract(plain, client);
-        if (players.length) return { players, source: "visibleText" };
-      } catch { /* fall through to the payload */ }
+        const { players, usage } = await RosterImporter.extractWithUsage(plain, client);
+        add(usage);
+        if (players.length) return { players, source: "visibleText", usage: spent };
+      } catch (e) {
+        // Only "nothing found" earns the costlier second attempt. A rejected key, a rate limit or
+        // a network failure would fail again, larger.
+        if (!(e instanceof ImportError)) throw e;
+      }
     }
     const payload = RosterImporter.payloadText(html);
     if (payload) {
       onEscalate?.("scriptPayload");
       // Keep the visible text as context — headings and labels help the model.
       const combined = plain + "\n\n" + payload.slice(0, 150_000);
-      const players = await RosterImporter.extract(combined, client);
-      if (players.length) return { players, source: "scriptPayload" };
+      const { players, usage } = await RosterImporter.extractWithUsage(combined, client);
+      add(usage);
+      if (players.length) return { players, source: "scriptPayload", usage: spent };
     }
     throw new ImportError("noPlayersFound", "no roster found in the page's text or its embedded data");
   },

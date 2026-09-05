@@ -30,7 +30,7 @@ import { CaptionResponseParser } from "@core/vision/CaptionResponseParser";
 import { CaptionComposer } from "@core/caption/CaptionComposer";
 import { CompositionContext, EventDescription, asSport, type CaptionStyle } from "@core/caption/CompositionContext";
 import { UNIDENTIFIED_TOKEN } from "@core/caption/PlayerReference";
-import { AnthropicClient, type KeyCheck } from "@core/anthropic/AnthropicClient";
+import { AnthropicClient, ClientError, type KeyCheck } from "@core/anthropic/AnthropicClient";
 import { needsOnboarding } from "./onboarding";
 import { AltTextRequest, SimpleAltText } from "@core/anthropic/AltText";
 import { VisionModel, ImagePrep } from "@core/anthropic/VisionModel";
@@ -308,6 +308,13 @@ export const derive = {
 };
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+/** What went wrong, in words a person can act on. */
+function describeFailure(e: unknown): string {
+  if (e instanceof ClientError && e.status === 401) return "Anthropic rejected the API key (HTTP 401). It may have been revoked or rotated — check it in Settings.";
+  if (e instanceof ClientError && e.status === 429) return "Anthropic is rate-limiting this key right now. Wait a moment and try again.";
+  return String((e as Error)?.message ?? e);
+}
 
 function toRosterPlayer(p: ImportedPlayer, teamID: string): RosterPlayer {
   const side = p.side === "offense" || p.side === "defense" || p.side === "specialTeams" ? p.side : "unknown";
@@ -633,7 +640,10 @@ export const useStore = create<State>()((set, get) => {
         // Extraction is a text job on a few thousand tokens, so it runs on the cheap model
         // whatever the vision pass is set to.
         const client = new AnthropicClient({ apiKey: s.apiKey, model: "claude-haiku-4-5-20251001", maxTokens: 8000 });
-        const { players } = await RosterImporter.importRoster(html, client, () => set({ importStatus: "Nothing in the page text — reading its data…" }));
+        const { players, source, usage } = await RosterImporter.importRoster(html, client, () => set({ importStatus: "Nothing in the page text — reading its data…" }));
+        const reader = VisionModel.byID(client.model);
+        const spent = VisionModel.cost(reader, usage.inputTokens, usage.outputTokens);
+        const how = `${reader.name} read ${source === "scriptPayload" ? "the page's data" : "the page"} · ${(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens · ${spent < 0.005 ? "under a cent" : "$" + spent.toFixed(2)}`;
 
         let team = SavedTeam.make({ identity, level: s.selection.level, sport: s.selection.sportID, gender: s.selection.gender, players });
         if (SavedTeam.genderMismatch(team) && identity.reportedGender) warnings.push(`That page is the ${identity.reportedGender.toLowerCase()} team — check this is the squad you meant.`);
@@ -646,9 +656,9 @@ export const useStore = create<State>()((set, get) => {
         const stored = await persistTeam(team);
         await loadLogos([stored]);
         adoptTeam(side, stored);
-        set({ importing: null, importWarnings: warnings, importStatus: `${SavedTeam.fullName(stored)} — ${stored.players.length} players` });
+        set({ importing: null, importWarnings: warnings, importStatus: `${SavedTeam.fullName(stored)} — ${stored.players.length} players · ${how}` });
       } catch (e) {
-        set({ importing: null, importStatus: "", importWarnings: [], importError: e instanceof ImportError ? e.message : String((e as Error).message ?? e) });
+        set({ importing: null, importStatus: "", importWarnings: [], importError: e instanceof ImportError ? e.message : describeFailure(e) });
       }
     },
 
@@ -749,6 +759,13 @@ export const useStore = create<State>()((set, get) => {
       // Run the first alone so it writes the prompt cache, then fan out — otherwise several
       // requests race to write the same prefix instead of reading it.
       await work(todo[0]);
+      // A key Anthropic rejects will reject every frame: stop here, and say so once.
+      const first = frame(todo[0].id);
+      if (generation === runGeneration && first?.state === "failed" && /\b401\b/.test(first.error ?? "")) {
+        set((st) => ({ isRunning: false, statusLine: "Stopped — the API key was rejected.", frames: st.frames.map((f) => (f.state === "working" ? { ...f, state: "pending" as FrameState } : f)) }));
+        get().notify(describeFailure(new ClientError("http", first.error ?? "", 401)));
+        return;
+      }
       const rest = todo.slice(1);
       let next = 0;
       const worker = async () => { while (next < rest.length && generation === runGeneration) { const f = rest[next++]; await work(f); } };

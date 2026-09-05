@@ -55,7 +55,8 @@ export const SCHOOL_CODES: Record<string, string> = {
 };
 
 function normalise(s: string): string {
-  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+  // A hyphen or slash joins two names into one school — "Ashland-Greenwood" is two words.
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[-–—/]/g, " ")
     .replace(/[^a-z0-9 ]/g, "").split(" ").filter(Boolean).join(" ");
 }
 
@@ -98,9 +99,12 @@ export const HDSNaming = {
     }
     // Deriving from the split name is wrong for a two-word school with no nickname: "Notre
     // Dame" splits as school "Notre" plus nickname "Dame", which derived "NOT" instead of "ND".
-    // Prefer the split name only when it is itself more than one word.
+    // Prefer the split name when it is itself more than one word, or when what came off the end
+    // reads as a mascot — a plural, "Rockets", "Bluejays" — so "Syracuse Rockets" gives "SYR".
+    const { nickname } = TeamName.split(team);
     const schoolWords = normalise(school).split(" ").filter(Boolean).length;
-    const basis = schoolWords > 1 ? school : team;
+    const mascotLike = !!nickname && /s$/i.test(nickname) && nickname.length > 3;
+    const basis = schoolWords > 1 || mascotLike ? school : team;
     return { code: derive(basis), isKnown: false };
   },
 

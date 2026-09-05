@@ -50,6 +50,11 @@ describe("The document's worked examples", () => {
     expect(HDSNaming.schoolCode("Notre Dame").code).toBe("ND");
     expect(HDSNaming.schoolCode("Notre Dame Fighting Irish").code).toBe("ND");
     expect(HDSNaming.schoolCode("Notre Dame").isKnown).toBe(false);
+    // A hyphenated school is two words; a plural nickname marks where the school ends.
+    expect(HDSNaming.schoolCode("Ashland-Greenwood Bluejays").code).toBe("AG");
+    expect(HDSNaming.schoolCode("Ashland-Greenwood").code).toBe("AG");
+    expect(HDSNaming.schoolCode("Syracuse Rockets").code).toBe("SYR");
+    expect(HDSNaming.schoolCode("Syracuse").code).toBe("SYR");
   });
   it("makes initials", () => {
     expect(HDSNaming.initials("Eli Larson")).toBe("EL");
