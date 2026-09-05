@@ -65,7 +65,7 @@ export interface Frame {
   writeError: string | null;
 }
 
-export interface SideState { name: string; colour: string; rosterURL: string; team: SavedTeam | null }
+export interface SideState { name: string; colour: string; rosterURL: string; team: SavedTeam | null; /** The user set the colour for this fixture; an import must not propose over it. */ colourSet: boolean }
 
 export const thumbnails = new ImageCache(3);
 export const previews = new ImageCache(2);
@@ -390,14 +390,22 @@ export const useStore = create<State>()((set, get) => {
     return CaptionComposer.compose(CaptionRecord.correctedVision(rec), cc);
   };
 
-  const recomposeFrame = async (id: string) => {
+  /**
+   * Rebuild one caption from its stored observation. Returns "changed", "same", or "kept" — kept
+   * meaning a caption someone typed by hand, which a bulk rebuild must not overwrite. Nothing is
+   * written to disk when the words did not change.
+   */
+  const recomposeFrame = async (id: string, opts: { force?: boolean } = {}): Promise<"changed" | "same" | "kept"> => {
     const f = frame(id);
-    if (!f || !f.record) return;
+    if (!f || !f.record) return "same";
+    if (f.edited && !opts.force) return "kept";
     const out = composeFor(get(), f.record, f.exif);
+    if (out.caption === f.caption && !f.edited) { patchFrame(id, { needsNumber: CaptionRecord.needsReview(f.record) }); return "same"; }
     const rec = { ...f.record, caption: out.caption };
     patchFrame(id, { record: rec, caption: out.caption, needsNumber: CaptionRecord.needsReview(rec), edited: false });
     await saveRecord(f, rec);
     await writeMetadata({ ...f, record: rec, caption: out.caption, edited: false });
+    return "changed";
   };
 
   const scanFolder = async () => {
@@ -436,9 +444,10 @@ export const useStore = create<State>()((set, get) => {
     const other = side === "home" ? s.away.colour : s.home.colour;
     const proposed = TeamIdentity.suggestedKitColour(team.identity);
     const patch: Partial<SideState> = { team, name: SavedTeam.fullName(team) || s[side].name };
-    // The kit colour is only proposed: published school colours are brand colours, and a team in
-    // its white change shirt still publishes red as colour one.
-    if (proposed && !TeamColorArbiter.sameFamily(proposed, other)) patch.colour = proposed;
+    // The kit colour is only proposed, and only into a colour nobody has set for this fixture:
+    // published school colours are brand colours, and a team in its road whites still publishes
+    // green as colour one. A colour the photographer typed is what the team wore.
+    if (proposed && !s[side].colourSet && !TeamColorArbiter.sameFamily(proposed, other)) patch.colour = proposed;
     const page = team.identity.rosterURL ?? team.identity.sourceURL;
     if (team.source === "web" && page) patch.rosterURL = page;
     set({ [side]: { ...s[side], ...patch } } as Partial<State>);
@@ -489,8 +498,8 @@ export const useStore = create<State>()((set, get) => {
     ready: false, screen: "start", panel: null, writableFolders: typeof window !== "undefined" && "showDirectoryPicker" in window, relay: null,
     settings: DEFAULT_SETTINGS, apiKey: "", library: [], logoURLs: {}, recents: [], templateNames: [],
     selection: GameSelection.make(), rosterMode: "rosters",
-    home: { name: "", colour: "white", rosterURL: "", team: null },
-    away: { name: "", colour: "navy", rosterURL: "", team: null },
+    home: { name: "", colour: "white", rosterURL: "", team: null, colourSet: false },
+    away: { name: "", colour: "navy", rosterURL: "", team: null, colourSet: false },
     eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
     folder: null, photoCount: 0, shootDate: null,
     importing: null, importStatus: "", importError: null, importWarnings: [],
@@ -550,8 +559,8 @@ export const useStore = create<State>()((set, get) => {
       const sel = GameSelection.make(game.level, game.sport, game.gender);
       set({
         selection: sel, rosterMode: game.rosterMode, eventName: game.eventName, participantNoun: game.participantNoun,
-        home: { name: game.homeName, colour: game.homeColor, rosterURL: game.homeRosterURL, team: lib.find((t) => t.id === game.homeTeamID) ?? null },
-        away: { name: game.awayName, colour: game.awayColor, rosterURL: game.awayRosterURL, team: lib.find((t) => t.id === game.awayTeamID) ?? null },
+        home: { name: game.homeName, colour: game.homeColor, rosterURL: game.homeRosterURL, team: lib.find((t) => t.id === game.homeTeamID) ?? null, colourSet: true },
+        away: { name: game.awayName, colour: game.awayColor, rosterURL: game.awayRosterURL, team: lib.find((t) => t.id === game.awayTeamID) ?? null, colourSet: true },
         venue: game.venue, city: game.city, state: game.state, notes: game.notes, importError: null, importWarnings: [], importStatus: "",
       });
       const missing = [game.homeTeamID && !get().home.team ? "home" : null, game.awayTeamID && !get().away.team ? "away" : null].filter(Boolean);
@@ -574,8 +583,8 @@ export const useStore = create<State>()((set, get) => {
     },
     /** A new card is a new fixture. What stays is what is not about this fixture. */
     startOver() {
-      set({ home: { name: "", colour: "white", rosterURL: GameSelection.suggestedHomeURL(get().selection) ?? "", team: null },
-            away: { name: "", colour: "navy", rosterURL: "", team: null },
+      set({ home: { name: "", colour: "white", rosterURL: GameSelection.suggestedHomeURL(get().selection) ?? "", team: null, colourSet: false },
+            away: { name: "", colour: "navy", rosterURL: "", team: null, colourSet: false },
             eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
             folder: null, frames: [], photoCount: 0, shootDate: null, importError: null, importWarnings: [], importStatus: "", importing: null,
             statusLine: "", tokensIn: 0, tokensOut: 0, tokensCacheWrite: 0, tokensCacheRead: 0, selectedID: null, filter: "all", screen: "start" });
@@ -589,7 +598,7 @@ export const useStore = create<State>()((set, get) => {
     setSport(id) { const sel = GameSelection.setSport(get().selection, id); set({ selection: sel }); refreshSuggestedURL(sel); },
     setGender(g) { const sel = GameSelection.setGender(get().selection, g); set({ selection: sel }); refreshSuggestedURL(sel); },
     setRosterMode: (rosterMode) => set({ rosterMode }),
-    setSide: (side, patch) => set({ [side]: { ...get()[side], ...patch } } as Partial<State>),
+    setSide: (side, patch) => set({ [side]: { ...get()[side], ...patch, ...("colour" in patch ? { colourSet: true } : {}) } } as Partial<State>),
     setFields: (patch) => set(patch),
 
     async importTeam(side) {
@@ -690,6 +699,9 @@ export const useStore = create<State>()((set, get) => {
     async continueToReview() {
       if (!derive.canContinue(get())) return;
       await remember();
+      // A kit colour, a venue or a name changed on the way back reaches every caption here, with
+      // no request — and nothing is written when nothing changed.
+      if (get().frames.some((f) => f.record)) await get().recomposeAll();
       set({ screen: "review" });
     },
 
@@ -811,7 +823,7 @@ export const useStore = create<State>()((set, get) => {
       const trimmed = number.trim();
       if (trimmed) manual[slot] = trimmed; else delete manual[slot];
       patchFrame(id, { record: { ...f.record, manualJerseyNumbers: manual } });
-      await recomposeFrame(id);
+      await recomposeFrame(id, { force: true });
     },
 
     async updateCaption(id, text) {
@@ -824,16 +836,17 @@ export const useStore = create<State>()((set, get) => {
       await writeMetadata({ ...f, caption: trimmed, edited: true, record: rec });
     },
 
-    recompose: recomposeFrame,
+    async recompose(id) { await recomposeFrame(id, { force: true }); },
     async recomposeAll() {
       const targets = get().frames.filter((f) => f.record);
-      let changed = 0;
+      if (!targets.length) return;
+      let changed = 0, kept = 0;
       for (const f of targets) {
-        const before = f.caption;
-        await recomposeFrame(f.id);
-        if (frame(f.id)?.caption !== before) changed++;
+        const r = await recomposeFrame(f.id);
+        if (r === "changed") changed++;
+        if (r === "kept") kept++;
       }
-      set({ bulkLabel: `Re-composed ${targets.length}; ${changed} changed.` });
+      set({ bulkLabel: `Re-composed ${targets.length}; ${changed} changed${kept ? `; ${kept} edited by hand left alone` : ""}.` });
     },
 
     async setApproved(id, approved) {
@@ -873,10 +886,10 @@ export const useStore = create<State>()((set, get) => {
         const reply = await client.analyse(jpeg, VisionPrompt.system, context);
         const vision = VisionResult.fromJSON(CaptionResponseParser.decodeJSON(reply.text));
         const rec: CaptionRecord = { ...(f.record ?? CaptionRecord.make({ filename: f.name, vision, caption: "", capturedAt: PhotoMetadata.apStyleDate(exif) })), vision, manualJerseyNumbers: {} };
-        patchFrame(id, { record: rec, exif, state: "done" });
+        patchFrame(id, { record: rec, exif, state: "done", edited: false });
         set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens, tokensOut: st.tokensOut + reply.usage.outputTokens,
           tokensCacheWrite: st.tokensCacheWrite + (reply.usage.cacheCreationInputTokens ?? 0), tokensCacheRead: st.tokensCacheRead + (reply.usage.cacheReadInputTokens ?? 0) }));
-        await recomposeFrame(id);
+        await recomposeFrame(id, { force: true });
         set({ statusLine: `Captioned ${f.name} again.` });
       } catch (e) {
         patchFrame(id, { state: "done" });

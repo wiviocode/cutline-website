@@ -18,6 +18,7 @@ import { CaptionRecord, type ReviewStatus } from "@core/records/CaptionRecord";
 import { RosterPlayer } from "@core/roster/Roster";
 import { RosterMatcher } from "@core/roster/RosterMatcher";
 import { asSport } from "@core/caption/CompositionContext";
+import { TeamColorArbiter } from "@core/roster/TeamColorArbiter";
 import { VisionModel } from "@core/anthropic/VisionModel";
 
 function visible(frames: Frame[], filter: ReviewStatus): Frame[] {
@@ -125,7 +126,8 @@ function Stage({ frame, zoom, onToggleZoom }: { frame: Frame | null; zoom: boole
   const [origin, setOrigin] = useState("50% 50%");
   useEffect(() => {
     let alive = true;
-    setUrl(frame ? previews.cached(frame.id) : null);
+    // The thumbnail stands in while a 20 MB frame decodes, so the stage is never blank.
+    setUrl(frame ? previews.cached(frame.id) ?? thumbnails.cached(frame.id) : null);
     if (frame) void previews.url(frame.id, () => frame.photo.file(), PREVIEW_EDGE).then((u) => { if (alive) setUrl(u); }).catch(() => {});
     return () => { alive = false; };
   }, [frame?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -173,6 +175,7 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
   const recaption = useStore((s) => s.recaption);
   const setApproved = useStore((s) => s.setApproved);
   const approveAndAdvance = useStore((s) => s.approveAndAdvance);
+  const setKitColour = useStore((s) => s.setKitColour);
   const roster = useMemo(() => derive.roster(useStore.getState()), [rosterMode, home, away]); // eslint-disable-line react-hooks/exhaustive-deps
   const matcher = useMemo(() => new RosterMatcher(roster, asSport(sportID)), [roster, sportID]);
 
@@ -183,6 +186,14 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
 
   const spans = CaptionParts.split(frame.caption, roster);
   const players = frame.record ? CaptionRecord.correctedVision(frame.record).players : [];
+  // A numbered jersey in a colour neither team is set to names nobody. Say so here, on the frame
+  // where it shows, with the two one-click fixes — the shoot-wide alarm waits for a pattern.
+  const orphan = rosterMode === "noTeams" ? null : (() => {
+    const lost = players.filter((p) => p.jerseyNumber && p.jerseyColor.trim() && !TeamColorArbiter.team(roster, p.jerseyColor));
+    if (!lost.length) return null;
+    const colour = lost[0].jerseyColor.trim().toLowerCase();
+    return { colour, numbers: lost.filter((p) => p.jerseyColor.trim().toLowerCase() === colour).map((p) => "#" + p.jerseyNumber) };
+  })();
 
   const save = () => {
     const text = draft.replace(/\s*\n+\s*/g, " ").trim();
@@ -227,6 +238,16 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
                 onClick={() => setPop({ slot, value: p.jerseyNumber })} />;
             })}
           </div>
+          {orphan && (
+            <div style={{ marginTop: 10 }}>
+              <Callout kind="warn" actions={<>
+                <Button variant="secondary" onClick={() => void setKitColour(orphan.colour, "home")}>{home.name || "Home"} wore {orphan.colour}</Button>
+                <Button variant="secondary" onClick={() => void setKitColour(orphan.colour, "away")}>{away.name || "Away"} wore {orphan.colour}</Button>
+              </>}>
+                <b>{orphan.numbers.join(", ")} in {orphan.colour} matched neither team.</b> Say who wore {orphan.colour} and every caption is rebuilt, with no new requests.
+              </Callout>
+            </div>
+          )}
           {pop && (
             <div className="pop" role="dialog" aria-label="Jersey number">
               <b>Jersey number</b>

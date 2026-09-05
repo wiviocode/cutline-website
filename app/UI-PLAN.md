@@ -188,3 +188,20 @@ of ours is in the middle; the photographs go to the model you chose, and nowhere
 - Four claims that the photographs "never leave your machine" were false — resized copies go to
   the model — and now say that no server of ours is in the middle.
 
+## From a real game: Ashland-Greenwood v Syracuse, six frames, two rosters
+
+Run on the photographer's own key, Sonnet 5 at 1616 px, both rosters read from MaxPreps links.
+
+- **Roster import.** Haiku 4.5 read each team from MaxPreps' embedded data (the visible text is
+  an empty shell): Syracuse, 38 players, 34,411 tokens, four cents; Ashland-Greenwood, 57 players.
+  School, mascot, colours, logo and gender all came from the page. The status line now says so.
+- **Captions.** Six frames in eleven seconds for eight cents, cache included. 31 became Grayson
+  Nolan, 73 Peyton Groteluschen, 6 Rogan Cerveny; two Rockets in white were XXXXX because the
+  import had overwritten the typed kit colour with the school's green.
+- **Fixed from it.** A colour the photographer typed is never overwritten by an import. A frame
+  whose numbered jersey matched neither team says so in the rail, with the two one-click fixes;
+  the shoot-wide alarm still waits for a pattern. "A Ashland-Greenwood coach" became "An". Alt
+  text uses the model's own phrase for a scene. Returning from the game screen recomposes every
+  caption for free, writes nothing that did not change, and leaves hand edits alone. The stage
+  shows the thumbnail while a 27 MB frame decodes. File codes read AG_v_SYR.
+

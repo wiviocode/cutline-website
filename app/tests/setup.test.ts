@@ -200,6 +200,14 @@ describe("Alt text", () => {
   });
   const alt = (scene: (typeof SCENE_TYPES)[number], players = 0, action = "", sport = "Volleyball", venue = "Lincoln Southwest High School") =>
     SimpleAltText.build(VisionResult.make({ sceneType: scene, players: Array.from({ length: players }, (_, i) => VisionPlayer.make(String(i + 1), "white", "hits the ball")), primaryAction: action }), sport, venue);
+  it("uses the model's own phrase for a scene when it gave one", () => {
+    const walk = VisionResult.make({ sceneType: "celebration", sceneDescription: "walk together carrying a flag before the game" });
+    expect(SimpleAltText.build(walk, "football", "")).toBe("Players walk together carrying a flag before the game.");
+    const huddle = VisionResult.make({ sceneType: "celebration", sceneDescription: "huddle together and celebrate" });
+    expect(SimpleAltText.build(huddle, "football", "Memorial Stadium")).toBe("Players huddle together and celebrate during a game on an outdoor field.");
+    const coach = VisionResult.make({ sceneType: "coaches", sceneDescription: "talks to his players." });
+    expect(SimpleAltText.build(coach, "football", "")).toBe("A coach talks to his players during a game.");
+  });
   it("builds a safe sentence from the observation already in hand", () => {
     const two = alt("players_action", 2);
     expect(two.endsWith(".")).toBe(true);

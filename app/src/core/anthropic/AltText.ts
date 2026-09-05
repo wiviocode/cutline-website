@@ -70,6 +70,15 @@ export const SimpleAltText = {
   build(vision: VisionResult, sport: string, venue: string): string {
     const s = sport.trim().toLowerCase();
     const setting = settingFor(venue);
+    // A phrase from the model beats a stock line: "Players walk together carrying a flag before
+    // the game" rather than "Players celebrate". A phrase that already places the moment in the
+    // game does not get the setting appended to it.
+    const phrase = vision.sceneDescription.trim().replace(/[.\s]+$/, "");
+    const noun: Partial<Record<VisionResult["sceneType"], string>> = { crowd: "Fans", cheerleaders: "Cheerleaders", band: "A marching band", mascot: "A team mascot", coaches: "A coach", bench: "Players", celebration: "Players" };
+    if (phrase && noun[vision.sceneType]) {
+      const sentence = `${noun[vision.sceneType]} ${phrase}`;
+      return (/\b(game|match|meet|before|after|during|halftime|kickoff)\b/i.test(phrase) ? sentence : `${sentence} ${setting}`).trim() + ".";
+    }
     let subject: string;
     switch (vision.sceneType) {
       case "crowd":        subject = "Spectators watch from the stands"; break;

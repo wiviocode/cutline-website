@@ -97,6 +97,14 @@ describe("Documented rules", () => {
     expect(RosterMatcher.isPlausibleMisread("7", "22")).toBe(false);
     expect(RosterMatcher.isPlausibleMisread("0", "00")).toBe(false);
   });
+  it("chooses the article by the school's first sound", () => {
+    const ag = Team.make("Ashland-Greenwood", "blue", "Bluejays");
+    const syr = Team.make("Syracuse", "white", "Rockets");
+    const ctx = CompositionContext.make({ style: "hurrdatSports", sport: "football", roster: Roster.make(ag, syr, []) });
+    const coach = (colour: string) => VisionResult.make({ sceneType: "coaches", sceneDescription: "talks to his players", subjectTeamColor: colour, nearbyPlayerColors: [colour] });
+    expect(CaptionComposer.compose(coach("blue"), ctx).caption).toMatch(/^An Ashland-Greenwood Bluejays coach talks to his players/);
+    expect(CaptionComposer.compose(coach("white"), ctx).caption).toMatch(/^A Syracuse Rockets coach talks to his players/);
+  });
   it("gives an unplaced scene a subject when a team's colour is in frame, and only then", () => {
     const neb = Team.make("Nebraska", "red", "Cornhuskers");
     const osu = Team.make("Ohio State", "white", "Buckeyes");

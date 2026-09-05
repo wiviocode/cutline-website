@@ -10,6 +10,11 @@ import { Team } from "../roster/Roster";
 import type { SceneType } from "../vision/VisionResult";
 import type { CaptionStyle } from "./CompositionContext";
 
+/** "An" before a vowel sound: "An Ohio State coach", "A Nebraska coach", "A Utah coach". */
+export function indefiniteArticle(word: string): string {
+  return /^[aeio]/i.test(word.trim()) ? "An" : "A";
+}
+
 export const SceneFallback = {
   /** Subject noun phrase, and whether it takes a plural verb. */
   subject(scene: SceneType, team: Team | null, _style: CaptionStyle, _professional: boolean): { text: string; plural: boolean } | null {
@@ -19,13 +24,13 @@ export const SceneFallback = {
       case "cheerleaders": return { text: name ? `${name} cheerleaders` : "Cheerleaders", plural: true };
       case "band":         return { text: name ? `The ${name} band` : "The band", plural: false };
       case "mascot":       return { text: name ? `The ${name} mascot` : "The mascot", plural: false };
-      case "coaches":      return { text: name ? `A ${name} coach` : "A coach", plural: false };
+      case "coaches":      return { text: name ? `${indefiniteArticle(name)} ${name} coach` : "A coach", plural: false };
       case "bench":        return { text: team ? Team.groupLabel(team, "players") : "Players", plural: true };
       case "celebration":  return { text: team ? Team.groupLabel(team, "players") : "Players", plural: true };
       // A scene the model could not place — a portrait, a warm-up, a moment on the sideline. With
       // a team's colour in frame the subject is one of its players; without one there is nothing
       // honest to say, and the caller falls back to the phrase alone.
-      case "other":        return team ? { text: `A ${Team.fullName(team)} player`, plural: false } : null;
+      case "other":        return team ? { text: `${indefiniteArticle(Team.fullName(team))} ${Team.fullName(team)} player`, plural: false } : null;
       default:             return null;
     }
   },
