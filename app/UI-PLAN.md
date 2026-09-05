@@ -123,3 +123,23 @@ visible, one line each.
    shortcuts and toast.
 6. `tsc`, the test suite, `vite build`; then a walk through every screen in the browser at two
    widths, with the console open, before it ships.
+
+## What was checked before it shipped
+
+Same day, in Chromium at 1280 and at 800 pixels wide, with the console open:
+
+- **Welcome.** A malformed key is refused before any request; a well-formed wrong key gets
+  Anthropic's 401 reported in words; Continue stays off until a key is saved. The style cards
+  show real sample captions that change with the photographer's name. The model cards show
+  list prices. The write switch is on because the browser can write. Finish lands on Start.
+- **Start → Game.** Three photographs seeded; the folder row reads the capture date; the
+  footer names the missing answer and turns to Ready when it is given. The team sheet takes
+  focus, sets name and colour, and closes on Escape. The open-event fields work.
+- **Review.** Arrows move, space zooms, `e` opens the editor with focus and arrows are ignored
+  while it is open, Escape closes it, Return approves and advances with the counts updating.
+  A run with a rejected key fails every frame with the HTTP reason, marks the thumbnails, and
+  ends with "Done — 0 captioned, 3 failed". Settings and Rename open, take focus, and close on
+  Escape. At 800px the rail sits under the stage and nothing scrolls sideways.
+- **Back and out.** ‹ Game keeps every field; Start over clears the fixture and lists the
+  shoot under Recent; "Run it again" in Settings reopens Welcome on the byline step.
+- Zero console errors from the app. `tsc` clean, 159 checks passing, `vite build` clean.
