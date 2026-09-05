@@ -22,6 +22,17 @@ export function App() {
         {!s.writableFolders && <span className="dim small" title="Safari and Firefox cannot write to files on disk">read-only browser</span>}
         <Button variant="secondary" onClick={() => s.setPanel("settings")} title="API key, caption style and output"><Gear />Settings</Button>
       </nav>
+      {!s.apiKey && (
+        <div className="banner" role="status">
+          <span className="glyph">!</span>
+          <div>
+            <b>Add your Anthropic API key to start captioning.</b> Cutline calls the model from this page with your own key. The key is kept in this browser, on this site only, and is sent to nothing but api.anthropic.com — so a key saved elsewhere is not here. Get one at <a href="https://console.anthropic.com/" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>console.anthropic.com</a>.
+            <div className="banner-actions">
+              <Button onClick={() => s.setPanel("settings")}>Add a key in Settings</Button>
+            </div>
+          </div>
+        </div>
+      )}
       {s.screen === "setup" ? <SetupScreen /> : <ReviewScreen />}
       {s.panel === "settings" && <SettingsPanel onClose={() => s.setPanel(null)} />}
       {s.panel === "rename" && <RenamePanel onClose={() => s.setPanel(null)} />}
