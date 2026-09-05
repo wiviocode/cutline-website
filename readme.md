@@ -7,6 +7,7 @@ Audience: working sports photographers and photo desks. Verification culture: 91
 ## Sources
 - GitHub: https://github.com/wiviocode/cutline (branch main) — README.md, Tools/make-brand.swift (canonical brand numbers/colors), Sources/CaptionComposer/WireStyle.swift (house styles), Sources/CutlineApp/ReviewUI.swift + SetupUI.swift (app screens).
 - This project's marketing site (Cutline.dc.html) and app-screen recreations (App Review.dc.html, App Setup.dc.html).
+- This repository: https://github.com/wiviocode/cutline-website — the site, and the app under app/ (MIT).
 
 ## Products
 1. **Marketing website** — dark, editorial one-pager (hero, caption demo, steps, review demo, open the app).

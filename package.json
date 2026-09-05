@@ -1,6 +1,7 @@
 {
   "name": "cutline-site",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "npm --prefix app ci --include=dev && npm --prefix app run build && node scripts/build-site.mjs",
