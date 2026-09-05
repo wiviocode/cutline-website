@@ -1,5 +1,7 @@
 # Cutline Design System
 
+The brand and design system behind the site and the app. For what Cutline is and how to run it, see [README.md](README.md).
+
 Cutline is a free, open-source app that runs in the browser and captions sports photographs: drop a folder, pick the teams, and it identifies players by jersey number against a roster, writes the caption in the desk's house style, and files IPTC/XMP metadata into the photograph. Bring your own model — an Anthropic API key. Built for Nebraska D-I and high-school sports, general by design.
 
 Audience: working sports photographers and photo desks. Verification culture: 910 checks, thirteen byte-for-byte "golden captions."
