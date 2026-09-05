@@ -38,7 +38,16 @@ export const PlayerReference = {
       const label = TeamNoun.singularTeamLabel(match.team.name, match.team.nickname) ?? Team.fullName(match.team);
       return `${label} ${name} ${number}`;
     }
+    // The AP form is team, position, name. A roster that gives no position — most high-school
+    // rosters — would leave "Syracuse Rockets Logan Jazbec", so the school takes the possessive
+    // instead: "Syracuse's Logan Jazbec (22)".
+    if (WireStyle.includesPosition(style) && !match.player.position) return `${PlayerReference.possessive(match.team.name)} ${name} ${number}`;
     return `${parts.join(" ")} ${number}`;
+  },
+
+  /** "Nebraska's", "Texas'" — AP adds only the apostrophe to a proper name ending in s. */
+  possessive(name: string): string {
+    return /s$/i.test(name.trim()) ? `${name.trim()}'` : `${name.trim()}'s`;
   },
 
   /**

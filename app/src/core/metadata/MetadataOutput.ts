@@ -23,6 +23,8 @@ export interface OutputOptions {
   state?: string;
   /** What the desk's sheet wants that a template cannot hold. Null leaves the template's own values alone. */
   fields?: HurrdatFields | null;
+  /** The By-line, when the template supplies none — the name from Settings. */
+  photographer?: string | null;
 }
 
 export const MetadataOutput = {
@@ -50,8 +52,9 @@ export const MetadataOutput = {
     // correct one, and it is what the IIM 2:55 dataset is derived from.
     const day = PhotoMetadata.iptcDateCreated(exif);
     if (day) {
-      packet = packet
-        .replace(/photoshop:DateCreated="[^"]*"/g, `photoshop:DateCreated="${day}"`)
+      // Set, not merely replaced: a packet built without a template has no date to replace, and
+      // the IIM 2:55 dataset a desk files by is derived from this attribute.
+      packet = XMPFieldWriter.setAttribute("photoshop:DateCreated", day, packet)
         .replace(/xmp:CreateDate="[^"]*"/g, `xmp:CreateDate="${day}"`);
     }
 
@@ -65,6 +68,9 @@ export const MetadataOutput = {
       }
       packet = MetadataOutput.apply(fields, packet);
     }
+    // The photographer's name is the By-line. A template that names a creator keeps its own.
+    const photographer = options.photographer?.trim();
+    if (photographer && !/<dc:creator[\s>]/.test(packet)) packet = XMPFieldWriter.setSeq("dc:creator", [photographer], packet);
     return packet;
   },
 

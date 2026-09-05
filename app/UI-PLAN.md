@@ -205,3 +205,21 @@ Run on the photographer's own key, Sonnet 5 at 1616 px, both rosters read from M
   caption for free, writes nothing that did not change, and leaves hand edits alone. The stage
   shows the thumbnail while a 27 MB frame decodes. File codes read AG_v_SYR.
 
+## Writing into the photographs, proven in a sandbox
+
+The pane can only drop files read-only, so the six frames were copied into the browser's private
+file system and handed to the app as a real writable folder — the same class the folder picker
+produces. Six frames written with no errors; records and manifest on disk; image data byte-identical
+to the originals; IPTC caption, headline, city, state, category and code all present. Rename moved
+six photographs and their six records in 0.6 s, and reopening the renamed folder brought every
+caption back from its record.
+
+What the bytes showed, and what changed: a packet built without a Photo Mechanic template used the
+`photoshop:` and `Iptc4xmpExt:` prefixes without declaring them — malformed XML a strict reader
+drops whole — and carried no capture date and no By-line. The writer now declares every namespace
+it uses, sets `photoshop:DateCreated` from the frame's EXIF, and writes `dc:creator` from the
+photographer in Settings when the template names none; IPTC 2:55 and 2:80 follow. A frame reopened
+from its record reads its EXIF before recomposing, so the weekday is not lost; and AP style names a
+player whose roster gives no position by the school's possessive — "Syracuse's Logan Jazbec (22)"
+rather than "Syracuse Rockets Logan Jazbec (22)".
+

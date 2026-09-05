@@ -358,7 +358,7 @@ export const useStore = create<State>()((set, get) => {
     if (!s.folder.writable) { patchFrame(f.id, { writeError: "This browser cannot write into the photographs." }); return; }
     try {
       const exif = f.exif ?? (await readPhotoMetadata(await f.photo.file()));
-      const packet = MetadataOutput.packet(f.caption, f.altText, f.name, exif, { template: await template(), city: s.city, state: s.state, fields: derive.deskFields(s) }, f.edited ? "manual" : "ai");
+      const packet = MetadataOutput.packet(f.caption, f.altText, f.name, exif, { template: await template(), city: s.city, state: s.state, fields: derive.deskFields(s), photographer: s.settings.photographer }, f.edited ? "manual" : "ai");
       if (s.settings.writeSidecars || !SupportedFormats.canEmbed(f.name)) {
         await s.folder.writeText(MetadataOutput.plan(f.name, packet, null).kind === "sidecar" ? f.name.replace(/\.[^.]+$/, "") + ".xmp" : f.name.replace(/\.[^.]+$/, "") + ".xmp", packet);
       }
@@ -399,12 +399,16 @@ export const useStore = create<State>()((set, get) => {
     const f = frame(id);
     if (!f || !f.record) return "same";
     if (f.edited && !opts.force) return "kept";
-    const out = composeFor(get(), f.record, f.exif);
+    // A frame reopened from its record has no EXIF yet, and the weekday in the caption comes from
+    // it. Read it once here rather than composing a caption that is missing a word.
+    let exif = f.exif;
+    if (!exif) { try { exif = await readPhotoMetadata(await f.photo.file()); patchFrame(id, { exif }); } catch { exif = null; } }
+    const out = composeFor(get(), f.record, exif);
     if (out.caption === f.caption && !f.edited) { patchFrame(id, { needsNumber: CaptionRecord.needsReview(f.record) }); return "same"; }
     const rec = { ...f.record, caption: out.caption };
     patchFrame(id, { record: rec, caption: out.caption, needsNumber: CaptionRecord.needsReview(rec), edited: false });
     await saveRecord(f, rec);
-    await writeMetadata({ ...f, record: rec, caption: out.caption, edited: false });
+    await writeMetadata({ ...f, exif, record: rec, caption: out.caption, edited: false });
     return "changed";
   };
 

@@ -16,7 +16,7 @@ import { WireDate } from "../src/core/caption/WireStyle";
 import { USState, APState } from "../src/core/caption/USState";
 import { TeamNoun } from "../src/core/caption/TeamNoun";
 import { Cleanup } from "../src/core/caption/Cleanup";
-import { UNIDENTIFIED_TOKEN } from "../src/core/caption/PlayerReference";
+import { UNIDENTIFIED_TOKEN, PlayerReference } from "../src/core/caption/PlayerReference";
 import { SampleCaption } from "../src/core/caption/SampleCaption";
 import { CaptionParts } from "../src/core/caption/CaptionParts";
 import { KitColourDiagnosis } from "../src/core/setup/KitColourDiagnosis";
@@ -96,6 +96,20 @@ describe("Documented rules", () => {
     expect(RosterMatcher.isPlausibleMisread("0", "3")).toBe(true);
     expect(RosterMatcher.isPlausibleMisread("7", "22")).toBe(false);
     expect(RosterMatcher.isPlausibleMisread("0", "00")).toBe(false);
+  });
+  it("names a player whose roster gives no position by the school's possessive", () => {
+    const ag = Team.make("Ashland-Greenwood", "blue", "Bluejays");
+    const syr = Team.make("Syracuse", "white", "Rockets");
+    const roster = Roster.make(ag, syr, [
+      RosterPlayer.make({ teamID: ag.id, jerseyNumber: "31", firstName: "Grayson", lastName: "Nolan", position: "running back" }),
+      RosterPlayer.make({ teamID: syr.id, jerseyNumber: "22", firstName: "Logan", lastName: "Jazbec", position: "" }),
+    ]);
+    const ctx = CompositionContext.make({ style: "apSports", sport: "football", roster });
+    const play = VisionResult.make({ sceneType: "players_action", players: [VisionPlayer.make("31", "blue", "runs with the ball"), VisionPlayer.make("22", "white", "dives for a tackle")],
+      interaction: { subjectJerseyNumber: "31", subjectJerseyColor: "blue", targetJerseyNumber: "22", targetJerseyColor: "white", phrase: "runs past" } });
+    expect(CaptionComposer.compose(play, ctx).caption).toMatch(/^Ashland-Greenwood Bluejays running back Grayson Nolan \(31\) runs past Syracuse's Logan Jazbec \(22\)/);
+    expect(PlayerReference.possessive("Texas")).toBe("Texas'");
+    expect(PlayerReference.possessive("Nebraska")).toBe("Nebraska's");
   });
   it("chooses the article by the school's first sound", () => {
     const ag = Team.make("Ashland-Greenwood", "blue", "Bluejays");

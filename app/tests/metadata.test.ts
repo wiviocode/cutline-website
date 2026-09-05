@@ -404,6 +404,32 @@ describe("Writing into a real camera JPEG", () => {
     expect(plan.kind).toBe("embed");
     expect(MetadataOutput.plan("DSC01.ARW", packet, null)).toMatchObject({ kind: "sidecar", name: "DSC01.xmp" });
   });
+  it("a packet built without a template declares every namespace it uses, and carries the date and the By-line", () => {
+    const exif: PhotoMetadata = { captureDate: localDate(2026, 9, 4) };
+    const fields = HurrdatFields.make({
+      descriptor: HurrdatFields.descriptor("Ashland-Greenwood", "Boys Football", "Syracuse", HurrdatFields.datePlaceholder),
+      supplementalCategory: "FB", city: "Ashland", state: "Neb.", sublocation: "",
+    });
+    const packet = MetadataOutput.packet(caption, "Two players compete.", "DSC01715.JPG", exif, { template: null, city: "Ashland", state: "Neb.", fields, photographer: "Eli Larson" }, "ai");
+    const used = new Set<string>();
+    for (const m of packet.matchAll(/<\/?([A-Za-z][\w]*):[\w]+/g)) used.add(m[1]);
+    for (const m of packet.matchAll(/\s([A-Za-z][\w]*):[\w]+="/g)) used.add(m[1]);
+    for (const prefix of used) { if (prefix !== "xml" && prefix !== "xmlns") expect(packet, `xmlns:${prefix}`).toContain(`xmlns:${prefix}=`); }
+    expect(used.has("photoshop") && used.has("Iptc4xmpExt")).toBe(true);
+    expect(XMPToIIM.attribute("photoshop:DateCreated", packet)).toBe("2026-09-04");
+    const iim = XMPToIIM.fields(packet);
+    const ds = (n: number) => iim.find((f) => f.dataset === n)?.value;
+    expect(ds(55)).toBe("20260904");
+    expect(ds(80)).toBe("Eli Larson");
+    expect(ds(105)).toBe("Ashland-Greenwood Boys Football v Syracuse - 2026-09-04");
+    expect(ds(15)).toBe("S");
+    expect(ds(20)).toBe("FB");
+    expect(ds(90)).toBe("Ashland");
+    expect(ds(120)).toContain("Reese Borer (8)");
+    // A template that names its own creator keeps it.
+    const templated = MetadataOutput.packet(caption, null, "DSC01.JPG", exif, { template: tpl, photographer: "Somebody Else" }, "ai");
+    expect(XMPToIIM.fields(templated).find((f) => f.dataset === 80)?.value).toBe("Eli Larson");
+  });
   it("rejects non-JPEG input", () => {
     expect(() => JPEGSegments.replacingXMP(new Uint8Array(64), "<x/>")).toThrow();
   });
