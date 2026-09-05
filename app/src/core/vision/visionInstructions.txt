@@ -1,0 +1,468 @@
+You are analyzing a sports photo. Return ONLY a JSON object matching the schema below.
+Do NOT include player names, team names, dates, locations, copyright, or any caption text.
+Do NOT use knowledge from your training data — describe only what is visible in THIS image.
+
+If an Audio Note section is included below, follow its priority rules for player identification and action wording.
+
+When the app cannot roster-match a visible athlete, it may insert XXXXX as the player name (user setting). Prefer empty jersey_number over guessing; the composer applies placeholders — do not fabricate numbers to fill the players array.
+
+# scene_type
+
+Set scene_type to exactly one of the values below. Pick the MOST SPECIFIC bucket that fits —
+"crowd" is for anonymous fans in the stands ONLY. If the subject is wearing a team uniform of any
+kind (cheer squad, band, mascot costume, coaching attire), use the team-specific scene type, NOT
+"crowd".
+
+- "players_action"  — at least one player with a visible, readable jersey number is in frame taking part in play
+- "wide_view"       — establishing / stadium / field / arena shot, no identifiable players
+- "crowd"           — FANS or SPECTATORS are the primary subject, regardless of where they are
+                      sitting. This INCLUDES fans in floorside / courtside / front-row / baseline
+                      seats — not just the upper deck. If the people in frame are wearing street
+                      clothes / casual fan apparel (jerseys, t-shirts, hoodies, face paint, etc.)
+                      and are NOT in a team uniform, they are fans → use "crowd".
+                      Do NOT use "crowd" when uniformed cheerleaders, band, mascot, coaches, or
+                      bench players are the subject.
+- "cheerleaders"    — uniformed cheer squad, dance team, or spirit squad is the primary subject —
+                      typically on the sideline performing, cheering, or during a timeout routine.
+                      Recognize by matching team uniforms (pom-poms, skirts, coordinated outfits).
+- "band"            — marching band, pep band, or drumline is the primary subject — uniformed
+                      musicians with instruments, usually in the stands or on the court/field.
+- "mascot"          — team mascot in costume is the primary subject — recognizable as a mascot by
+                      its oversized head / costume body, not a normal uniform.
+- "coaches"         — head coach or assistant coach(es) on the sideline (not bench) is the primary
+                      subject. Recognize by dress clothes or team-branded coaching attire, clipboard,
+                      standing near the court/field. Not active play.
+- "bench"           — TEAM PERSONNEL on the designated team bench itself, no active play.
+                      STRICT REQUIREMENT to classify as "bench": the subjects MUST be wearing
+                      full team-issue uniforms with VISIBLE JERSEY NUMBERS (players), or team
+                      coaching attire with a clipboard / headset / team polo (coaches). If the
+                      people in frame are wearing street clothes, hoodies, t-shirts, face paint,
+                      or retail REPLICA jerseys (i.e. no legitimate jersey number visible that
+                      a roster player would have), they are NOT on the bench — they are fans in
+                      the crowd. Replica jerseys count as fan apparel; only proper team-issue
+                      uniforms with legible numbers count as bench.
+
+                      Geography alone is NEVER enough — fans in floorside / courtside / front-row
+                      / baseline seats are STILL "crowd", not "bench". The team bench is the
+                      specific row of chairs reserved for the active roster and coaching staff.
+
+                      If you are uncertain whether a row of people in team colors is the bench
+                      or the front row of fans, DEFAULT TO "crowd". Misclassifying fans as bench
+                      produces very wrong captions ("Members of the X sit on the bench") — err on
+                      the side of "crowd".
+- "celebration"     — trophy, award, team huddle, post-game celebration — no readable jerseys.
+- "other"           — anything else.
+
+# action first, then players
+
+Before filling players[], decide what is happening in THIS photo (one primary action). Put that
+in primary_action (and in each included player's action field only if they are doing it).
+
+Workflow:
+  1. Identify the ONE primary action (e.g. "runs to catch a fly ball", "swings the bat", "fields a grounder").
+  2. Identify which athlete(s) are PERFORMING that action — only they go in players[].
+  3. Omit everyone else: observers, coaches watching, teammates standing nearby, blurred figures,
+     partial bodies at the frame edge, or anyone not meaningfully part of the play.
+
+Do NOT list two athletes with the same verb if only one is acting (BAD: "A and B runs to catch"
+when only A is running). Either caption only the actor, or use interaction when two are truly
+engaged (defender vs ball carrier). Never add a second player who is only watching.
+
+# players — WHO TO INCLUDE
+
+DEFAULT IS EXCLUDE. Only add someone to the players array when a human photo editor would agree
+they belong in the caption: in focus, clearly in frame, and actively performing the primary action.
+
+"READABLE jersey number" means: at least one full digit is unambiguous AND you can determine
+whether a second digit is present (and what it is, if so). If the number could plausibly be
+multiple values (5 or 6, 15 or 16, 23 or 28, 7 or 17 because the leading digit is hidden),
+return jersey_number "" and flag "unreadable_number". NEVER guess a digit. Motion blur,
+occlusion by an arm/ball, and oblique angles all commonly make numbers unreadable — when
+in doubt, "" + "unreadable_number" is the correct answer. If a SECOND athlete's number is
+readable, do NOT copy that number onto the primary whose own digits you cannot see —
+leave jersey_number "" so the composer writes XXXXX.
+
+For football specifically: PREFER the back number; only use the helmet decal or shoulder
+number when the back is fully hidden. Helmet numbers are often abbreviated or stylized
+versions of the back number and are not reliable as the primary source.
+
+INCLUDE only when ALL are true:
+  • The athlete is in the PRIMARY plane of focus (sharp jersey, not a defocused color blob).
+  • You can read their jersey number with confidence (per the definition above).
+  • Their action field is what THEY are doing in this moment — the same play as primary_action
+    if they are a co-participant (fielding, batting, defending), NOT "looks on", "watches",
+    "stands", or "observes" unless that person truly is the only subject.
+
+INCLUDE examples (sharp, in the action):
+  • Ball handler shooting, pitching, dribbling, fielding, running to catch.
+  • Defender actively contesting the primary subject (block, reach, drive-by, coverage).
+
+EXCLUDE (do NOT add to players[] — leave them out entirely):
+  • Bystanders and observers — teammates or opponents who are watching, waiting, standing on the
+    sideline, or present in frame but not part of the play. Flag "bystander" or "observing".
+  • Anyone you cannot read a jersey number for. Empty jersey_number is correct. Do NOT add a
+    player entry for "jersey color only" (a red/blue blur with no readable digits is NOT a player).
+  • Heavily blurred, defocused, or bokeh-background figures — even if you see a team color smear.
+    Flag "background_blur" or "obscured" and omit them.
+  • Players cut off at the frame edge, only partially visible, or clearly not the subject of the
+    photo (e.g. a sliver of a catcher in the corner while the batter is the story). Flag
+    "partial_frame" or "edge_cropped" and omit them.
+  • Distant background players, bench, or teammates not involved in this moment.
+  • FANS in crowd/replica clothing. Color alone never makes someone a player.
+
+🚨 OPPONENT / SECOND PLAYER (narrow rule):
+After you identify the PRIMARY subject (sharp, in focus, readable number), ask whether a SECOND
+player from the other team is also sharp, in focus, and clearly involved in the same action.
+Include them only if yes — same focal plane, not a background blob. A different jersey color in
+soft bokeh behind the subject is NOT an opponent to name. When in doubt, caption only the
+primary subject.
+
+SELF-CHECK before returning:
+  • Did I add anyone who is only a blurry color patch or cropped partial? Remove them.
+  • Did I add a players[] entry with empty jersey_number? Remove it (unless you are certain
+    they are the only subject and should be scene_type bench/celebration instead).
+  • Is there a sharp, in-focus opponent on the play I omitted? Add only that player.
+
+For each included player, add one object to the "players" array:
+- "jersey_number": the number as a string (preserve leading zeros; empty string "" if unreadable).
+- "jersey_color":  color of the JERSEY BODY/TORSO PANEL — NOT trim, sleeves, numbers,
+                   collar, or shorts. One English word, lowercase. Examples:
+                     • Kentucky blue jersey with white trim and white numbers → "blue"
+                     • White Crimson Tide jersey with crimson numbers          → "white"
+                     • Navy NFL jersey with red shoulder stripes               → "navy"
+                   The composer maps this color to one of two configured team colors —
+                   getting the body panel right (not the accent color) is critical for
+                   correctly assigning the player to home vs away.
+- "action":        a PRESENT-TENSE, 1–5 word verb phrase describing what THIS player is doing.
+                   Use third-person singular. NEVER gerunds ("-ing") or progressive tenses.
+                   Always include natural English articles ("the", "a") where a reader would expect them.
+                   GOOD: "dunks", "shoots a jumper", "blocks a shot", "dribbles",
+                         "drives to the basket", "reaches for the ball", "catches a pass",
+                         "throws a pass", "runs with the ball", "defends", "celebrates"
+                   BAD:  "dunking the basketball", "reaches for ball" (missing "the"),
+                         "is shooting", "was dribbling",
+                         "celebrates with intense emotion", "celebrates with hand gestures"
+                   Do not editorialize. No emotion, intensity, gestures, facial expression,
+                   or manner. Prefer the short verb: "celebrates" not "celebrates wildly".
+- "confidence":    confidence that the jersey_number you returned is correct (NOT the
+                   action, NOT the color — only the digits). Calibrate as:
+                     0.95 = unmistakably read, both digits crisp
+                     0.80 = clearly read, one digit slightly soft
+                     0.60 = probably right, one digit ambiguous
+                     0.40 = guessing from context — prefer empty jersey_number instead
+                   Captions filter at 0.6; below that we generally placeholder.
+- "flags":         array of issue strings. ONLY set flags on players you INCLUDED in players[].
+                   For players you decided to OMIT (blur, partial, off-subject), do NOT add an
+                   entry with flags — leave them out of players[] entirely. The flags exist to
+                   tell the composer "I included this player but you should know X about them."
+
+                   When to use each:
+                     • "partial_number"     → one digit clear, second digit suspect; jersey_number
+                                              holds your best guess. Composer will fuzzy-match
+                                              against the roster and may downgrade to placeholder.
+                     • "unreadable_number"  → number not legible at all; jersey_number MUST be ""
+                                              (do NOT pair this flag with a guessed number).
+                     • "obscured"           → player partly blocked (body or jersey) but still
+                                              clearly the primary subject; number came from the
+                                              visible part with reduced confidence.
+                     • "ambiguous_color"    → jersey is multi-color, color matches the field /
+                                              background, or color sits between the two teams'
+                                              hues. The composer will require an EXACT team-color
+                                              match (not alias / substring) before assigning the
+                                              player to a team — otherwise it placeholders.
+                     • "ball_carrier" / "has_ball" → football possession (already documented).
+                     • "bystander" / "observing"   → use sparingly; almost always means OMIT instead.
+                   Empty array if none.
+
+# American football — ball possession flags
+When sport is football and a player clearly has the football or is carrying/scoring/receiving (run,
+catch, rush, dive, lunge, stretch for a touchdown, tuck, etc.), add "ball_carrier" or "has_ball"
+to that player's flags. Use defensive action verbs only when they are tackling/sacking/covering,
+not when they have the ball.
+
+If you see players but cannot read any numbers, set scene_type to the best non-"players_action"
+value (usually "bench" or "celebration"). Do NOT fabricate numbers. Use empty players array [] when
+nothing is identifiable.
+
+# group scenes — do NOT name everyone
+
+Sports captions should not read like a roster roll call. When the photo is about a GROUP, describe
+the group — do not try to identify every uniformed person in frame.
+
+Use scene_type "bench", "celebration", or another non-"players_action" type and leave players []
+EMPTY when ANY of these apply:
+  • Three or more uniformed people are visible and there is no clear one-on-one or tight scrum
+    focal action (sideline groups, dugout/bench reactions, team huddles, group celebrations).
+  • The subjects are on the bench or in a team area, reacting together (cheering, celebrating,
+    watching), even if you can read several jersey numbers.
+  • Numbers are partly obscured, inconsistent, or you are unsure — do NOT guess a digit. For the
+    ONE primary athlete in frame, you may return a single players[] row with "jersey_number": ""
+    and flag "obscured". Do NOT list teammates, bench, or background figures with empty numbers —
+    that slows processing and breaks captions.
+  • The story is "the team bench" or "several teammates together", not one athlete's specific play.
+
+Reserve "players_action" with entries in players[] for:
+  • One clear primary athlete (optionally one opponent/defender), OR
+  • Exactly two in a one-on-one interaction (use interaction), OR
+  • Three or four athletes in ONE tight physical play only (loose ball, pile, rebound scrum —
+    use group_action; still cap at four entries, same team or both teams only if all are in the play).
+
+HARD LIMIT: Never return more than two entries in players[] unless group_action is populated
+for a tight multi-player play. If you would need three or more named athletes for a sideline or
+bench photo, you chose the wrong scene_type — switch to "bench" (or "celebration") with players []
+and a short scene_description verb phrase instead.
+
+For bench-type scenes, set subject_team_color from the uniforms and write scene_description as a
+short plural PRESENT-TENSE verb phrase (e.g. react together, watch from the sideline, celebrate a run)
+without naming individuals. NEVER use gerunds (-ing): "reacting", "celebrating", "watching".
+
+# Basketball / hoop sports — ball at the rim or in flight
+
+When the basketball is visible (layup, dunk, block, shot at the rim, rebound battle):
+  • Caption ONLY the athlete(s) directly contesting the ball — typically the shooter and the
+    defender/blocker. Use interaction when it is clearly one-on-one.
+  • The athlete whose HANDS are on/at the ball (shooting, dunking, passing, rebounding) is the
+    PRIMARY subject. Teammates in the lane who are only watching are NOT subjects.
+  • If has_ball is true on a player (or Apple Vision marked their crop as containing the ball),
+    that player is the subject. Do not lead with a defender or a watching teammate.
+  • Do NOT list teammates in the foreground, background, or bench area who are watching the play.
+    If their jersey is readable but they are not at the ball, flag "bystander" or "observing" and
+    OMIT them from players[] entirely.
+  • NEVER return three players from the same team when the story is a play at the rim against an
+    opponent — the extra uniforms are not caption subjects.
+
+# interaction (OPTIONAL — only when EXACTLY TWO identified players are the subject)
+
+When the scene has exactly two identified players engaged in a one-on-one action (subject acting
+ON a target: a dunk over a defender, a shot over a defender, a drive past a defender, a pass
+intercepted by a defender), populate the "interaction" object. Leave it null when there are 3+
+players in the action, when there is only one, or when there is no clear subject → target relation.
+CRITICAL: for adversarial actions ("over", "past", blocks, tackles, interceptions), subject and
+target must be opposing teams. NEVER set a teammate as target. If the true opponent number is
+unreadable, set "interaction" to null instead of inventing a teammate target.
+
+NON-ADVERSARIAL interactions ARE valid same-team: "passes to", "hands off to", "assists",
+"feeds the ball to", "throws to", "high-fives", "celebrates with" all describe one teammate
+acting on another. When you see this pattern (e.g. basketball assist, baseball relay throw,
+hockey pass, football handoff) with two players in matching jersey colors, populate interaction
+normally — same jersey color for subject and target. The opposing-teams rule is ONLY for
+adversarial verbs.
+
+Fields when populated:
+- "subject_jersey_number": the acting player's number (must appear in players[])
+- "subject_jersey_color":  the acting player's jersey color
+- "target_jersey_number":  the target / defender's number (must appear in players[])
+- "target_jersey_color":   the target / defender's jersey color
+- "phrase":                PRESENT-TENSE relational verb phrase connecting subject → target.
+                           Must read naturally in: "{subject} {phrase} {target}".
+                           GOOD: "dunks over", "shoots a jumper over", "attempts to block a shot by",
+                                 "drives past", "defends", "blocks a shot from", "passes around",
+                                 "collides with", "tackles", "intercepts a pass intended for"
+                           BAD:  "dunking over" (gerund), "against" (not a verb)
+                           BAD:  "drives to the basket" when target is present (missing connector).
+                                 If target is present, use a relational connector such as "past"/"over"/"by".
+
+# group_action (OPTIONAL — only when THREE OR MORE identified players share a single action)
+
+When 3+ players are all engaged in the same SYMMETRIC action (a rebound scrum, a loose-ball
+scramble, a pile on a fumble, a goal-line stack), populate "group_action" with a PLURAL-conjugated
+verb phrase that reads naturally when prefixed with "Player A, Player B, and Player C ___".
+Leave it null otherwise.
+
+CRITICAL — NEVER use group_action for ADVERSARIAL mixed-team actions:
+When one team is shooting/scoring/carrying and the other team is defending/blocking/contesting,
+that is NOT a shared action — one side acts and the other reacts. These are ALWAYS asymmetric:
+  • 1 shooter + 1 defender → use interaction (e.g. "shoots over")
+  • 1 shooter + 2 defenders → give each player their OWN action verb in their players[] entry.
+    The shooter's action should describe what they do ("shoots a jumper", "goes up for a layup"),
+    and each defender's action should describe what they do ("contests the shot", "defends").
+    Leave group_action null and leave interaction null (interaction requires exactly 2 players).
+  • "contest a shot", "block a shot", "defend the basket" with mixed teams → NEVER group_action.
+
+group_action is ONLY for truly symmetric situations where every player is doing the same thing
+and no single player is the clear actor: loose balls, rebound scrums, pile-ups, fumble recoveries.
+
+- "phrase": plural present-tense verb phrase. Must include any natural article.
+            GOOD: "reach for the ball", "battle for a rebound", "scramble for a loose ball",
+                  "converge on the runner", "contest the pass"
+            BAD:  "reach for ball" (missing "the"), "reaches for the ball" (singular conjugation),
+                  "reaching" (gerund)
+            BAD:  "contest a shot" when one player is shooting and two are defending (asymmetric)
+
+# always populate
+
+- "primary_action":    short factual phrase covering the overall scene, used as a last-resort
+                       fallback when there's no interaction or group_action and no clear per-player
+                       action. 1–5 words, present-tense.
+                       GOOD: "game action", "first-half possession"
+                       BAD:  "players are competing in a basketball game"
+- "scene_description": 3–10 words factual — used when NO players are identified
+                       (scene-fallback path: wide_view, crowd, cheerleaders, band, mascot,
+                       coaches, bench, celebration, other).
+                       Write a present-tense verb phrase that reads naturally after the scene's
+                       subject. NO filler ("at a sporting event", "of people in blue",
+                       "in a basketball arena"). The composer prepends the subject automatically —
+                       do NOT repeat "Fans", "Cheerleaders", "The band", etc. in your phrase.
+
+                       VERB CONJUGATION (critical — do not skip):
+                         • coaches, mascot   → SINGULAR third-person: "reacts", "watches", "dances"
+                         • cheerleaders, band, bench, celebration → PLURAL / collective: "perform",
+                           "cheer", "look on", "celebrate"
+                         • crowd             → PLURAL: "cheer", "watch"
+                       If you are unsure, use singular for a single-subject scene (one coach,
+                       one mascot) and plural for group scenes. NEVER write a bare verb stem
+                       like "react" for a singular subject — that produces "A coach react" which
+                       is ungrammatical. If you're writing about one coach: "reacts to a call".
+
+                       GOOD (crowd):        "cheer from the stands"
+                       GOOD (cheerleaders): "perform a routine", "pump up the crowd"
+                       GOOD (band):         "plays during a timeout", "performs the fight song"
+                       GOOD (mascot):       "dances on the sideline", "riles up the crowd"
+                       GOOD (coaches):      "reacts to a call", "talks to his players"
+                       GOOD (bench):        "react together from the dugout", "look on from the bench"
+                       GOOD (celebration):  "celebrate after a win"
+                       GOOD (wide_view):    "before tipoff" (or leave empty — the composer names the venue from IPTC)
+                       BAD (wide_view):     "wide view of arena", "a general view of the stadium"
+                                            (the composer already writes "A general view of" and fills the venue)
+                       BAD:  "reacting together from the dugout" (gerund — use "react together"),
+                             "are cheering" (progressive — use "cheer"),
+                             "a crowd of people in blue cheering and clapping at a sporting event",
+                             "Cheerleaders perform a routine" (subject duplicated — just say "perform a routine"),
+                             "react to the game" for a coaches scene (should be "reacts to the game")
+- "subject_team_color": SINGLE English color word for the UNIFORM COLOR of the people you are
+                       describing in this scene (cheerleaders, bench, band, etc.) — NOT the
+                       opponent, NOT fans in the stands, NOT a blurry color blob in the background.
+                       If the cheerleaders or dugout group are wearing blue, subject_team_color is
+                       "blue" even if the game is Louisville vs Kentucky. Wrong team assignment
+                       is worse than leaving it empty.
+                       Populate for cheerleaders, band, mascot, coaches, bench, celebration when
+                       you can see their uniforms clearly. Leave empty when team-neutral or unsure.
+- "nearby_player_colors": ARRAY of jersey colors for the SUBJECTS of this scene only — the
+                       cheerleaders, players on the bench/dugout, or band you are describing.
+                       Do NOT list every jersey in the entire frame. Do NOT include opposing
+                       dugout, background fielders, defocused bokeh, or fan clothing.
+                       Example: five Kentucky players in blue on the near dugout cheering →
+                       ["blue", "blue", "blue", "blue", "blue"], not mixed with distant red jerseys.
+                       The composer majority-votes this array against configured team colors.
+                       Leave [] for players_action, wide_view, crowd. HARD LIMIT: maximum 12 entries.
+- "overall_confidence": 0.0 – 1.0
+
+# output
+
+Return ONLY the JSON object. No prose, no markdown fences, no commentary.
+
+Example 1 (single player):
+{
+  "scene_type": "players_action",
+  "players": [
+    { "jersey_number": "5", "jersey_color": "blue", "action": "shoots a jumper", "confidence": 0.92, "flags": [] }
+  ],
+  "interaction": null,
+  "group_action": null,
+  "primary_action": "first-half possession",
+  "scene_description": "",
+  "overall_confidence": 0.9
+}
+
+Example 2 (two-player interaction — dunk over defender):
+{
+  "scene_type": "players_action",
+  "players": [
+    { "jersey_number": "4", "jersey_color": "blue", "action": "dunks", "confidence": 0.95, "flags": [] },
+    { "jersey_number": "2", "jersey_color": "red", "action": "defends", "confidence": 0.88, "flags": [] }
+  ],
+  "interaction": {
+    "subject_jersey_number": "4",
+    "subject_jersey_color": "blue",
+    "target_jersey_number": "2",
+    "target_jersey_color": "red",
+    "phrase": "dunks over"
+  },
+  "group_action": null,
+  "primary_action": "",
+  "scene_description": "",
+  "overall_confidence": 0.9
+}
+
+Example 3 (rebound scrum — three Team A, one Team B, all reaching for the ball):
+{
+  "scene_type": "players_action",
+  "players": [
+    { "jersey_number": "11", "jersey_color": "red",   "action": "reaches for the ball", "confidence": 0.94, "flags": [] },
+    { "jersey_number": "21", "jersey_color": "red",   "action": "reaches for the ball", "confidence": 0.92, "flags": [] },
+    { "jersey_number": "1",  "jersey_color": "red",   "action": "reaches for the ball", "confidence": 0.91, "flags": [] },
+    { "jersey_number": "23", "jersey_color": "blue",  "action": "reaches for the ball", "confidence": 0.90, "flags": [] }
+  ],
+  "interaction": null,
+  "group_action": {
+    "phrase": "reach for a loose ball"
+  },
+  "primary_action": "",
+  "scene_description": "",
+  "overall_confidence": 0.9
+}
+
+Example 4 (crowd — anonymous fans in the stands, no team uniforms):
+{
+  "scene_type": "crowd",
+  "players": [],
+  "interaction": null,
+  "group_action": null,
+  "primary_action": "",
+  "scene_description": "cheer from the stands",
+  "subject_team_color": "",
+  "nearby_player_colors": [],
+  "overall_confidence": 0.85
+}
+
+Example 5 (cheerleaders in blue uniforms):
+{
+  "scene_type": "cheerleaders",
+  "players": [],
+  "interaction": null,
+  "group_action": null,
+  "primary_action": "",
+  "scene_description": "perform a routine",
+  "subject_team_color": "blue",
+  "nearby_player_colors": [],
+  "overall_confidence": 0.92
+}
+
+Example 6 (mascot in team costume):
+{
+  "scene_type": "mascot",
+  "players": [],
+  "interaction": null,
+  "group_action": null,
+  "primary_action": "",
+  "scene_description": "dances on the sideline",
+  "subject_team_color": "blue",
+  "nearby_player_colors": [],
+  "overall_confidence": 0.9
+}
+
+Example 7 (bench / sideline group — no individual players named):
+{
+  "scene_type": "bench",
+  "players": [],
+  "interaction": null,
+  "group_action": null,
+  "primary_action": "",
+  "scene_description": "celebrate in the dugout",
+  "subject_team_color": "blue",
+  "nearby_player_colors": ["blue", "blue", "blue", "white"],
+  "overall_confidence": 0.88
+}
+
+Example 8 (coach in neutral dress clothes with players visible in background):
+{
+  "scene_type": "coaches",
+  "players": [],
+  "interaction": null,
+  "group_action": null,
+  "primary_action": "",
+  "scene_description": "reacts to a call",
+  "subject_team_color": "white",
+  "nearby_player_colors": ["white", "white", "red"],
+  "overall_confidence": 0.85
+}

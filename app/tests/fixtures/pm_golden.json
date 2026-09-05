@@ -1,0 +1,170 @@
+{
+  "cases": [
+    {
+      "template": "{city:uc}",
+      "context": { "iptcCity": "boston" },
+      "expected": "BOSTON"
+    },
+    {
+      "template": "{city:0:UC}",
+      "context": { "iptcCity": "boston" },
+      "expected": "BOSTON"
+    },
+    {
+      "template": "{city:0:1:UC}, {state:0:1:UC}",
+      "context": { "iptcCity": "seattle", "iptcState": "washington" },
+      "expected": "SEATTLE, WASHINGTON"
+    },
+    {
+      "template": "{seqn:pad4}",
+      "context": { "seqn": 7 },
+      "expected": "0007"
+    },
+    {
+      "template": "X {unknown}",
+      "context": {},
+      "expected": "X {unknown}"
+    },
+    {
+      "template": "{photog}",
+      "context": {
+        "bodySerialNumber": "123",
+        "codeReplacement": { "123": "Pat Smith" }
+      },
+      "expected": "Pat Smith"
+    },
+    {
+      "template": "Hi {city:tc}",
+      "context": { "iptcCity": "new york" },
+      "expected": "Hi New York"
+    },
+    {
+      "template": "{basename}_{seqn}",
+      "context": { "fileBaseName": "IMG_1", "seqn": 2 },
+      "expected": "IMG_1_2"
+    },
+    {
+      "template": "{event} - {location}",
+      "context": { "sessionEvent": "State Finals", "sessionLocation": "Rupp Arena" },
+      "expected": "State Finals - Rupp Arena"
+    },
+    {
+      "template": "{unknown:uc}",
+      "context": {},
+      "expected": "{unknown:uc}"
+    },
+    {
+      "template": "{caption:tr:10}",
+      "context": { "iptcCaption": "A long caption value" },
+      "expected": "A long cap"
+    },
+    {
+      "template": "{caption:0,10}",
+      "context": { "iptcCaption": "A long caption value" },
+      "expected": "A long cap"
+    },
+    {
+      "template": "{serial}",
+      "context": { "bodySerialNumber": "ABC123" },
+      "expected": "ABC123"
+    },
+    {
+      "template": "{todayyear4}-{todaymonth0}-{todayday0}",
+      "context": { "tokenValues": { "todayyear4": "2026", "todaymonth0": "04", "todayday0": "16" } },
+      "expected": "2026-04-16"
+    },
+    {
+      "template": "{file} {ext}",
+      "context": { "tokenValues": { "filename": "IMG_0001.JPG", "ext": "JPG" } },
+      "expected": "IMG_0001.JPG JPG"
+    },
+    {
+      "template": "{filenamebase:0,3}",
+      "context": { "fileBaseName": "DSC_1234" },
+      "expected": "DSC"
+    },
+    {
+      "template": "{filenamebase:-4,4}",
+      "context": { "fileBaseName": "DSC_1234" },
+      "expected": "1234"
+    },
+    {
+      "template": "{filenamebase:-4}",
+      "context": { "fileBaseName": "DSC_1234" },
+      "expected": "1234"
+    },
+    {
+      "template": "{filenamebase:2,3}",
+      "context": { "fileBaseName": "DSC_1234" },
+      "expected": "C_1"
+    },
+    {
+      "template": "{filenamebase:0:lc}",
+      "context": { "fileBaseName": "DSC_1234" },
+      "expected": "dsc_1234"
+    },
+    {
+      "template": "{filenamebase:0:PC}",
+      "context": { "fileBaseName": "DSC_1234" },
+      "expected": "Dsc_1234"
+    },
+    {
+      "template": "{filename:0,-4}",
+      "context": { "tokenValues": { "filename": "DSC_1234.JPG" } },
+      "expected": "DSC_1234"
+    },
+    {
+      "template": "{caption:0:lc:tr: /_}",
+      "context": { "iptcCaption": "Hello World" },
+      "expected": "hello_world"
+    },
+    {
+      "template": "{sup2:0:PC:tr: /}",
+      "context": { "tokenValues": { "suppcat2": "Eastern Illinois" } },
+      "expected": "EasternIllinois"
+    },
+    {
+      "template": "{sup1:0:PC:tr: /}",
+      "context": { "tokenValues": { "suppcat1": "Kentucky Wildcats" } },
+      "expected": "KentuckyWildcats"
+    },
+    {
+      "template": "{year4}{month0}{day0}_TBT_{sup2:0:PC:tr: /}vs{sup1:0:PC:tr: /}_CI_{seqn}",
+      "context": {
+        "tokenValues": {
+          "year4": "2026",
+          "month0": "05",
+          "day0": "18",
+          "suppcat2": "Eastern Illinois",
+          "suppcat1": "Kentucky Wildcats"
+        },
+        "seqn": 1
+      },
+      "expected": "20260518_TBT_EasternIllinoisvsKentuckyWildcats_CI_1"
+    },
+    {
+      "template": "{category}_{sup2:0:PC:tr: /}vs{sup1:0:PC:tr: /}_CI_{seqn}",
+      "context": {
+        "tokenValues": {
+          "category": "MBB",
+          "suppcat2": "The Ville",
+          "suppcat1": "La Familia"
+        },
+        "seqn": 292
+      },
+      "expected": "MBB_TheVillevsLaFamilia_CI_292"
+    },
+    {
+      "template": "{cat}_{sup2:0:PC:tr: /}vs{sup1:0:PC:tr: /}_CI_{seqn}",
+      "context": {
+        "tokenValues": {
+          "category": "MBB",
+          "suppcat2": "The Ville",
+          "suppcat1": "La Familia"
+        },
+        "seqn": 292
+      },
+      "expected": "MBB_TheVillevsLaFamilia_CI_292"
+    }
+  ]
+}

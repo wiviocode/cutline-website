@@ -1,0 +1,11 @@
+{
+  "name": "Cutline",
+  "short_name": "Cutline",
+  "description": "Captions for sports photographs. Runs in your browser; your photos stay on your machine.",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#15181d",
+  "theme_color": "#15181d",
+  "icons": [{ "src": "/app/cutline-mark-256.png", "sizes": "256x256", "type": "image/png" }]
+}

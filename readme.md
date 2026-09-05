@@ -1,6 +1,6 @@
 # Cutline Design System
 
-Cutline is a free, open-source macOS app (macOS 15+, Swift 6) that captions sports photographs: drop a folder, pick the teams, and it identifies players by jersey number against a roster, writes the caption in the desk's house style, and files IPTC/XMP metadata into the photograph. Bring your own model — an API key or a local model. Built for Nebraska D-I and high-school sports, general by design.
+Cutline is a free, open-source app that runs in the browser and captions sports photographs: drop a folder, pick the teams, and it identifies players by jersey number against a roster, writes the caption in the desk's house style, and files IPTC/XMP metadata into the photograph. Bring your own model — an Anthropic API key. Built for Nebraska D-I and high-school sports, general by design.
 
 Audience: working sports photographers and photo desks. Verification culture: 910 checks, thirteen byte-for-byte "golden captions."
 
@@ -9,8 +9,8 @@ Audience: working sports photographers and photo desks. Verification culture: 91
 - This project's marketing site (Cutline.dc.html) and app-screen recreations (App Review.dc.html, App Setup.dc.html).
 
 ## Products
-1. **Marketing website** — dark, editorial one-pager (hero, caption demo, steps, review demo, download).
-2. **The app** — a macOS window (WKWebView-rendered) with Setup and Review pages; dense, keyboard-first.
+1. **Marketing website** — dark, editorial one-pager (hero, caption demo, steps, review demo, open the app).
+2. **The app** — served at /app from this repository's `app/` folder (Vite + React), with Setup and Review pages; dense, keyboard-first. The screen recreations here were drawn from the original macOS build, which the web app follows.
 
 ## CONTENT FUNDAMENTALS
 - Voice: confident, punchy, dry-editorial. Short declaratives: "Shoot the game. Skip the typing." / "You stay the editor." / "Shoot. Drop. Done."

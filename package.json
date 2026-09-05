@@ -1,0 +1,13 @@
+{
+  "name": "cutline-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix app ci --include=dev && npm --prefix app run build && node scripts/build-site.mjs",
+    "test": "npm --prefix app test"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.9.3"
+  }
+}

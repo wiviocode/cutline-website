@@ -1,0 +1,896 @@
+/**
+ * The application's state: the setup screen's answers, the shoot, the run, and review.
+ *
+ * `ShootModel` and `GameSetup` from the native app, in one store. Everything that touches the
+ * disk or the network goes through `@platform`; everything that decides what a caption says goes
+ * through `@core`. This file is the wiring between them.
+ */
+
+import { create } from "zustand";
+import { Storage, DEFAULT_SETTINGS, type Settings } from "@platform/storage";
+import { pickFolder, reopenFolder, applyRenamePlan, FileListFolder, type PhotoFolder, type PhotoFile } from "@platform/fs";
+import { preparedForVision, ImageCache, THUMB_EDGE, PREVIEW_EDGE } from "@platform/images";
+import { readPhotoMetadata } from "@platform/exif";
+import { fetchPage, fetchLogo, relayAvailable } from "@platform/fetchPage";
+
+import { GameSelection, RecentGame, SportCatalogue, captionQualifier, type Level, type Gender, type RosterMode } from "@core/setup/GameLibrary";
+import { KitColourDiagnosis } from "@core/setup/KitColourDiagnosis";
+import { Roster, RosterPlayer, Team, type Roster as RosterT } from "@core/roster/Roster";
+import { TeamColorArbiter } from "@core/roster/TeamColorArbiter";
+import { TeamName } from "@core/roster/TeamName";
+import { SavedTeam, TeamLibrary } from "@core/roster/SavedTeam";
+import { TeamPageURL } from "@core/roster/TeamPageURL";
+import { TeamPageParser } from "@core/roster/TeamPageParser";
+import { TeamIdentity } from "@core/roster/TeamIdentity";
+import { RosterImporter, ImportError, type ImportedPlayer } from "@core/roster/RosterImporter";
+import { CSVRosterImporter } from "@core/roster/CSVRosterImporter";
+import { VisionResult } from "@core/vision/VisionResult";
+import { VisionPrompt } from "@core/vision/VisionPrompt";
+import { CaptionResponseParser } from "@core/vision/CaptionResponseParser";
+import { CaptionComposer } from "@core/caption/CaptionComposer";
+import { CompositionContext, EventDescription, asSport, type CaptionStyle } from "@core/caption/CompositionContext";
+import { UNIDENTIFIED_TOKEN } from "@core/caption/PlayerReference";
+import { AnthropicClient } from "@core/anthropic/AnthropicClient";
+import { AltTextRequest, SimpleAltText } from "@core/anthropic/AltText";
+import { VisionModel, ImagePrep } from "@core/anthropic/VisionModel";
+import { CaptionRecord, type ReviewStatus } from "@core/records/CaptionRecord";
+import { ProcessedFilesManifest, type ProcessedFileRecord } from "@core/records/ProcessedFilesManifest";
+import { PhotoMetadata } from "@core/images/PhotoMetadata";
+import { SupportedFormats } from "@core/images/SupportedFormats";
+import { MetadataOutput } from "@core/metadata/MetadataOutput";
+import { IPTCTemplate } from "@core/metadata/IPTCTemplate";
+import { HurrdatFields } from "@core/metadata/HurrdatFields";
+import { HDSNaming, type Fixture } from "@core/naming/HDSNaming";
+import { PhotoRenamer, type RenamePlan } from "@core/naming/PhotoRenamer";
+
+export type Side = "home" | "away";
+export type FrameState = "pending" | "working" | "done" | "failed";
+
+export interface Frame {
+  id: string;
+  name: string;
+  photo: PhotoFile;
+  state: FrameState;
+  error: string | null;
+  caption: string;
+  altText: string | null;
+  record: CaptionRecord | null;
+  exif: PhotoMetadata | null;
+  needsNumber: boolean;
+  approved: boolean;
+  edited: boolean;
+  writeError: string | null;
+}
+
+export interface SideState { name: string; colour: string; rosterURL: string; team: SavedTeam | null }
+
+export const thumbnails = new ImageCache(3);
+export const previews = new ImageCache(2);
+
+interface State {
+  ready: boolean;
+  screen: "setup" | "review";
+  panel: null | "settings" | "rename";
+  writableFolders: boolean;
+  relay: boolean | null;
+
+  settings: Settings;
+  apiKey: string;
+  library: SavedTeam[];
+  logoURLs: Record<string, string>;
+  recents: RecentGame[];
+  templateNames: string[];
+
+  selection: GameSelection;
+  rosterMode: RosterMode;
+  home: SideState;
+  away: SideState;
+  eventName: string;
+  participantNoun: string;
+  venue: string;
+  city: string;
+  state: string;
+  notes: string;
+  folder: PhotoFolder | null;
+  photoCount: number;
+  shootDate: Date | null;
+  importing: Side | null;
+  importStatus: string;
+  importError: string | null;
+  importWarnings: string[];
+
+  frames: Frame[];
+  isRunning: boolean;
+  progressDone: number;
+  progressTotal: number;
+  statusLine: string;
+  lastError: string | null;
+  tokensIn: number;
+  tokensOut: number;
+  selectedID: string | null;
+  filter: ReviewStatus;
+  bulkLabel: string;
+
+  // lifecycle
+  init(): Promise<void>;
+  setScreen(s: "setup" | "review"): void;
+  setPanel(p: null | "settings" | "rename"): void;
+  clearError(): void;
+
+  // settings
+  setSetting(patch: Partial<Settings>): void;
+  setApiKey(key: string): Promise<void>;
+  addTemplate(name: string, text: string): Promise<void>;
+  removeTemplate(name: string): Promise<void>;
+
+  // setup
+  chooseFolder(): Promise<void>;
+  useFolder(folder: PhotoFolder): Promise<void>;
+  useFiles(files: File[]): Promise<void>;
+  openRecent(game: RecentGame): Promise<void>;
+  forgetRecent(game: RecentGame): Promise<void>;
+  startOver(): void;
+  setLevel(l: Level): void;
+  setSport(id: string): void;
+  setGender(g: Gender): void;
+  setRosterMode(m: RosterMode): void;
+  setSide(side: Side, patch: Partial<SideState>): void;
+  setFields(patch: Partial<Pick<State, "eventName" | "participantNoun" | "venue" | "city" | "state" | "notes">>): void;
+  importTeam(side: Side): Promise<void>;
+  importTeamFromHTML(side: Side, html: string, sourceURL?: string): Promise<void>;
+  importCSV(side: Side, csv: string, teamName?: string): Promise<void>;
+  pickLibraryTeam(side: Side, team: SavedTeam): void;
+  clearTeam(side: Side): void;
+  forgetTeam(team: SavedTeam): Promise<void>;
+  continueToReview(): Promise<void>;
+
+  // run
+  run(opts?: { redo?: boolean; limit?: number }): Promise<void>;
+  cancel(): void;
+
+  // review
+  select(id: string): void;
+  step(delta: number): void;
+  nextNeedingNumber(): void;
+  setFilter(f: ReviewStatus): void;
+  assignNumber(id: string, slot: number, number: string): Promise<void>;
+  updateCaption(id: string, text: string): Promise<void>;
+  recompose(id: string): Promise<void>;
+  recomposeAll(): Promise<void>;
+  setApproved(id: string, approved: boolean): Promise<void>;
+  approveAndAdvance(): Promise<void>;
+  recaption(id: string, note: string): Promise<void>;
+  setKitColour(colour: string, side: Side): Promise<void>;
+
+  // rename
+  renameFixture(date: Date, coveredIsHome: boolean): Fixture | null;
+  renamePlan(date: Date, coveredIsHome: boolean): Promise<RenamePlan | null>;
+  applyRename(plan: RenamePlan): Promise<void>;
+}
+
+// ---- derived helpers, used by screens too ----
+
+export const derive = {
+  sportLabel: (s: State) => (s.rosterMode === "noTeams" ? "" : GameSelection.label(s.selection)),
+  eventTitle: (s: State) => {
+    if (s.rosterMode === "noTeams") return s.eventName.trim() || "Event";
+    return `${s.home.name || "Home"} vs ${s.away.name || "Away"}`;
+  },
+  rosterless: (s: State) => s.rosterMode !== "rosters",
+  noTeams: (s: State) => s.rosterMode === "noTeams",
+  hasFolder: (s: State) => s.folder != null,
+
+  /** Where a team's name divides. A scraped team already knows; a typed one is guessed at. */
+  nameParts(s: State, side: Side): { school: string; nickname: string | null } {
+    const st = s[side];
+    if (st.team && st.team.identity.schoolName && st.name === SavedTeam.fullName(st.team)) {
+      return { school: st.team.identity.schoolName, nickname: st.team.identity.mascot ?? null };
+    }
+    return TeamName.split(st.name);
+  },
+
+  roster(s: State): RosterT {
+    if (s.rosterMode === "noTeams") return Roster.noTeams();
+    const h = derive.nameParts(s, "home"), a = derive.nameParts(s, "away");
+    const t1 = Team.make(h.school, s.home.colour, h.nickname, "home");
+    const t2 = Team.make(a.school, s.away.colour, a.nickname, "away");
+    if (s.rosterMode === "noRosters") return Roster.make(t1, t2, []);
+    const players = (team: SavedTeam | null, id: string) => (team?.players ?? []).map((p) => toRosterPlayer(p, id));
+    return Roster.make(t1, t2, [...players(s.home.team, "home"), ...players(s.away.team, "away")]);
+  },
+
+  event(s: State): EventDescription | null {
+    return s.rosterMode === "noTeams" ? EventDescription.make(s.eventName, s.participantNoun) : null;
+  },
+
+  canContinue(s: State): boolean { return derive.blockingReason(s) == null; },
+
+  blockingReason(s: State): string | null {
+    if (!s.folder) return "Choose the folder of photos.";
+    if (s.rosterMode === "noTeams") return s.eventName.trim() ? null : "Name the event.";
+    if (!s.home.name.trim()) return "Name the home team.";
+    if (!s.away.name.trim()) return "Name the away team.";
+    if (!s.home.colour.trim() || !s.away.colour.trim()) return "Set both kit colours — colour is how a jersey is matched to a team.";
+    if (TeamColorArbiter.sameFamily(s.home.colour, s.away.colour)) {
+      return s.home.colour.toLowerCase() === s.away.colour.toLowerCase()
+        ? `Both teams are set to ${s.home.colour} — colour is how a jersey is matched to a team.`
+        : `${cap(s.home.colour)} and ${cap(s.away.colour)} are the same colour to the matcher, so it could not tell the teams apart.`;
+    }
+    if (s.rosterMode === "rosters") {
+      if (!s.home.team) return "Import or choose the home team.";
+      if (!s.away.team) return "Import or choose the away team.";
+      if (!s.home.team.players.length) return "The home team has no players.";
+      if (!s.away.team.players.length) return "The away team has no players.";
+    }
+    return null;
+  },
+
+  deskFields(s: State): HurrdatFields {
+    const descriptor = s.rosterMode === "noTeams"
+      ? HurrdatFields.descriptor(derive.eventTitle(s), "", "", HurrdatFields.datePlaceholder)
+      : HurrdatFields.descriptor(derive.nameParts(s, "home").school, derive.sportLabel(s), derive.nameParts(s, "away").school, HurrdatFields.datePlaceholder);
+    return HurrdatFields.make({
+      descriptor,
+      supplementalCategory: HurrdatFields.supplementalCategory(s.selection.sportID, s.selection.gender),
+      city: s.city, state: s.state, sublocation: s.venue,
+    });
+  },
+
+  descriptorPreview(s: State): string {
+    const iso = s.shootDate ? PhotoMetadata.iptcDateCreated({ captureDate: s.shootDate })! : "the date of each frame";
+    return derive.deskFields(s).descriptor.split(HurrdatFields.datePlaceholder).join(iso);
+  },
+
+  filenamePreview(s: State): string | null {
+    if (s.rosterMode === "noTeams" || !s.shootDate || !s.home.name || !s.away.name) return null;
+    const code = HDSNaming.sportCode(s.selection.sportID, s.selection.gender);
+    if (!code) return null;
+    return HDSNaming.filename({ initials: HDSNaming.initials(s.settings.photographer), date: s.shootDate, sportCode: code, covered: s.home.name, opponent: s.away.name, coveredIsHome: true }, 1, "jpg");
+  },
+
+  visibleFrames(s: State): Frame[] {
+    switch (s.filter) {
+      case "approved": return s.frames.filter((f) => f.approved);
+      case "needsReview": return s.frames.filter((f) => !f.approved);
+      default: return s.frames;
+    }
+  },
+  counts(s: State) {
+    const approved = s.frames.filter((f) => f.approved).length;
+    return { needsReview: s.frames.length - approved, approved, all: s.frames.length, needsNumber: s.frames.filter((f) => f.needsNumber).length };
+  },
+  selected(s: State): Frame | null {
+    const list = derive.visibleFrames(s);
+    if (!s.selectedID) return list[0] ?? null;
+    return list.find((f) => f.id === s.selectedID) ?? list[0] ?? null;
+  },
+  estimatedCost: (s: State) => VisionModel.cost(VisionModel.byID(s.settings.model), s.tokensIn, s.tokensOut),
+  pendingCount: (s: State) => s.frames.filter((f) => f.state === "pending").length,
+  anyDone: (s: State) => s.frames.some((f) => f.state === "done"),
+  readyToRun: (s: State) => !!s.folder && !!s.apiKey && !s.isRunning && s.frames.length > 0,
+
+  /**
+   * Colours that cost a player their name — counted from what the captions lost, not from what
+   * the model saw, so re-composing after a fix clears the warning.
+   */
+  kitColourWarning(s: State): { colour: string; count: number }[] {
+    if (s.rosterMode === "noTeams") return [];
+    const roster = derive.roster(s);
+    const counts = new Map<string, number>();
+    let readable = 0;
+    for (const f of s.frames) {
+      if (!f.record) continue;
+      const corrected = CaptionRecord.correctedVision(f.record);
+      for (const p of corrected.players) {
+        if (!p.jerseyNumber) continue;
+        readable++;
+        if (!f.record.caption.includes(UNIDENTIFIED_TOKEN)) continue;
+        const colour = p.jerseyColor.trim();
+        if (!colour || TeamColorArbiter.team(roster, colour)) continue;
+        counts.set(colour.toLowerCase(), (counts.get(colour.toLowerCase()) ?? 0) + 1);
+      }
+    }
+    const unmatched = [...counts.entries()].map(([colour, count]) => ({ colour, count })).sort((a, b) => b.count - a.count);
+    const lost = unmatched.reduce((n, u) => n + u.count, 0);
+    return KitColourDiagnosis.isMisconfigured(lost, readable) ? unmatched : [];
+  },
+};
+
+const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+function toRosterPlayer(p: ImportedPlayer, teamID: string): RosterPlayer {
+  const side = p.side === "offense" || p.side === "defense" || p.side === "specialTeams" ? p.side : "unknown";
+  return RosterPlayer.make({ teamID, jerseyNumber: p.jerseyNumber, firstName: p.firstName, lastName: p.lastName, position: p.position, side });
+}
+
+let runGeneration = 0;
+let runController: AbortController | null = null;
+
+export const useStore = create<State>()((set, get) => {
+  const patchFrame = (id: string, patch: Partial<Frame>) =>
+    set((s) => ({ frames: s.frames.map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
+  const frame = (id: string) => get().frames.find((f) => f.id === id) ?? null;
+
+  const records = async (create: boolean): Promise<PhotoFolder | null> => {
+    const folder = get().folder;
+    if (!folder) return null;
+    if (!folder.writable && !create) return folder.sub(CaptionRecord.directoryName, false);
+    if (!folder.writable) return null;
+    return folder.sub(CaptionRecord.directoryName, true);
+  };
+
+  const saveRecord = async (f: Frame, rec: CaptionRecord) => {
+    const dir = await records(true);
+    if (!dir) return;
+    try { await dir.writeText(CaptionRecord.recordName(f.name), JSON.stringify(CaptionRecord.toJSON(rec), null, 2)); } catch { /* read-only */ }
+  };
+
+  const template = async (): Promise<IPTCTemplate | null> => {
+    const name = get().settings.templateName;
+    if (!name) return null;
+    const text = await Storage.template(name);
+    if (!text) return null;
+    try { return new IPTCTemplate(text); } catch { return null; }
+  };
+
+  /** Push a frame's current caption out to its sidecar and into the JPEG. */
+  const writeMetadata = async (f: Frame): Promise<void> => {
+    const s = get();
+    if (!s.folder || (!s.settings.embedInFile && !s.settings.writeSidecars)) return;
+    if (!s.folder.writable) { patchFrame(f.id, { writeError: "This browser cannot write into the photographs." }); return; }
+    try {
+      const exif = f.exif ?? (await readPhotoMetadata(await f.photo.file()));
+      const packet = MetadataOutput.packet(f.caption, f.altText, f.name, exif, { template: await template(), city: s.city, state: s.state, fields: derive.deskFields(s) }, f.edited ? "manual" : "ai");
+      if (s.settings.writeSidecars || !SupportedFormats.canEmbed(f.name)) {
+        await s.folder.writeText(MetadataOutput.plan(f.name, packet, null).kind === "sidecar" ? f.name.replace(/\.[^.]+$/, "") + ".xmp" : f.name.replace(/\.[^.]+$/, "") + ".xmp", packet);
+      }
+      if (s.settings.embedInFile && SupportedFormats.canEmbed(f.name)) {
+        const original = await s.folder.readBytes(f.name);
+        if (!original) throw new Error("could not read the file");
+        const plan = MetadataOutput.plan(f.name, packet, original);
+        if (plan.kind === "embed") await s.folder.writeBytes(f.name, plan.bytes);
+      }
+      patchFrame(f.id, { writeError: null, exif });
+    } catch (e) {
+      patchFrame(f.id, { writeError: (e as Error).message });
+    }
+  };
+
+  const composeFor = (s: State, rec: CaptionRecord, exif: PhotoMetadata | null) => {
+    const roster = derive.roster(s);
+    const cc = CompositionContext.make({
+      style: s.settings.style as CaptionStyle,
+      fallback: derive.rosterless(s) ? "describeWithoutName" : "markUnidentified",
+      sport: asSport(s.selection.sportID),
+      roster,
+      iptc: { dateText: rec.capturedAt, venue: s.venue || null, city: s.city || null, state: s.state || null, leagueLevel: captionQualifier(s.selection.level) },
+      photographer: s.settings.photographer || null,
+      weekday: exif ? PhotoMetadata.weekdayName(exif) : null,
+      event: derive.event(s),
+      captureDate: exif?.captureDate ?? null,
+    });
+    return CaptionComposer.compose(CaptionRecord.correctedVision(rec), cc);
+  };
+
+  const recomposeFrame = async (id: string) => {
+    const f = frame(id);
+    if (!f || !f.record) return;
+    const out = composeFor(get(), f.record, f.exif);
+    const rec = { ...f.record, caption: out.caption };
+    patchFrame(id, { record: rec, caption: out.caption, needsNumber: CaptionRecord.needsReview(rec), edited: false });
+    await saveRecord(f, rec);
+    await writeMetadata({ ...f, record: rec, caption: out.caption, edited: false });
+  };
+
+  const scanFolder = async () => {
+    const folder = get().folder;
+    if (!folder) return;
+    const photos = await folder.listPhotos();
+    const dir = await records(false);
+    const manifestText = await folder.readText(ProcessedFilesManifest.fileName);
+    const manifest = manifestText ? ProcessedFilesManifest.parse(manifestText) : [];
+    const frames: Frame[] = [];
+    for (const p of photos) {
+      const f: Frame = { id: p.name, name: p.name, photo: p, state: "pending", error: null, caption: "", altText: null, record: null, exif: null, needsNumber: false, approved: false, edited: false, writeError: null };
+      const text = dir ? await dir.readText(CaptionRecord.recordName(p.name)) : null;
+      if (text) {
+        try {
+          const rec = CaptionRecord.fromJSON(JSON.parse(text));
+          f.record = rec; f.caption = rec.caption; f.altText = rec.altText; f.state = "done";
+          f.needsNumber = CaptionRecord.needsReview(rec); f.approved = rec.approved;
+        } catch { /* a bad record is an uncaptioned frame */ }
+      } else {
+        const sig = ProcessedFilesManifest.signature(p);
+        if (ProcessedFilesManifest.isProcessed(manifest, sig.filename, sig.fileSize, sig.modificationDate)) { f.state = "done"; f.caption = "(captioned previously)"; }
+      }
+      frames.push(f);
+    }
+    thumbnails.clear(); previews.clear();
+    // A dozen frames is enough to find the day, and the card is often not in capture order.
+    const dates: Date[] = [];
+    for (const p of photos.slice(0, 12)) { const m = await readPhotoMetadata(await p.file()); if (m.captureDate) dates.push(m.captureDate); }
+    const shootDate = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
+    set({ frames, photoCount: photos.length, shootDate, selectedID: frames[0]?.id ?? null, statusLine: `${frames.length} photos — ${frames.filter((f) => f.state === "pending").length} to do` });
+  };
+
+  const adoptTeam = (side: Side, team: SavedTeam) => {
+    const s = get();
+    const other = side === "home" ? s.away.colour : s.home.colour;
+    const proposed = TeamIdentity.suggestedKitColour(team.identity);
+    const patch: Partial<SideState> = { team, name: SavedTeam.fullName(team) || s[side].name };
+    // The kit colour is only proposed: published school colours are brand colours, and a team in
+    // its white change shirt still publishes red as colour one.
+    if (proposed && !TeamColorArbiter.sameFamily(proposed, other)) patch.colour = proposed;
+    const page = team.identity.rosterURL ?? team.identity.sourceURL;
+    if (team.source === "web" && page) patch.rosterURL = page;
+    set({ [side]: { ...s[side], ...patch } } as Partial<State>);
+    // Venue details come from the home side only; an away school's city is not the venue.
+    if (side === "home") {
+      const p: Partial<State> = {};
+      if (team.identity.city) p.city = team.identity.city;
+      if (team.identity.state) p.state = team.identity.state;
+      set(p);
+    }
+  };
+
+  const persistTeam = async (team: SavedTeam): Promise<SavedTeam> => {
+    const lib = TeamLibrary.upsert(get().library, team);
+    await Storage.saveTeams(lib);
+    set({ library: TeamLibrary.sorted(lib) });
+    return lib.find((t) => SavedTeam.identityKey(t) === SavedTeam.identityKey(team)) ?? team;
+  };
+
+  const loadLogos = async (teams: SavedTeam[]) => {
+    const urls: Record<string, string> = { ...get().logoURLs };
+    for (const t of teams) {
+      if (!t.logoKey || urls[t.id]) continue;
+      const blob = await Storage.logo(t.logoKey);
+      if (blob) urls[t.id] = URL.createObjectURL(blob);
+    }
+    set({ logoURLs: urls });
+  };
+
+  const remember = async () => {
+    const s = get();
+    const game = RecentGame.make({
+      level: s.selection.level, sport: s.selection.sportID, gender: s.selection.gender, rosterMode: s.rosterMode,
+      eventName: s.eventName, participantNoun: s.participantNoun,
+      homeName: s.home.name, homeColor: s.home.colour, homeRosterURL: s.home.rosterURL,
+      awayName: s.away.name, awayColor: s.away.colour, awayRosterURL: s.away.rosterURL,
+      venue: s.venue, city: s.city, state: s.state, notes: s.notes,
+      homeTeamID: s.home.team?.id, awayTeamID: s.away.team?.id,
+      templateName: s.settings.templateName ?? undefined, photosFolder: s.folder?.name,
+    });
+    const list = RecentGame.remember(s.recents, game);
+    set({ recents: list });
+    await Storage.saveRecents(list);
+    if (s.folder?.handle) await Storage.saveFolderHandle(game.id, s.folder.handle);
+  };
+
+  return {
+    ready: false, screen: "setup", panel: null, writableFolders: typeof window !== "undefined" && "showDirectoryPicker" in window, relay: null,
+    settings: DEFAULT_SETTINGS, apiKey: "", library: [], logoURLs: {}, recents: [], templateNames: [],
+    selection: GameSelection.make(), rosterMode: "rosters",
+    home: { name: "", colour: "white", rosterURL: "", team: null },
+    away: { name: "", colour: "navy", rosterURL: "", team: null },
+    eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
+    folder: null, photoCount: 0, shootDate: null,
+    importing: null, importStatus: "", importError: null, importWarnings: [],
+    frames: [], isRunning: false, progressDone: 0, progressTotal: 0, statusLine: "", lastError: null, tokensIn: 0, tokensOut: 0,
+    selectedID: null, filter: "all", bulkLabel: "",
+
+    async init() {
+      const [settings, apiKey, library, recents, templateNames] = await Promise.all([Storage.settings(), Storage.apiKey(), Storage.teams(), Storage.recents(), Storage.templateNames()]);
+      set({ settings, apiKey, library: TeamLibrary.sorted(library), recents, templateNames, ready: true });
+      const sel = GameSelection.make();
+      set({ selection: sel, home: { ...get().home, rosterURL: GameSelection.suggestedHomeURL(sel) ?? "" } });
+      await loadLogos(library);
+      relayAvailable().then((relay) => set({ relay }));
+    },
+    setScreen: (screen) => set({ screen }),
+    setPanel: (panel) => set({ panel }),
+    clearError: () => set({ lastError: null }),
+
+    setSetting(patch) {
+      const settings = { ...get().settings, ...patch };
+      set({ settings });
+      void Storage.saveSettings(settings);
+    },
+    async setApiKey(key) { set({ apiKey: key.trim() }); await Storage.saveApiKey(key.trim()); },
+    async addTemplate(name, text) {
+      try { new IPTCTemplate(text); } catch { set({ lastError: "That file is not an XMP template." }); return; }
+      await Storage.saveTemplate(name, text);
+      set({ templateNames: await Storage.templateNames() });
+      get().setSetting({ templateName: name });
+    },
+    async removeTemplate(name) {
+      await Storage.deleteTemplate(name);
+      set({ templateNames: await Storage.templateNames() });
+      if (get().settings.templateName === name) get().setSetting({ templateName: null });
+    },
+
+    async chooseFolder() {
+      const folder = await pickFolder();
+      if (folder) await get().useFolder(folder);
+    },
+    async useFolder(folder) {
+      get().startOver();
+      set({ folder });
+      await scanFolder();
+    },
+    async useFiles(files) {
+      if (!files.length) return;
+      await get().useFolder(new FileListFolder(files));
+    },
+    async openRecent(game) {
+      const lib = get().library;
+      const sel = GameSelection.make(game.level, game.sport, game.gender);
+      set({
+        selection: sel, rosterMode: game.rosterMode, eventName: game.eventName, participantNoun: game.participantNoun,
+        home: { name: game.homeName, colour: game.homeColor, rosterURL: game.homeRosterURL, team: lib.find((t) => t.id === game.homeTeamID) ?? null },
+        away: { name: game.awayName, colour: game.awayColor, rosterURL: game.awayRosterURL, team: lib.find((t) => t.id === game.awayTeamID) ?? null },
+        venue: game.venue, city: game.city, state: game.state, notes: game.notes, importError: null, importWarnings: [], importStatus: "",
+      });
+      const missing = [game.homeTeamID && !get().home.team ? "home" : null, game.awayTeamID && !get().away.team ? "away" : null].filter(Boolean);
+      if (missing.length) set({ importError: `The ${missing.join(" and ")} team is no longer in the library — import it again.` });
+      const handle = await Storage.folderHandle(game.id);
+      if (handle) {
+        try {
+          const folder = await reopenFolder(handle);
+          if (folder) { set({ folder }); await scanFolder(); return; }
+        } catch { /* fall through */ }
+      }
+      set({ folder: null, frames: [], photoCount: 0, shootDate: null, statusLine: "Choose the folder of photos again — the browser could not reopen it." });
+    },
+    async forgetRecent(game) {
+      const recents = get().recents.filter((g) => g.id !== game.id);
+      set({ recents });
+      await Storage.saveRecents(recents);
+      await Storage.deleteFolderHandle(game.id);
+    },
+    /** A new card is a new fixture. What stays is what is not about this fixture. */
+    startOver() {
+      set({ home: { name: "", colour: "white", rosterURL: GameSelection.suggestedHomeURL(get().selection) ?? "", team: null },
+            away: { name: "", colour: "navy", rosterURL: "", team: null },
+            eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
+            folder: null, frames: [], photoCount: 0, shootDate: null, importError: null, importWarnings: [], importStatus: "", importing: null,
+            statusLine: "", lastError: null, tokensIn: 0, tokensOut: 0, selectedID: null, filter: "all" });
+      thumbnails.clear(); previews.clear();
+    },
+    setLevel(level) {
+      const sel = GameSelection.setLevel(get().selection, level);
+      set({ selection: sel });
+      refreshSuggestedURL(sel);
+    },
+    setSport(id) { const sel = GameSelection.setSport(get().selection, id); set({ selection: sel }); refreshSuggestedURL(sel); },
+    setGender(g) { const sel = GameSelection.setGender(get().selection, g); set({ selection: sel }); refreshSuggestedURL(sel); },
+    setRosterMode: (rosterMode) => set({ rosterMode }),
+    setSide: (side, patch) => set({ [side]: { ...get()[side], ...patch } } as Partial<State>),
+    setFields: (patch) => set(patch),
+
+    async importTeam(side) {
+      const s = get();
+      if (!s.apiKey) { set({ importError: "Add your Anthropic API key in Settings before importing a team." }); return; }
+      const pasted = s[side].rosterURL.trim();
+      if (!pasted) { set({ importError: "Paste a link to the team's page first." }); return; }
+      const parsed = TeamPageURL.parse(pasted);
+      if (!parsed) { set({ importError: "That does not look like a web address." }); return; }
+      const candidates = TeamPageURL.rosterCandidates(parsed, s.selection.sportID, s.selection.gender);
+      if (!candidates.length) { set({ importError: `Could not work out the roster page for ${s.selection.sportID} from that link.` }); return; }
+      set({ importing: side, importError: null, importWarnings: [], importStatus: "Resolving…" });
+
+      let chosen: { url: string; html: string; identity: TeamIdentity | null } | null = null;
+      let lastError: Error | null = null;
+      for (const url of candidates) {
+        set({ importStatus: `Trying ${new URL(url).pathname}…` });
+        try {
+          const page = await fetchPage(url);
+          const identity = TeamPageParser.parse(page.text, page.url);
+          if (identity) {
+            set({ importStatus: `Found ${TeamIdentity.fullName(identity)} — reading the roster…` });
+            const wanted = s.selection.gender === "womens" ? ["girls", "women", "women's"] : ["boys", "men", "men's"];
+            const reported = identity.reportedGender?.toLowerCase();
+            if (!reported || wanted.includes(reported)) { chosen = { url: page.url, html: page.text, identity }; break; }
+          }
+          if (!chosen) chosen = { url: page.url, html: page.text, identity };
+        } catch (e) { lastError = e as Error; }
+      }
+      if (!chosen) {
+        set({ importing: null, importStatus: "", importError: lastError ? `Could not load that page: ${lastError.message}` : "No roster page responded." });
+        return;
+      }
+      await get().importTeamFromHTML(side, chosen.html, chosen.url);
+    },
+
+    async importTeamFromHTML(side, html, sourceURL) {
+      const s = get();
+      if (!s.apiKey) { set({ importError: "Add your Anthropic API key in Settings before importing a team." }); return; }
+      set({ importing: side, importError: null, importWarnings: [], importStatus: "Reading the page…" });
+      try {
+        const identity = (sourceURL ? TeamPageParser.parse(html, sourceURL) : null) ?? TeamIdentity.make({ schoolName: s[side].name, sourceURL: sourceURL ?? null });
+        identity.rosterURL = sourceURL ?? identity.rosterURL ?? null;
+        const warnings: string[] = [];
+        if (!identity.schoolName) warnings.push("Could not read the team's name from that page — type it in.");
+        if (!identity.colorHexes.length) warnings.push("That site does not publish team colours — set them by hand.");
+
+        // Extraction is a text job on a few thousand tokens, so it runs on the cheap model
+        // whatever the vision pass is set to.
+        const client = new AnthropicClient({ apiKey: s.apiKey, model: "claude-haiku-4-5-20251001", maxTokens: 8000 });
+        const { players } = await RosterImporter.importRoster(html, client, () => set({ importStatus: "Nothing in the page text — reading its data…" }));
+
+        let team = SavedTeam.make({ identity, level: s.selection.level, sport: s.selection.sportID, gender: s.selection.gender, players });
+        if (SavedTeam.genderMismatch(team) && identity.reportedGender) warnings.push(`That page is the ${identity.reportedGender.toLowerCase()} team — check this is the squad you meant.`);
+        if (identity.logoURL) {
+          set({ importStatus: "Saving the logo…" });
+          const logo = await fetchLogo(identity.logoURL).catch(() => null);
+          if (logo) { const key = `${team.id}.${logo.extension}`; await Storage.saveLogo(key, logo.blob); team = { ...team, logoKey: key }; }
+          else warnings.push("The team's logo could not be saved.");
+        }
+        const stored = await persistTeam(team);
+        await loadLogos([stored]);
+        adoptTeam(side, stored);
+        set({ importing: null, importWarnings: warnings, importStatus: `${SavedTeam.fullName(stored)} — ${stored.players.length} players` });
+      } catch (e) {
+        set({ importing: null, importStatus: "", importWarnings: [], importError: e instanceof ImportError ? e.message : String((e as Error).message ?? e) });
+      }
+    },
+
+    async importCSV(side, csv, teamName) {
+      const s = get();
+      try {
+        const { players } = CSVRosterImporter.import(csv);
+        const name = (teamName ?? s[side].name).trim() || "Team";
+        const { school, nickname } = TeamName.split(name);
+        const identity = TeamIdentity.make({ schoolName: school, mascot: nickname });
+        const team = SavedTeam.make({ identity, level: s.selection.level, sport: s.selection.sportID, gender: s.selection.gender, source: "manual",
+          players: players.filter((p) => p.role === "player").map((p) => ({ jerseyNumber: p.jerseyNumber, firstName: p.firstName, lastName: p.lastName, position: p.position })) });
+        const stored = await persistTeam(team);
+        adoptTeam(side, stored);
+        set({ importError: null, importWarnings: [], importStatus: `${SavedTeam.fullName(stored)} — ${stored.players.length} players` });
+      } catch (e) { set({ importError: (e as Error).message }); }
+    },
+
+    pickLibraryTeam(side, team) { adoptTeam(side, team); set({ importError: null, importWarnings: [], importStatus: `${SavedTeam.fullName(team)} — ${team.players.length} players` }); },
+    clearTeam(side) { set({ [side]: { ...get()[side], team: null } } as Partial<State>); },
+    async forgetTeam(team) {
+      const library = TeamLibrary.remove(get().library, team.id);
+      await Storage.saveTeams(library);
+      if (team.logoKey) await Storage.deleteLogo(team.logoKey);
+      const s = get();
+      set({ library, home: s.home.team?.id === team.id ? { ...s.home, team: null } : s.home, away: s.away.team?.id === team.id ? { ...s.away, team: null } : s.away });
+    },
+
+    async continueToReview() {
+      if (!derive.canContinue(get())) return;
+      await remember();
+      set({ screen: "review" });
+    },
+
+    async run(opts = {}) {
+      const s = get();
+      if (!s.folder) return;
+      if (!s.apiKey) { set({ lastError: "Add your Anthropic API key in Settings first." }); return; }
+      let todo = s.frames.filter((f) => opts.redo || f.state === "pending");
+      if (opts.limit) todo = todo.slice(0, opts.limit);
+      if (!todo.length) { set({ statusLine: "Nothing to do." }); return; }
+
+      runGeneration += 1;
+      const generation = runGeneration;
+      runController = new AbortController();
+      set({ isRunning: true, lastError: null, progressDone: 0, progressTotal: todo.length, tokensIn: 0, tokensOut: 0 });
+      for (const f of todo) patchFrame(f.id, { state: "working", error: null });
+
+      const roster = derive.roster(s);
+      const event = derive.event(s);
+      const sportLabel = s.rosterMode === "noTeams" ? s.eventName.trim() : derive.sportLabel(s);
+      const context = VisionPrompt.context({ sportLabel, roster, event, notes: s.notes });
+      const client = new AnthropicClient({ apiKey: s.apiKey, model: s.settings.model, onRetry: (attempt, wait, why) => set({ statusLine: `Waiting ${Math.round(wait)}s after ${why} (attempt ${attempt})…` }) });
+      const altClient = new AnthropicClient({ apiKey: s.apiKey, model: "claude-haiku-4-5-20251001", maxTokens: AltTextRequest.maxTokens });
+      const tpl = await template();
+      const manifestDir = s.folder;
+      let manifest: ProcessedFileRecord[] = ProcessedFilesManifest.parse((await manifestDir.readText(ProcessedFilesManifest.fileName)) ?? "");
+
+      const work = async (f: Frame): Promise<void> => {
+        if (generation !== runGeneration) return;
+        try {
+          const file = await f.photo.file();
+          const exif = await readPhotoMetadata(file);
+          const jpeg = await preparedForVision(file, s.settings.longEdge);
+          const reply = await client.analyse(jpeg, VisionPrompt.system, context);
+          if (generation !== runGeneration) return;
+          const vision = VisionResult.fromJSON(CaptionResponseParser.decodeJSON(reply.text));
+          let rec = CaptionRecord.make({ filename: f.name, imagePath: f.name, vision, caption: "", capturedAt: PhotoMetadata.apStyleDate(exif) });
+          const out = composeFor(get(), rec, exif);
+          let alt: string | null = null, altIn = 0, altOut = 0;
+          switch (s.settings.altTextMode) {
+            case "off": break;
+            case "simple": alt = SimpleAltText.build(vision, sportLabel, s.venue); break;
+            case "brief": case "detailed": {
+              const edge = s.settings.altTextMode === "brief" ? ImagePrep.briefLongEdge : ImagePrep.standardLongEdge;
+              const small = await preparedForVision(file, edge);
+              const r = await altClient.describe(small, AltTextRequest.systemInstruction, AltTextRequest.userContent(out.caption, sportLabel), AltTextRequest.maxTokens);
+              alt = AltTextRequest.sanitise(r.text); altIn = r.usage.inputTokens; altOut = r.usage.outputTokens;
+            }
+          }
+          rec = { ...rec, caption: out.caption, altText: alt };
+          if (generation !== runGeneration) return;
+          patchFrame(f.id, { record: rec, caption: out.caption, altText: alt, exif, state: "done", approved: false, edited: false, needsNumber: CaptionRecord.needsReview(rec) });
+          set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens + altIn, tokensOut: st.tokensOut + reply.usage.outputTokens + altOut }));
+          await saveRecord(f, rec);
+          await writeMetadata({ ...f, record: rec, caption: out.caption, altText: alt, exif, edited: false });
+          const sig = ProcessedFilesManifest.signature(file);
+          manifest = ProcessedFilesManifest.markProcessed(manifest, sig.filename, sig.fileSize, sig.modificationDate);
+        } catch (e) {
+          if (generation !== runGeneration) return;
+          patchFrame(f.id, { state: "failed", error: (e as Error).message ?? String(e) });
+        } finally {
+          if (generation === runGeneration) set((st) => ({ progressDone: st.progressDone + 1, statusLine: `${st.progressDone + 1} of ${st.progressTotal}…` }));
+        }
+      };
+
+      // Run the first alone so it writes the prompt cache, then fan out — otherwise several
+      // requests race to write the same prefix instead of reading it.
+      await work(todo[0]);
+      const rest = todo.slice(1);
+      let next = 0;
+      const worker = async () => { while (next < rest.length && generation === runGeneration) { const f = rest[next++]; await work(f); } };
+      await Promise.all(Array.from({ length: Math.min(s.settings.concurrency, rest.length) }, worker));
+
+      if (generation !== runGeneration) return;
+      if (manifestDir.writable) { try { await manifestDir.writeText(ProcessedFilesManifest.fileName, ProcessedFilesManifest.serialise(manifest)); } catch { /* ignore */ } }
+      const st = get();
+      const failed = st.frames.filter((f) => f.state === "failed").length;
+      const needs = st.frames.filter((f) => f.needsNumber).length;
+      set({ isRunning: false, statusLine: `Done — ${st.progressTotal - failed} captioned${failed ? `, ${failed} failed` : ""}${needs ? `, ${needs} need a number` : ""}` });
+      void tpl;
+    },
+
+    cancel() {
+      runGeneration += 1;
+      runController?.abort();
+      set((s) => ({ isRunning: false, progressDone: 0, progressTotal: 0, statusLine: "Stopped.", frames: s.frames.map((f) => (f.state === "working" ? { ...f, state: "pending" as FrameState } : f)) }));
+    },
+
+    select: (id) => set({ selectedID: id }),
+    step(delta) {
+      const s = get();
+      const list = derive.visibleFrames(s);
+      if (!list.length) return;
+      const current = Math.max(0, list.findIndex((f) => f.id === derive.selected(s)?.id));
+      set({ selectedID: list[Math.min(Math.max(current + delta, 0), list.length - 1)].id });
+    },
+    nextNeedingNumber() {
+      const s = get();
+      const list = derive.visibleFrames(s);
+      if (!list.length) return;
+      const start = list.findIndex((f) => f.id === derive.selected(s)?.id) + 1;
+      const order = [...list.slice(start), ...list.slice(0, start)];
+      const hit = order.find((f) => f.needsNumber);
+      if (hit) set({ selectedID: hit.id });
+    },
+    setFilter: (filter) => set({ filter }),
+
+    async assignNumber(id, slot, number) {
+      const f = frame(id);
+      if (!f?.record || slot >= f.record.vision.players.length) return;
+      const manual = { ...f.record.manualJerseyNumbers };
+      const trimmed = number.trim();
+      if (trimmed) manual[slot] = trimmed; else delete manual[slot];
+      patchFrame(id, { record: { ...f.record, manualJerseyNumbers: manual } });
+      await recomposeFrame(id);
+    },
+
+    async updateCaption(id, text) {
+      const f = frame(id);
+      const trimmed = text.trim();
+      if (!f || trimmed === f.caption) return;
+      const rec = f.record ? { ...f.record, caption: trimmed } : null;
+      patchFrame(id, { caption: trimmed, edited: true, writeError: null, record: rec });
+      if (rec) await saveRecord(f, rec);
+      await writeMetadata({ ...f, caption: trimmed, edited: true, record: rec });
+    },
+
+    recompose: recomposeFrame,
+    async recomposeAll() {
+      const targets = get().frames.filter((f) => f.record);
+      let changed = 0;
+      for (const f of targets) {
+        const before = f.caption;
+        await recomposeFrame(f.id);
+        if (frame(f.id)?.caption !== before) changed++;
+      }
+      set({ bulkLabel: `Re-composed ${targets.length}; ${changed} changed.` });
+    },
+
+    async setApproved(id, approved) {
+      const f = frame(id);
+      if (!f) return;
+      patchFrame(id, { approved });
+      if (f.record) { const rec = { ...f.record, approved }; patchFrame(id, { record: rec }); await saveRecord(f, rec); }
+    },
+    async approveAndAdvance() {
+      const s = get();
+      const row = derive.selected(s);
+      if (!row) return;
+      const list = derive.visibleFrames(s);
+      const position = list.findIndex((f) => f.id === row.id);
+      await get().setApproved(row.id, true);
+      const after = derive.visibleFrames(get());
+      if (after.some((f) => f.id === row.id)) get().step(1);
+      else if (!after.length) set({ selectedID: null });
+      else set({ selectedID: after[Math.min(Math.max(position, 0), after.length - 1)].id });
+    },
+
+    /** Caption one frame again, with something the photographer knows that the model missed. */
+    async recaption(id, note) {
+      const s = get();
+      const f = frame(id);
+      if (!f || !s.apiKey) { if (!s.apiKey) set({ lastError: "Add your Anthropic API key in Settings first." }); return; }
+      patchFrame(id, { state: "working" });
+      set({ statusLine: `Captioning ${f.name} again…` });
+      try {
+        const roster = derive.roster(s);
+        const sportLabel = s.rosterMode === "noTeams" ? s.eventName.trim() : derive.sportLabel(s);
+        const context = VisionPrompt.context({ sportLabel, roster, event: derive.event(s), notes: s.notes, note });
+        const client = new AnthropicClient({ apiKey: s.apiKey, model: s.settings.model });
+        const file = await f.photo.file();
+        const exif = await readPhotoMetadata(file);
+        const jpeg = await preparedForVision(file, s.settings.longEdge);
+        const reply = await client.analyse(jpeg, VisionPrompt.system, context);
+        const vision = VisionResult.fromJSON(CaptionResponseParser.decodeJSON(reply.text));
+        const rec: CaptionRecord = { ...(f.record ?? CaptionRecord.make({ filename: f.name, vision, caption: "", capturedAt: PhotoMetadata.apStyleDate(exif) })), vision, manualJerseyNumbers: {} };
+        patchFrame(id, { record: rec, exif, state: "done" });
+        set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens, tokensOut: st.tokensOut + reply.usage.outputTokens }));
+        await recomposeFrame(id);
+        set({ statusLine: `Captioned ${f.name} again.` });
+      } catch (e) {
+        patchFrame(id, { state: "done" });
+        set({ lastError: `Could not caption ${f.name} again: ${(e as Error).message}` });
+      }
+    },
+
+    async setKitColour(colour, side) {
+      set({ [side]: { ...get()[side], colour } } as Partial<State>);
+      await get().recomposeAll();
+    },
+
+    renameFixture(date, coveredIsHome) {
+      const s = get();
+      if (s.rosterMode === "noTeams") return null;
+      const code = HDSNaming.sportCode(s.selection.sportID, s.selection.gender);
+      if (!code) return null;
+      return { initials: HDSNaming.initials(s.settings.photographer), date, sportCode: code,
+        covered: coveredIsHome ? s.home.name : s.away.name, opponent: coveredIsHome ? s.away.name : s.home.name, coveredIsHome };
+    },
+    async renamePlan(date, coveredIsHome) {
+      const s = get();
+      const fixture = get().renameFixture(date, coveredIsHome);
+      if (!fixture || !s.folder) return null;
+      // Capture order, not the card's filenames, so the numbering follows the game.
+      const withDates = await Promise.all(s.frames.map(async (f) => ({ f, when: f.exif?.captureDate ?? (await readPhotoMetadata(await f.photo.file())).captureDate ?? new Date(0) })));
+      withDates.sort((a, b) => a.when.getTime() - b.when.getTime() || a.f.name.localeCompare(b.f.name));
+      const dir = await records(false);
+      return PhotoRenamer.plan({ photos: withDates.map((w) => w.f.name), fixture, pattern: s.settings.namingPattern,
+        existingNames: await s.folder.listNames(), recordNames: dir ? await dir.listNames() : new Set() });
+    },
+    async applyRename(plan) {
+      const s = get();
+      if (!s.folder) return;
+      try {
+        const count = await applyRenamePlan(s.folder, await records(false), plan);
+        await scanFolder();
+        set({ statusLine: `Renamed ${count} file${count === 1 ? "" : "s"}.`, panel: null });
+      } catch (e) { set({ lastError: (e as Error).message }); }
+    },
+  };
+
+  function refreshSuggestedURL(sel: GameSelection) {
+    const s = get();
+    const suggestions = new Set([...SportCatalogue.divisionI.flatMap((o) => (["mens", "womens"] as Gender[]).map((g) => GameSelection.suggestedHomeURL({ level: "divisionI", sportID: o.sport, gender: g })))].filter(Boolean) as string[]);
+    if (s.home.rosterURL === "" || suggestions.has(s.home.rosterURL)) {
+      set({ home: { ...s.home, rosterURL: GameSelection.suggestedHomeURL(sel) ?? "" } });
+    }
+  }
+});
+
+export { THUMB_EDGE, PREVIEW_EDGE };

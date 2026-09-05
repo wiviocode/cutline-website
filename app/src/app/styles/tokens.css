@@ -1,0 +1,105 @@
+:root {
+  /* Ink scale — the dark ground, deepest to lightest (from make-brand.swift + the app) */
+  --ink-0: #15181d;   /* page ground; the mark's tile ("ink") */
+  --ink-1: #1b1e23;   /* raised panel ("page") */
+  --ink-2: #24282f;   /* window chrome, bars */
+  --ink-3: #2a2f37;   /* controls, wells */
+  --ink-4: #31363f;   /* hairlines on chrome, control borders */
+  --ink-5: #3a4150;   /* large dim numerals */
+  --ink-hairline: #23272e; /* section hairlines on the page ground */
+
+  /* Text scale */
+  --text-1: #e9ecf0;  /* primary ("text") */
+  --text-2: #b6bdc7;  /* body on marketing pages */
+  --text-3: #9aa2ad;  /* secondary */
+  --text-4: #8b939f;  /* muted labels */
+  --text-5: #5d6570;  /* faint mono notes */
+  --text-dim: #4a525e; /* the mark's second rule ("dim") */
+
+  /* Accent — the cutline gold */
+  --gold: #e8b00a;
+  --gold-hover: #f2c235;
+  --on-gold: #1e1700;
+
+  /* Brand grays from the mark */
+  --photo-frame: #8d97a5; /* the photo rectangle ("frame") */
+  --photo-edge: #b9c2ce;  /* its keyline ("edge") */
+
+  /* Sport red — kit swatches, warnings of the jersey kind */
+  --kit-red: #b3202c;
+
+  /* Semantic aliases */
+  --surface-page: var(--ink-0);
+  --surface-panel: var(--ink-1);
+  --surface-chrome: var(--ink-2);
+  --surface-control: var(--ink-3);
+  --border-hairline: var(--ink-hairline);
+  --border-control: var(--ink-4);
+  --text-body: var(--text-2);
+  --text-heading: var(--text-1);
+  --accent: var(--gold);
+  --gold-wash: rgba(232, 176, 10, 0.16);
+  --gold-wash-border: rgba(232, 176, 10, 0.5);
+}
+:root {
+  /* Families */
+  --font-display: 'Newsreader', Georgia, serif;      /* headlines + set captions; optical sizing on */
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  --font-mono: 'Spline Sans Mono', 'SF Mono', ui-monospace, monospace; /* meta, labels, filenames */
+
+  /* Display (marketing) */
+  --type-hero-size: clamp(48px, 7vw, 96px);
+  --type-hero-weight: 500;
+  --type-hero-leading: 1.02;
+  --type-hero-tracking: -0.025em;
+  --type-h2-size: clamp(34px, 4.4vw, 58px);
+  --type-h2-leading: 1.08;
+  --type-h2-tracking: -0.02em;
+  --type-caption-size: clamp(20px, 2.3vw, 28px); /* a set caption, as display */
+  --type-caption-leading: 1.5;
+
+  /* Body */
+  --type-lede-size: clamp(17px, 1.6vw, 20px);
+  --type-lede-leading: 1.65;
+  --type-body-size: 15px;
+  --type-ui-size: 12.5px;   /* app chrome */
+  --type-ui-leading: 1.5;
+
+  /* Mono meta */
+  --type-mono-size: 12px;
+  --type-mono-note: 11.5px;
+  --type-overline-size: 10px;   /* uppercase section labels in the app */
+  --type-overline-tracking: 0.05em;
+}
+:root {
+  /* Spacing — the site and app use these steps */
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --space-5: 24px;
+  --space-6: 34px;
+  --space-7: 44px;
+  --space-8: 70px;   /* section padding, min */
+  --space-9: 110px;  /* section padding, max */
+  --page-gutter: clamp(24px, 6vw, 84px);
+  --page-max: 1160px;
+}
+:root {
+  /* Radii */
+  --radius-control: 6px;   /* app buttons, inputs */
+  --radius-button: 8px;    /* marketing CTAs */
+  --radius-card: 12px;     /* panels, wells */
+  --radius-window: 14px;   /* framed windows */
+  --radius-pill: 99px;     /* tabs, chips */
+  --radius-mark: 22.37%;   /* the mark's tile corner, as a fraction of its width */
+
+  /* Shadows — one deep drop for framed windows; hairlines do the rest */
+  --shadow-window: 0 30px 80px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 10px 34px rgba(0, 0, 0, 0.55);
+
+  /* Motion */
+  --ease-brand: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --dur-rise: 0.7s;      /* entrance rise-in */
+  --dur-control: 0.18s;  /* zooms, small transitions */
+}

@@ -1,0 +1,13 @@
+number,first_name,last_name,position,role
+1,John,Smith,QB,player
+2,Jane,Doe,RB,player
+3,Bob,Johnson,WR,player
+4,Alice,Williams,TE,player
+5,Charlie,Brown,OL,player
+10,David,Miller,DB,player
+12,Sarah,Davis,LB,player
+21,Mike,Wilson,WR,player
+33,Emily,Moore,RB,player
+45,Tom,Anderson,DL,player
+99,Coach,Johnson,,coach
+
