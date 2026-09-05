@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import { AnthropicClient, ClientError, toBase64 } from "../src/core/anthropic/AnthropicClient";
 import { RetryPolicy } from "../src/core/anthropic/RetryPolicy";
 
-type Call = { url: string; headers: Record<string, string>; body: Record<string, unknown> };
+type Call = { url: string; headers: Record<string, string>; body: Record<string, unknown>; signal: AbortSignal | null };
 
 function fakeServer(responses: ((call: Call, n: number) => Response)[]) {
   const calls: Call[] = [];
@@ -13,7 +13,7 @@ function fakeServer(responses: ((call: Call, n: number) => Response)[]) {
     const headers: Record<string, string> = {};
     new Headers(init?.headers as HeadersInit).forEach((v, k) => { headers[k] = v; });
     const body = init?.body ? JSON.parse(init.body as string) : {};
-    const call = { url: String(input), headers, body };
+    const call = { url: String(input), headers, body, signal: (init?.signal as AbortSignal | null | undefined) ?? null };
     calls.push(call);
     const handler = responses[Math.min(calls.length - 1, responses.length - 1)];
     return handler(call, calls.length);
@@ -104,5 +104,37 @@ describe("The Messages client", () => {
     const b64 = toBase64(big);
     expect(b64.length).toBe(Math.ceil(big.length / 3) * 4);
     expect(Buffer.from(b64, "base64").equals(Buffer.from(big))).toBe(true);
+  });
+});
+
+describe("Checking a key", () => {
+  const models = () => new Response(JSON.stringify({ data: [{ id: "claude-opus-5", type: "model", display_name: "Opus", created_at: "2026-01-01T00:00:00Z" }], has_more: false, first_id: null, last_id: null }), { status: 200, headers: { "content-type": "application/json" } });
+  it("uses the free model list and spends no tokens", async () => {
+    const server = fakeServer([models]);
+    expect(await AnthropicClient.verifyKey("sk-ant-good", server.fetch)).toEqual({ ok: true });
+    expect(server.calls[0].url).toContain("/v1/models");
+    expect(server.calls[0].headers["x-api-key"]).toBe("sk-ant-good");
+  });
+  it("says plainly why a key is refused", async () => {
+    const server = fakeServer([() => fail(401)]);
+    const r = await AnthropicClient.verifyKey("sk-ant-bad", server.fetch);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/not accepted/);
+  });
+  it("tells a network failure from a bad key", async () => {
+    const server = fakeServer([() => { throw new TypeError("Failed to fetch"); }]);
+    const r = await AnthropicClient.verifyKey("sk-ant-x", server.fetch);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/reach/);
+  });
+});
+
+describe("Stopping", () => {
+  it("hands the abort signal to every request", async () => {
+    const server = fakeServer([() => ok("x")]);
+    const controller = new AbortController();
+    const client = new AnthropicClient({ apiKey: "k", model: "claude-opus-5", fetch: server.fetch, retry: fast, signal: controller.signal });
+    await client.describeText("", "hello", 10);
+    expect(server.calls[0].signal).toBeInstanceOf(AbortSignal);
   });
 });

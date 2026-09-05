@@ -1,50 +1,86 @@
+/**
+ * The shell: a title bar with where you are, one screen at a time, the two sheets, and a toast
+ * for anything that needs saying. Everything sits inside an error boundary.
+ */
+
 import React, { useEffect } from "react";
-import { useStore } from "./store";
+import { useStore, type Screen } from "./store";
 import { Button, Mark } from "./components";
-import { SetupScreen } from "./screens/SetupScreen";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { Welcome } from "./screens/Welcome";
+import { StartScreen } from "./screens/StartScreen";
+import { GameScreen } from "./screens/GameScreen";
 import { ReviewScreen } from "./screens/ReviewScreen";
 import { SettingsPanel } from "./screens/SettingsPanel";
 import { RenamePanel } from "./screens/RenamePanel";
 
 export function App() {
-  const s = useStore();
-  useEffect(() => { void s.init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!s.ready) return <div className="app"><div className="titlebar"><Mark /><span className="appname">Cutline</span></div></div>;
+  const ready = useStore((s) => s.ready);
+  const screen = useStore((s) => s.screen);
+  const panel = useStore((s) => s.panel);
+  const init = useStore((s) => s.init);
+  const setPanel = useStore((s) => s.setPanel);
+  useEffect(() => { void init(); }, [init]);
 
   return (
-    <div className={"app" + (s.panel ? " inert" : "")}>
-      <nav className="titlebar">
-        <Mark />
-        <span className="appname">Cutline</span>
-        {s.screen === "review" && s.isRunning && <span className="dim small">captioning…</span>}
-        <span className="spacer" />
-        {!s.writableFolders && <span className="dim small" title="Safari and Firefox cannot write to files on disk">read-only browser</span>}
-        <Button variant="secondary" onClick={() => s.setPanel("settings")} title="API key, caption style and output"><Gear />Settings</Button>
-      </nav>
-      {!s.apiKey && (
-        <div className="banner" role="status">
-          <span className="glyph">!</span>
-          <div>
-            <b>Add your Anthropic API key to start captioning.</b> Cutline calls the model from this page with your own key. The key is kept in this browser, on this site only, and is sent to nothing but api.anthropic.com — so a key saved elsewhere is not here. Get one at <a href="https://console.anthropic.com/" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>console.anthropic.com</a>.
-            <div className="banner-actions">
-              <Button onClick={() => s.setPanel("settings")}>Add a key in Settings</Button>
-            </div>
-          </div>
-        </div>
-      )}
-      {s.screen === "setup" ? <SetupScreen /> : <ReviewScreen />}
-      {s.panel === "settings" && <SettingsPanel onClose={() => s.setPanel(null)} />}
-      {s.panel === "rename" && <RenamePanel onClose={() => s.setPanel(null)} />}
-      {s.lastError && (
-        <div className="sheet-backdrop" onMouseDown={() => s.clearError()}>
-          <div className="sheet small" role="alertdialog">
-            <header className="sheet-head"><h1>Something went wrong</h1></header>
-            <div className="sheet-body"><p>{s.lastError}</p></div>
-            <footer className="sheet-foot"><span className="spacer" /><Button onClick={() => s.clearError()}>OK</Button></footer>
-          </div>
-        </div>
-      )}
+    <ErrorBoundary>
+      <div className="app">
+        {ready && screen !== "welcome" && <Titlebar />}
+        {!ready && <div className="titlebar"><Mark /><span className="appname">Cutline</span></div>}
+        {ready && screen === "welcome" && <Welcome />}
+        {ready && screen === "start" && <StartScreen />}
+        {ready && screen === "game" && <GameScreen />}
+        {ready && screen === "review" && <ReviewScreen />}
+        {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
+        {panel === "rename" && <RenamePanel onClose={() => setPanel(null)} />}
+        <Toast />
+      </div>
+    </ErrorBoundary>
+  );
+}
+
+const STEPS: { id: Screen; label: string }[] = [{ id: "start", label: "Photographs" }, { id: "game", label: "Game" }, { id: "review", label: "Review" }];
+
+function Titlebar() {
+  const screen = useStore((s) => s.screen);
+  const writable = useStore((s) => s.writableFolders);
+  const running = useStore((s) => s.isRunning);
+  const setPanel = useStore((s) => s.setPanel);
+  const at = STEPS.findIndex((st) => st.id === screen);
+  return (
+    <nav className="titlebar" aria-label="Cutline">
+      <Mark />
+      <span className="appname">Cutline</span>
+      <span className="crumbs" aria-label="Where you are">
+        {STEPS.map((st, i) => (
+          <React.Fragment key={st.id}>
+            {i > 0 && <i aria-hidden="true">›</i>}
+            <span className={i === at ? "on" : i < at ? "done" : ""} aria-current={i === at ? "step" : undefined}>{st.label}</span>
+          </React.Fragment>
+        ))}
+      </span>
+      <span className="spacer" />
+      {running && <span className="tag">captioning…</span>}
+      {!writable && <span className="tag" title="Safari and Firefox can open photographs but cannot write captions into them. Chrome, Edge and Brave can.">read-only browser</span>}
+      <Button variant="secondary" onClick={() => setPanel("settings")} title="Key, byline, model and output"><Gear />Settings</Button>
+    </nav>
+  );
+}
+
+function Toast() {
+  const notice = useStore((s) => s.notice);
+  const clear = useStore((s) => s.clearNotice);
+  useEffect(() => {
+    if (!notice || notice.kind !== "info") return;
+    const t = setTimeout(clear, 7000);
+    return () => clearTimeout(t);
+  }, [notice, clear]);
+  if (!notice) return null;
+  return (
+    <div className={`toast toast-${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}>
+      <span className="toast-glyph" aria-hidden="true">{notice.kind === "error" ? "!" : "i"}</span>
+      <span>{notice.text}</span>
+      <button type="button" className="toast-close" aria-label="Dismiss" onClick={clear}>×</button>
     </div>
   );
 }
@@ -57,5 +93,3 @@ function Gear() {
     </svg>
   );
 }
-
-export { React };

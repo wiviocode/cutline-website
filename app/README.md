@@ -25,8 +25,9 @@ Open the site in **Chrome, Edge, Brave or another Chromium browser** and drop a 
 photographs on it. Safari and Firefox can open a folder read-only — caption, review, correct —
 but cannot write into the files; the app says so when it detects one.
 
-You need an [Anthropic API key](https://console.anthropic.com/). It goes in Settings, is kept in
-the browser's own storage, and is sent only to `api.anthropic.com`. Unlike the Mac app's keychain,
+You need an [Anthropic API key](https://console.anthropic.com/). The first-time setup asks for it and
+checks it before anything else, then your byline and house style, then the model and output. The key
+is kept in the browser's own storage and is sent only to `api.anthropic.com`. Unlike the Mac app's keychain,
 anything else running in that browser profile could read it — use a key you can revoke.
 
 Every file format the app writes is the Mac app's: `.caption-data/<frame>.json`,
@@ -60,7 +61,7 @@ sidecar beside them.
 cd app
 npm install
 npm run dev        # http://localhost:5173/app/
-npm test           # 152 checks, including a real JPEG written and read back
+npm test           # 159 checks, including a real JPEG written and read back
 npm run build      # into ../dist/app
 ```
 
@@ -69,7 +70,7 @@ Set `CUTLINE_RAW_SAMPLE=/path/to/a.ARW` to run the RAW walker's check against a 
 ```
 src/core/       pure TypeScript — every line has a test; no DOM, no network
 src/platform/   the browser: File System Access, IndexedDB, image decoding, EXIF, the relay client
-src/app/        React + zustand, the design system's tokens and primitives
+src/app/        React + zustand: the shell, the first-time setup, and the four screens (UI-PLAN.md)
 ../api/fetch.ts the relay, a Vercel function — at the repository root, where the host looks for it
 tests/          the golden suite, ported check for check from the Mac app
 ```

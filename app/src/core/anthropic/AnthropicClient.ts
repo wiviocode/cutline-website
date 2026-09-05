@@ -40,9 +40,13 @@ export interface ClientOptions {
   retry?: RetryPolicy;
   /** Called before each wait, so a long batch can show why it paused. */
   onRetry?: (attempt: number, wait: number, why: string) => void;
+  /** Aborts every request made through this client — Stop means stop. */
+  signal?: AbortSignal;
   /** For tests. */
   fetch?: typeof fetch;
 }
+
+export type KeyCheck = { ok: true } | { ok: false; reason: string };
 
 export class AnthropicClient {
   readonly model: string;
@@ -50,6 +54,7 @@ export class AnthropicClient {
   readonly effort: ClientOptions["effort"];
   readonly retry: RetryPolicy;
   private readonly onRetry?: ClientOptions["onRetry"];
+  private readonly signal?: AbortSignal;
   private readonly sdk: Anthropic;
 
   constructor(opts: ClientOptions) {
@@ -58,6 +63,7 @@ export class AnthropicClient {
     this.effort = opts.effort ?? null;
     this.retry = opts.retry ?? new RetryPolicy();
     this.onRetry = opts.onRetry;
+    this.signal = opts.signal;
     this.sdk = new Anthropic({
       apiKey: opts.apiKey,
       dangerouslyAllowBrowser: true,
@@ -65,6 +71,27 @@ export class AnthropicClient {
       timeout: 180_000,
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
     });
+  }
+
+  /**
+   * Whether a key is accepted at all, using the free model list — no tokens are spent. Says
+   * plainly why not, because a first-time user has nothing else to go on.
+   */
+  static async verifyKey(apiKey: string, fetchImpl?: typeof fetch): Promise<KeyCheck> {
+    const sdk = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 0, timeout: 20_000, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
+    try {
+      await sdk.models.list({ limit: 1 });
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof APIError && typeof e.status === "number") {
+        if (e.status === 401) return { ok: false, reason: "That key was not accepted. Check it was copied whole — it starts with sk-ant- and is long." };
+        if (e.status === 403) return { ok: false, reason: "That key is valid but not allowed to use the API. Check its permissions in the Anthropic console." };
+        if (e.status === 429) return { ok: false, reason: "The key works but is rate-limited right now. Try again in a moment." };
+        return { ok: false, reason: `Anthropic answered HTTP ${e.status}.` };
+      }
+      if (e instanceof APIConnectionError) return { ok: false, reason: "Could not reach api.anthropic.com. Check the connection, or whether something is blocking it." };
+      return { ok: false, reason: (e as Error).message || "The key could not be checked." };
+    }
   }
 
   /** One vision call: cached system prompt + image + per-photo context. */
@@ -144,7 +171,7 @@ export class AnthropicClient {
   }
 
   private async sendOnce(params: MessageCreateParamsNonStreaming): Promise<Reply> {
-    const message = await this.sdk.messages.create(params);
+    const message = await this.sdk.messages.create(params, this.signal ? { signal: this.signal } : undefined);
     if (message.stop_reason === "refusal") {
       const details = (message as unknown as { stop_details?: { category?: string } }).stop_details;
       throw new ClientError("refused", "the model declined to describe this photograph", undefined, details?.category ?? null);

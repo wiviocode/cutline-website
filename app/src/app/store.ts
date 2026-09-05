@@ -30,7 +30,8 @@ import { CaptionResponseParser } from "@core/vision/CaptionResponseParser";
 import { CaptionComposer } from "@core/caption/CaptionComposer";
 import { CompositionContext, EventDescription, asSport, type CaptionStyle } from "@core/caption/CompositionContext";
 import { UNIDENTIFIED_TOKEN } from "@core/caption/PlayerReference";
-import { AnthropicClient } from "@core/anthropic/AnthropicClient";
+import { AnthropicClient, type KeyCheck } from "@core/anthropic/AnthropicClient";
+import { needsOnboarding } from "./onboarding";
 import { AltTextRequest, SimpleAltText } from "@core/anthropic/AltText";
 import { VisionModel, ImagePrep } from "@core/anthropic/VisionModel";
 import { CaptionRecord, type ReviewStatus } from "@core/records/CaptionRecord";
@@ -45,6 +46,8 @@ import { PhotoRenamer, type RenamePlan } from "@core/naming/PhotoRenamer";
 
 export type Side = "home" | "away";
 export type FrameState = "pending" | "working" | "done" | "failed";
+export type Screen = "welcome" | "start" | "game" | "review";
+export interface Notice { text: string; kind: "error" | "info" }
 
 export interface Frame {
   id: string;
@@ -69,7 +72,7 @@ export const previews = new ImageCache(2);
 
 interface State {
   ready: boolean;
-  screen: "setup" | "review";
+  screen: Screen;
   panel: null | "settings" | "rename";
   writableFolders: boolean;
   relay: boolean | null;
@@ -104,7 +107,7 @@ interface State {
   progressDone: number;
   progressTotal: number;
   statusLine: string;
-  lastError: string | null;
+  notice: Notice | null;
   tokensIn: number;
   tokensOut: number;
   selectedID: string | null;
@@ -113,20 +116,24 @@ interface State {
 
   // lifecycle
   init(): Promise<void>;
-  setScreen(s: "setup" | "review"): void;
+  setScreen(s: Screen): void;
   setPanel(p: null | "settings" | "rename"): void;
-  clearError(): void;
+  notify(text: string, kind?: Notice["kind"]): void;
+  clearNotice(): void;
 
-  // settings
+  // settings and the first-time setup
   setSetting(patch: Partial<Settings>): void;
   setApiKey(key: string): Promise<void>;
+  verifyKey(key: string): Promise<KeyCheck>;
+  finishOnboarding(): void;
+  reopenSetup(): void;
   addTemplate(name: string, text: string): Promise<void>;
   removeTemplate(name: string): Promise<void>;
 
-  // setup
-  chooseFolder(): Promise<void>;
-  useFolder(folder: PhotoFolder): Promise<void>;
-  useFiles(files: File[]): Promise<void>;
+  // setup. `fresh` means a new card: the fixture is cleared, the beat is kept.
+  chooseFolder(fresh: boolean): Promise<void>;
+  useFolder(folder: PhotoFolder, fresh: boolean): Promise<void>;
+  useFiles(files: File[], fresh: boolean): Promise<void>;
   openRecent(game: RecentGame): Promise<void>;
   forgetRecent(game: RecentGame): Promise<void>;
   startOver(): void;
@@ -179,6 +186,7 @@ export const derive = {
   rosterless: (s: State) => s.rosterMode !== "rosters",
   noTeams: (s: State) => s.rosterMode === "noTeams",
   hasFolder: (s: State) => s.folder != null,
+  needsOnboarding: (s: State) => needsOnboarding(s.settings, s.apiKey),
 
   /** Where a team's name divides. A scraped team already knows; a typed one is guessed at. */
   nameParts(s: State, side: Side): { school: string; nickname: string | null } {
@@ -468,7 +476,7 @@ export const useStore = create<State>()((set, get) => {
   };
 
   return {
-    ready: false, screen: "setup", panel: null, writableFolders: typeof window !== "undefined" && "showDirectoryPicker" in window, relay: null,
+    ready: false, screen: "start", panel: null, writableFolders: typeof window !== "undefined" && "showDirectoryPicker" in window, relay: null,
     settings: DEFAULT_SETTINGS, apiKey: "", library: [], logoURLs: {}, recents: [], templateNames: [],
     selection: GameSelection.make(), rosterMode: "rosters",
     home: { name: "", colour: "white", rosterURL: "", team: null },
@@ -476,12 +484,12 @@ export const useStore = create<State>()((set, get) => {
     eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
     folder: null, photoCount: 0, shootDate: null,
     importing: null, importStatus: "", importError: null, importWarnings: [],
-    frames: [], isRunning: false, progressDone: 0, progressTotal: 0, statusLine: "", lastError: null, tokensIn: 0, tokensOut: 0,
+    frames: [], isRunning: false, progressDone: 0, progressTotal: 0, statusLine: "", notice: null, tokensIn: 0, tokensOut: 0,
     selectedID: null, filter: "all", bulkLabel: "",
 
     async init() {
       const [settings, apiKey, library, recents, templateNames] = await Promise.all([Storage.settings(), Storage.apiKey(), Storage.teams(), Storage.recents(), Storage.templateNames()]);
-      set({ settings, apiKey, library: TeamLibrary.sorted(library), recents, templateNames, ready: true });
+      set({ settings, apiKey, library: TeamLibrary.sorted(library), recents, templateNames, ready: true, screen: needsOnboarding(settings, apiKey) ? "welcome" : "start" });
       const sel = GameSelection.make();
       set({ selection: sel, home: { ...get().home, rosterURL: GameSelection.suggestedHomeURL(sel) ?? "" } });
       await loadLogos(library);
@@ -489,7 +497,8 @@ export const useStore = create<State>()((set, get) => {
     },
     setScreen: (screen) => set({ screen }),
     setPanel: (panel) => set({ panel }),
-    clearError: () => set({ lastError: null }),
+    notify: (text, kind = "error") => set({ notice: { text, kind } }),
+    clearNotice: () => set({ notice: null }),
 
     setSetting(patch) {
       const settings = { ...get().settings, ...patch };
@@ -497,8 +506,11 @@ export const useStore = create<State>()((set, get) => {
       void Storage.saveSettings(settings);
     },
     async setApiKey(key) { set({ apiKey: key.trim() }); await Storage.saveApiKey(key.trim()); },
+    verifyKey: (key) => AnthropicClient.verifyKey(key.trim()),
+    finishOnboarding() { get().setSetting({ onboarded: true }); set({ screen: "start" }); },
+    reopenSetup() { set({ panel: null, screen: "welcome" }); },
     async addTemplate(name, text) {
-      try { new IPTCTemplate(text); } catch { set({ lastError: "That file is not an XMP template." }); return; }
+      try { new IPTCTemplate(text); } catch { get().notify("That file is not an XMP template."); return; }
       await Storage.saveTemplate(name, text);
       set({ templateNames: await Storage.templateNames() });
       get().setSetting({ templateName: name });
@@ -509,18 +521,19 @@ export const useStore = create<State>()((set, get) => {
       if (get().settings.templateName === name) get().setSetting({ templateName: null });
     },
 
-    async chooseFolder() {
-      const folder = await pickFolder();
-      if (folder) await get().useFolder(folder);
+    async chooseFolder(fresh) {
+      let folder: PhotoFolder | null = null;
+      try { folder = await pickFolder(); } catch (e) { get().notify(`Could not open that folder: ${(e as Error).message}`); return; }
+      if (folder) await get().useFolder(folder, fresh);
     },
-    async useFolder(folder) {
-      get().startOver();
-      set({ folder });
-      await scanFolder();
+    async useFolder(folder, fresh) {
+      if (fresh) get().startOver();
+      set({ folder, screen: "game" });
+      try { await scanFolder(); } catch (e) { set({ folder: null, frames: [], photoCount: 0 }); get().notify(`Could not read that folder: ${(e as Error).message}`); }
     },
-    async useFiles(files) {
+    async useFiles(files, fresh) {
       if (!files.length) return;
-      await get().useFolder(new FileListFolder(files));
+      await get().useFolder(new FileListFolder(files), fresh);
     },
     async openRecent(game) {
       const lib = get().library;
@@ -537,10 +550,11 @@ export const useStore = create<State>()((set, get) => {
       if (handle) {
         try {
           const folder = await reopenFolder(handle);
-          if (folder) { set({ folder }); await scanFolder(); return; }
+          if (folder) { set({ folder, screen: "game" }); await scanFolder(); return; }
         } catch { /* fall through */ }
       }
-      set({ folder: null, frames: [], photoCount: 0, shootDate: null, statusLine: "Choose the folder of photos again — the browser could not reopen it." });
+      set({ folder: null, frames: [], photoCount: 0, shootDate: null, screen: "game" });
+      get().notify("Choose the folder of photographs again — the browser could not reopen it on its own.", "info");
     },
     async forgetRecent(game) {
       const recents = get().recents.filter((g) => g.id !== game.id);
@@ -554,7 +568,7 @@ export const useStore = create<State>()((set, get) => {
             away: { name: "", colour: "navy", rosterURL: "", team: null },
             eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
             folder: null, frames: [], photoCount: 0, shootDate: null, importError: null, importWarnings: [], importStatus: "", importing: null,
-            statusLine: "", lastError: null, tokensIn: 0, tokensOut: 0, selectedID: null, filter: "all" });
+            statusLine: "", tokensIn: 0, tokensOut: 0, selectedID: null, filter: "all", screen: "start" });
       thumbnails.clear(); previews.clear();
     },
     setLevel(level) {
@@ -580,7 +594,7 @@ export const useStore = create<State>()((set, get) => {
       set({ importing: side, importError: null, importWarnings: [], importStatus: "Resolving…" });
 
       let chosen: { url: string; html: string; identity: TeamIdentity | null } | null = null;
-      let lastError: Error | null = null;
+      let lastFailure: Error | null = null;
       for (const url of candidates) {
         set({ importStatus: `Trying ${new URL(url).pathname}…` });
         try {
@@ -593,10 +607,10 @@ export const useStore = create<State>()((set, get) => {
             if (!reported || wanted.includes(reported)) { chosen = { url: page.url, html: page.text, identity }; break; }
           }
           if (!chosen) chosen = { url: page.url, html: page.text, identity };
-        } catch (e) { lastError = e as Error; }
+        } catch (e) { lastFailure = e as Error; }
       }
       if (!chosen) {
-        set({ importing: null, importStatus: "", importError: lastError ? `Could not load that page: ${lastError.message}` : "No roster page responded." });
+        set({ importing: null, importStatus: "", importError: lastFailure ? `Could not load that page: ${lastFailure.message}` : "No roster page responded." });
         return;
       }
       await get().importTeamFromHTML(side, chosen.html, chosen.url);
@@ -669,7 +683,7 @@ export const useStore = create<State>()((set, get) => {
     async run(opts = {}) {
       const s = get();
       if (!s.folder) return;
-      if (!s.apiKey) { set({ lastError: "Add your Anthropic API key in Settings first." }); return; }
+      if (!s.apiKey) { get().notify("Add your Anthropic API key in Settings first."); return; }
       let todo = s.frames.filter((f) => opts.redo || f.state === "pending");
       if (opts.limit) todo = todo.slice(0, opts.limit);
       if (!todo.length) { set({ statusLine: "Nothing to do." }); return; }
@@ -677,16 +691,16 @@ export const useStore = create<State>()((set, get) => {
       runGeneration += 1;
       const generation = runGeneration;
       runController = new AbortController();
-      set({ isRunning: true, lastError: null, progressDone: 0, progressTotal: todo.length, tokensIn: 0, tokensOut: 0 });
+      const signal = runController.signal;
+      set({ isRunning: true, notice: null, progressDone: 0, progressTotal: todo.length, tokensIn: 0, tokensOut: 0 });
       for (const f of todo) patchFrame(f.id, { state: "working", error: null });
 
       const roster = derive.roster(s);
       const event = derive.event(s);
       const sportLabel = s.rosterMode === "noTeams" ? s.eventName.trim() : derive.sportLabel(s);
       const context = VisionPrompt.context({ sportLabel, roster, event, notes: s.notes });
-      const client = new AnthropicClient({ apiKey: s.apiKey, model: s.settings.model, onRetry: (attempt, wait, why) => set({ statusLine: `Waiting ${Math.round(wait)}s after ${why} (attempt ${attempt})…` }) });
-      const altClient = new AnthropicClient({ apiKey: s.apiKey, model: "claude-haiku-4-5-20251001", maxTokens: AltTextRequest.maxTokens });
-      const tpl = await template();
+      const client = new AnthropicClient({ apiKey: s.apiKey, model: s.settings.model, signal, onRetry: (attempt, wait, why) => set({ statusLine: `Waiting ${Math.round(wait)}s after ${why} (attempt ${attempt})…` }) });
+      const altClient = new AnthropicClient({ apiKey: s.apiKey, model: "claude-haiku-4-5-20251001", maxTokens: AltTextRequest.maxTokens, signal });
       const manifestDir = s.folder;
       let manifest: ProcessedFileRecord[] = ProcessedFilesManifest.parse((await manifestDir.readText(ProcessedFilesManifest.fileName)) ?? "");
 
@@ -742,7 +756,6 @@ export const useStore = create<State>()((set, get) => {
       const failed = st.frames.filter((f) => f.state === "failed").length;
       const needs = st.frames.filter((f) => f.needsNumber).length;
       set({ isRunning: false, statusLine: `Done — ${st.progressTotal - failed} captioned${failed ? `, ${failed} failed` : ""}${needs ? `, ${needs} need a number` : ""}` });
-      void tpl;
     },
 
     cancel() {
@@ -825,7 +838,7 @@ export const useStore = create<State>()((set, get) => {
     async recaption(id, note) {
       const s = get();
       const f = frame(id);
-      if (!f || !s.apiKey) { if (!s.apiKey) set({ lastError: "Add your Anthropic API key in Settings first." }); return; }
+      if (!f || !s.apiKey) { if (!s.apiKey) get().notify("Add your Anthropic API key in Settings first."); return; }
       patchFrame(id, { state: "working" });
       set({ statusLine: `Captioning ${f.name} again…` });
       try {
@@ -845,7 +858,7 @@ export const useStore = create<State>()((set, get) => {
         set({ statusLine: `Captioned ${f.name} again.` });
       } catch (e) {
         patchFrame(id, { state: "done" });
-        set({ lastError: `Could not caption ${f.name} again: ${(e as Error).message}` });
+        get().notify(`Could not caption ${f.name} again: ${(e as Error).message}`);
       }
     },
 
@@ -880,7 +893,7 @@ export const useStore = create<State>()((set, get) => {
         const count = await applyRenamePlan(s.folder, await records(false), plan);
         await scanFolder();
         set({ statusLine: `Renamed ${count} file${count === 1 ? "" : "s"}.`, panel: null });
-      } catch (e) { set({ lastError: (e as Error).message }); }
+      } catch (e) { get().notify((e as Error).message); }
     },
   };
 

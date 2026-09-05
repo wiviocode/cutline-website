@@ -1,0 +1,125 @@
+# The interface, rebuilt from the ground
+
+Written 2026-09-05, before the code. The brief: strip the interface to the bone, rebuild it so
+it has no errors or glitches, make it streamlined and easy, and give a first-time user a setup
+that collects everything the app needs before they start.
+
+Nothing under `src/core` or `src/platform` changes in what it does. The 152 checks stay green
+throughout; two are added.
+
+## What was wrong with the old one
+
+Read from the code, not guessed:
+
+- **Nothing collected the essentials up front.** The API key lived on the second tab of a
+  Settings sheet, behind a gear. Photographer name (the credit line) sat on the first tab. A new
+  user met a dark drop zone and a disabled button.
+- **Whole-store subscriptions everywhere.** Every screen called `useStore()` with no selector,
+  so every frame update during a run re-rendered the entire tree — including a filmstrip of
+  hundreds of thumbnails, none memoised.
+- **The three setup thumbnails flickered.** Their effect keyed on `frames`, which changes on
+  every progress tick, and it cleared the URL map each time.
+- **A component defined inside render** (`Why` in Settings) remounted its buttons every render.
+- **Errors opened a modal.** A failed write or a bad key became a blocking "Something went
+  wrong" sheet in the middle of review.
+- **Stop did not stop.** Cancel bumped a generation counter, but the in-flight requests kept
+  running to completion; the abort controller was created and never passed to the client.
+- **Return approved a frame whenever focus was on a button** — pressing Stop and then Return
+  approved the frame under review.
+- **Fixed heights that clip.** Bars were 46px with `overflow: hidden`; the rail was a hard
+  300px; narrow windows lost buttons and the stage.
+- **A no-op expression** in the team editor's crest colour (`(derive.nameParts(s, side), st.colour)`).
+- **Settings behind tabs** with "why" toggles: three surfaces for eleven values.
+
+## The shape of the new one
+
+Four screens in a straight line, one sheet for settings, two small sheets for a team and for
+renaming. Nothing is more than one click from where it is needed.
+
+```
+Welcome (first run)  →  Start  →  Game  →  Review
+   key · byline · model      folder     who played     caption, correct, approve
+```
+
+### Welcome — the first-time setup
+
+Shown when the app has never been set up, or when there is no key. Three steps, one screen
+each, with a progress rail. The user cannot reach the app without a key that has been checked.
+
+1. **Your key.** One field. A **Check key** button makes the free `models.list` call and
+   reports plainly: works, or the exact reason it does not (401 "not a valid key", network).
+   A line on where the key lives (this browser, this site, sent to nothing but
+   api.anthropic.com) and a link to get one. If the browser cannot write into files, it says so
+   here, before any work is done, with the two browsers that can.
+2. **Your byline.** Photographer name, and the house style as a list of radio rows, each
+   showing the real sample caption it produces. This is what makes a caption read as AP or
+   Getty; it belongs at the start, not in a tab.
+3. **Model and output.** Which model reads the photographs (three cards: capability, speed,
+   list price per million tokens), whether captions are written into the photographs (on when
+   the browser can), and alt text. **Finish** marks the app as set up.
+
+Settings keeps a "Run the setup again" link so it is never a one-way door.
+
+### Start
+
+The drop zone, the browser note if it applies, recent shoots. Nothing else.
+
+### Game
+
+One scrolling page, no numbered steps:
+
+- **Photographs** — folder, count, capture date, Change.
+- **What was played** — level, sport, gender, and how much team information there is.
+- **Who played** — two team cards (name, kit colour, roster) opening the team sheet, or the
+  event fields for an open event.
+- **Where** — venue, city, state, and notes to the model.
+- A footer that says in words what is still missing, then **Continue**.
+
+### Review
+
+- Header: back, the matchup, the filter (needs review / approved / all) and position, and the
+  "next unread number" jump when there is one.
+- The stage (click to zoom at the click point) and the rail: the caption (click to edit),
+  numbers read as chips (click to correct — recomposed locally, no request), redo with a note,
+  alt text, approve.
+- The filmstrip, memoised per thumbnail.
+- The action bar: **Caption N photos** / **Stop**, Test 10, Redo all, Rename…, live cost.
+- The kit-colour alarm, when it fires, above the stage.
+
+Below 880px the rail moves under the stage, and the bars wrap rather than clip.
+
+### Settings
+
+One scrolling sheet, sections in the order a person needs them: key, byline and style, model,
+output, file names, and the setup link. No tabs. Explanations sit under their control, always
+visible, one line each.
+
+## How the glitches go away
+
+- **An error boundary** around the app: a render error shows a message and a Reload button
+  instead of a blank page.
+- **Notices, not modals.** Errors and confirmations are a toast at the bottom, dismissed by a
+  click or on their own.
+- **One shortcut hook.** Shortcuts are declared per screen, ignored while a sheet is open or
+  when focus is in an input, textarea, select or button. Return approves only from the stage.
+- **Selectors.** Hot components subscribe to the slice they draw; `Thumb` is `memo`ised and
+  subscribes to nothing but its own frame's four booleans.
+- **Stable thumbnails.** The setup preview keys on the folder, not on the frame list.
+- **Abort that aborts.** The run's `AbortSignal` goes into every request; Stop cancels what is in
+  flight and marks those frames pending again.
+- **Layout that bends.** Bars are `min-height` and wrap; the rail has a media query; the stage is
+  `min-width: 0`. No `overflow: hidden` on a bar.
+- **Class-based primitives.** Buttons, inputs and selects are CSS classes, not per-instance
+  hover state, so nothing re-renders to change a colour.
+
+## Order of work
+
+1. `AnthropicClient`: accept `signal`; add `verifyKey()`. Test against the fake server.
+2. `Settings.onboarded`; store: `screen` becomes `welcome | start | game | review`; `notice`
+   replaces `lastError`; `verifyKey`, `finishOnboarding`; abort wired.
+3. `onboarding.ts` (pure): which step is next, key-format check. Test.
+4. Primitives and stylesheet, rewritten.
+5. Screens: Welcome, Start, Game, Review, Settings, Team, Rename. App shell with the boundary,
+   shortcuts and toast.
+6. `tsc`, the test suite, `vite build`; then a walk through every screen in the browser at two
+   widths, with the console open, before it ships.

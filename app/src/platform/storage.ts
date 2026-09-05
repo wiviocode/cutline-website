@@ -28,6 +28,8 @@ export interface Settings {
   namingPattern: string;
   /** Name of the chosen template in the `templates` store, or null for none. */
   templateName: string | null;
+  /** The first-time setup has been completed once. */
+  onboarded: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   concurrency: 4,
   namingPattern: NamingPattern.hurrdat,
   templateName: null,
+  onboarded: false,
 };
 
 const DB_NAME = "cutline";
