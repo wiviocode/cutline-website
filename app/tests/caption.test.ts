@@ -97,6 +97,16 @@ describe("Documented rules", () => {
     expect(RosterMatcher.isPlausibleMisread("7", "22")).toBe(false);
     expect(RosterMatcher.isPlausibleMisread("0", "00")).toBe(false);
   });
+  it("gives an unplaced scene a subject when a team's colour is in frame, and only then", () => {
+    const neb = Team.make("Nebraska", "red", "Cornhuskers");
+    const osu = Team.make("Ohio State", "white", "Buckeyes");
+    const roster = Roster.make(neb, osu, []);
+    const ctx = CompositionContext.make({ style: "apSports", sport: "volleyball", roster });
+    const portrait = VisionResult.make({ sceneType: "other", sceneDescription: "poses for a portrait", primaryAction: "poses for a portrait", subjectTeamColor: "red", nearbyPlayerColors: ["red"] });
+    expect(CaptionComposer.compose(portrait, ctx).caption).toMatch(/^A Nebraska Cornhuskers player poses for a portrait/);
+    const unplaced = VisionResult.make({ sceneType: "other", sceneDescription: "poses for a portrait", primaryAction: "poses for a portrait" });
+    expect(CaptionComposer.compose(unplaced, ctx).caption).toMatch(/^Poses for a portrait/);
+  });
   it("resolves football duplicates from the verb, and refuses elsewhere", () => {
     const team = Team.make("Nebraska", "red", "Cornhuskers");
     const fb = Roster.make(team, ksu, [
@@ -414,6 +424,12 @@ describe("Kit colour, model choice and cost", () => {
     for (const m of VISION_MODELS) expect(Math.abs(VisionModel.cost(m, 1_000_000, 1_000_000) - (m.inputPricePerMillion + m.outputPricePerMillion))).toBeLessThan(1e-9);
     expect(Math.abs(VisionModel.cost(haiku, 400_000, 20_000) * 5 - VisionModel.cost(opus, 400_000, 20_000))).toBeLessThan(1e-9);
     expect(VisionModel.cost(opus, 0, 0)).toBe(0);
+    // A cached run: the prompt written once at 1.25× and read twice at 0.1× is most of the bill.
+    const sonnet = VISION_MODELS.find((m) => m.id === "claude-sonnet-5")!;
+    const plain = VisionModel.cost(sonnet, 2500, 360);
+    const cached = VisionModel.cost(sonnet, 2500, 360, 10_000, 20_000);
+    expect(Math.abs(cached - (plain + 10_000 * 2e-6 * 1.25 + 20_000 * 2e-6 * 0.1))).toBeLessThan(1e-9);
+    expect(cached).toBeGreaterThan(plain * 3);
   });
   it("decides whether the colours are actually wrong", () => {
     expect(KitColourDiagnosis.isMisconfigured(6, 24)).toBe(true);

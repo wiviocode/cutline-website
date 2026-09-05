@@ -110,6 +110,8 @@ interface State {
   notice: Notice | null;
   tokensIn: number;
   tokensOut: number;
+  tokensCacheWrite: number;
+  tokensCacheRead: number;
   selectedID: string | null;
   filter: ReviewStatus;
   bulkLabel: string;
@@ -272,7 +274,7 @@ export const derive = {
     if (!s.selectedID) return list[0] ?? null;
     return list.find((f) => f.id === s.selectedID) ?? list[0] ?? null;
   },
-  estimatedCost: (s: State) => VisionModel.cost(VisionModel.byID(s.settings.model), s.tokensIn, s.tokensOut),
+  estimatedCost: (s: State) => VisionModel.cost(VisionModel.byID(s.settings.model), s.tokensIn, s.tokensOut, s.tokensCacheWrite, s.tokensCacheRead),
   pendingCount: (s: State) => s.frames.filter((f) => f.state === "pending").length,
   failedCount: (s: State) => s.frames.filter((f) => f.state === "failed").length,
   anyDone: (s: State) => s.frames.some((f) => f.state === "done"),
@@ -485,7 +487,7 @@ export const useStore = create<State>()((set, get) => {
     eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
     folder: null, photoCount: 0, shootDate: null,
     importing: null, importStatus: "", importError: null, importWarnings: [],
-    frames: [], isRunning: false, progressDone: 0, progressTotal: 0, statusLine: "", notice: null, tokensIn: 0, tokensOut: 0,
+    frames: [], isRunning: false, progressDone: 0, progressTotal: 0, statusLine: "", notice: null, tokensIn: 0, tokensOut: 0, tokensCacheWrite: 0, tokensCacheRead: 0,
     selectedID: null, filter: "all", bulkLabel: "",
 
     async init() {
@@ -569,7 +571,7 @@ export const useStore = create<State>()((set, get) => {
             away: { name: "", colour: "navy", rosterURL: "", team: null },
             eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
             folder: null, frames: [], photoCount: 0, shootDate: null, importError: null, importWarnings: [], importStatus: "", importing: null,
-            statusLine: "", tokensIn: 0, tokensOut: 0, selectedID: null, filter: "all", screen: "start" });
+            statusLine: "", tokensIn: 0, tokensOut: 0, tokensCacheWrite: 0, tokensCacheRead: 0, selectedID: null, filter: "all", screen: "start" });
       thumbnails.clear(); previews.clear();
     },
     setLevel(level) {
@@ -693,7 +695,7 @@ export const useStore = create<State>()((set, get) => {
       const generation = runGeneration;
       runController = new AbortController();
       const signal = runController.signal;
-      set({ isRunning: true, notice: null, progressDone: 0, progressTotal: todo.length, tokensIn: 0, tokensOut: 0 });
+      set({ isRunning: true, notice: null, progressDone: 0, progressTotal: todo.length, tokensIn: 0, tokensOut: 0, tokensCacheWrite: 0, tokensCacheRead: 0 });
       for (const f of todo) patchFrame(f.id, { state: "working", error: null });
 
       const roster = derive.roster(s);
@@ -730,7 +732,8 @@ export const useStore = create<State>()((set, get) => {
           rec = { ...rec, caption: out.caption, altText: alt };
           if (generation !== runGeneration) return;
           patchFrame(f.id, { record: rec, caption: out.caption, altText: alt, exif, state: "done", approved: false, edited: false, needsNumber: CaptionRecord.needsReview(rec) });
-          set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens + altIn, tokensOut: st.tokensOut + reply.usage.outputTokens + altOut }));
+          set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens + altIn, tokensOut: st.tokensOut + reply.usage.outputTokens + altOut,
+            tokensCacheWrite: st.tokensCacheWrite + (reply.usage.cacheCreationInputTokens ?? 0), tokensCacheRead: st.tokensCacheRead + (reply.usage.cacheReadInputTokens ?? 0) }));
           await saveRecord(f, rec);
           await writeMetadata({ ...f, record: rec, caption: out.caption, altText: alt, exif, edited: false });
           const sig = ProcessedFilesManifest.signature(file);
@@ -854,7 +857,8 @@ export const useStore = create<State>()((set, get) => {
         const vision = VisionResult.fromJSON(CaptionResponseParser.decodeJSON(reply.text));
         const rec: CaptionRecord = { ...(f.record ?? CaptionRecord.make({ filename: f.name, vision, caption: "", capturedAt: PhotoMetadata.apStyleDate(exif) })), vision, manualJerseyNumbers: {} };
         patchFrame(id, { record: rec, exif, state: "done" });
-        set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens, tokensOut: st.tokensOut + reply.usage.outputTokens }));
+        set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens, tokensOut: st.tokensOut + reply.usage.outputTokens,
+          tokensCacheWrite: st.tokensCacheWrite + (reply.usage.cacheCreationInputTokens ?? 0), tokensCacheRead: st.tokensCacheRead + (reply.usage.cacheReadInputTokens ?? 0) }));
         await recomposeFrame(id);
         set({ statusLine: `Captioned ${f.name} again.` });
       } catch (e) {

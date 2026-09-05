@@ -25,8 +25,13 @@ export const VISION_MODELS: VisionModel[] = [
 export const VisionModel = {
   default: VISION_MODELS[0],
   byID(id: string): VisionModel { return VISION_MODELS.find((m) => m.id === id) ?? VISION_MODELS[0]; },
-  cost(m: VisionModel, inputTokens: number, outputTokens: number): number {
-    return (inputTokens / 1_000_000) * m.inputPricePerMillion + (outputTokens / 1_000_000) * m.outputPricePerMillion;
+  /**
+   * Cached prompt tokens are billed too: writing the cache costs 1.25× the input rate, reading it
+   * 0.1×. Leaving them out understated a cached run by several times.
+   */
+  cost(m: VisionModel, inputTokens: number, outputTokens: number, cacheWriteTokens = 0, cacheReadTokens = 0): number {
+    const perIn = m.inputPricePerMillion / 1_000_000;
+    return inputTokens * perIn + (outputTokens / 1_000_000) * m.outputPricePerMillion + cacheWriteTokens * perIn * 1.25 + cacheReadTokens * perIn * 0.1;
   },
 };
 

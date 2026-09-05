@@ -170,3 +170,21 @@ Also corrected while here: four places said the photographs never leave your mac
 leave it — resized copies go to Anthropic to be read. The copy now says what is true: no server
 of ours is in the middle; the photographs go to the model you chose, and nowhere else.
 
+## Streamlined further, after a run on a real key
+
+- The review header carries the matchup, the filter and the position — the house style and the
+  venue are gone from it; they are settings and setup, not review.
+- A fresh shoot opens with one card on the photograph: "N photographs ready · Caption them".
+  It disappears the moment anything has run.
+- The rail hides "Numbers read" until there is a record with players in it, says "Redo with a
+  note to the model…", and "Written into the photograph" instead of naming the blocks.
+- The action bar has one primary button — Caption N, or Retry N failed when a run left
+  failures — and a **More** menu for Redo every caption and Rename photographs. Nothing
+  disabled sits in it.
+- Two defects the real run exposed are fixed: a scene the model could not place (a portrait)
+  produced a sentence with no subject, and now reads "A Nebraska Cornhuskers player poses…"
+  when a team's colour is in frame; and the cost estimate ignored cached prompt tokens, which
+  understated a cached run several times over.
+- Four claims that the photographs "never leave your machine" were false — resized copies go to
+  the model — and now say that no server of ours is in the middle.
+

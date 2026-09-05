@@ -22,6 +22,10 @@ export const SceneFallback = {
       case "coaches":      return { text: name ? `A ${name} coach` : "A coach", plural: false };
       case "bench":        return { text: team ? Team.groupLabel(team, "players") : "Players", plural: true };
       case "celebration":  return { text: team ? Team.groupLabel(team, "players") : "Players", plural: true };
+      // A scene the model could not place — a portrait, a warm-up, a moment on the sideline. With
+      // a team's colour in frame the subject is one of its players; without one there is nothing
+      // honest to say, and the caller falls back to the phrase alone.
+      case "other":        return team ? { text: `A ${Team.fullName(team)} player`, plural: false } : null;
       default:             return null;
     }
   },
