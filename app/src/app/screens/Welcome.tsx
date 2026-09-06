@@ -109,8 +109,8 @@ function OutputStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
       <RadioCards name="model" value={settings.model} onChange={(v) => set({ model: v })}
         options={VISION_MODELS.map((m) => ({
           id: m.id, title: m.name, aside: `$${m.inputPricePerMillion} in · $${m.outputPricePerMillion} out, per million tokens`,
-          detail: m.relativeCost === "most capable" ? "Reads the most numbers right. The default."
-            : m.relativeCost === "balanced" ? "Most of the accuracy at less than half the price."
+          detail: m.relativeCost === "most capable" ? "Reads the most numbers right, at the highest price."
+            : m.relativeCost === "balanced" ? "Most of that accuracy at less than half the price. The default."
             : "Cheapest and quickest; misses more numbers on busy frames.",
         }))} />
       <div className="card rows">
@@ -127,7 +127,7 @@ function OutputStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
         <div className="field">
           <span className="field-label">Your desk's IPTC template</span>
           <div className="keyrow" style={{ flexWrap: "wrap", justifyContent: "flex-start" }}><TemplatePicker /></div>
-          <span className="field-hint">Optional. A .XMP stationery pad exported from Photo Mechanic carries the standing fields the app cannot know — credit line, copyright, source, contact — and every frame gets them. Without one, the caption, capture date, By-line, headline, place and category codes are still written into each photograph.</span>
+          <span className="field-hint">Optional. A template carries the standing fields the app cannot know — credit line, copyright, source, contact — and every frame gets them. Make one here from your desk's details, or add a .XMP stationery pad exported from Photo Mechanic. Without one, the caption, capture date, By-line, headline, place and category codes are still written into each photograph.</span>
         </div>
       </div>
       <div className="wnav">

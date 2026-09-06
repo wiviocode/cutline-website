@@ -15,6 +15,7 @@ import { IPTCTemplate } from "../src/core/metadata/IPTCTemplate";
 import { XMPSidecar } from "../src/core/metadata/XMPSidecar";
 import { HurrdatFields } from "../src/core/metadata/HurrdatFields";
 import { MetadataOutput } from "../src/core/metadata/MetadataOutput";
+import { TemplateBuilder } from "../src/core/metadata/TemplateBuilder";
 import { EmbeddedMetadataWriter } from "../src/core/metadata/EmbeddedMetadataWriter";
 import { PhotoMetadata, localDate } from "../src/core/images/PhotoMetadata";
 
@@ -445,5 +446,56 @@ describe("Photo metadata derived forms", () => {
     expect(PhotoMetadata.apStyleDate({ captureDate: localDate(2025, 7, 4) })).toBe("July 4, 2025");
     expect(PhotoMetadata.parseExifDate("2026:08:20 12:37:07")?.getFullYear()).toBe(2026);
     expect(PhotoMetadata.apStyleDate({})).toBeNull();
+  });
+});
+
+describe("A template made in the app", () => {
+  const xmp = TemplateBuilder.build({ credit: "Eli Larson/Hurrdat Sports", source: "Hurrdat Sports", copyright: "© 2026 Hurrdat Sports", usageTerms: "Editorial use only",
+    instructions: "Not for syndication", jobTitle: "Staff photographer", email: "desk@example.com", website: "https://example.com", phone: "+1 402 555 0100" });
+  const tpl = new IPTCTemplate(xmp);
+  it("is a template the app accepts, with the desk's fields declared and no caption base", () => {
+    expect(tpl.declaredFields["photoshop:Credit"]).toBe("Eli Larson/Hurrdat Sports");
+    expect(tpl.declaredFields["photoshop:Source"]).toBe("Hurrdat Sports");
+    expect(tpl.declaredFields["dc:rights"]).toBe("© 2026 Hurrdat Sports");
+    expect(tpl.declaredFields["photoshop:Instructions"]).toBe("Not for syndication");
+    expect(tpl.declaredFields["photoshop:AuthorsPosition"]).toBe("Staff photographer");
+    expect(tpl.declaredFields["xmpRights:Marked"]).toBe("True");
+    expect(tpl.declaredFields["dc:creator"]).toBeUndefined();
+    expect(tpl.descriptionBase).toBe("");
+    expect(xmp).toContain("<Iptc4xmpCore:CiEmailWork>desk@example.com</Iptc4xmpCore:CiEmailWork>");
+    expect(xmp).toContain("<xmpRights:UsageTerms>");
+  });
+  it("carries the desk's fields into the IIM block beside the caption, with the By-line from Settings", () => {
+    const exif: PhotoMetadata = { captureDate: localDate(2026, 9, 5) };
+    const packet = MetadataOutput.packet("A caption.", "Alt text.", "DSC_0001.jpg", exif, { template: tpl, photographer: "Eli Larson", house: "Hurrdat Sports", city: "Lincoln", state: "Neb." }, "ai");
+    const iim = Object.fromEntries(XMPToIIM.fields(packet).map((f) => [f.dataset, f.value]));
+    expect(iim[120]).toBe("A caption.");
+    expect(iim[110]).toBe("Eli Larson/Hurrdat Sports");
+    expect(iim[115]).toBe("Hurrdat Sports");
+    expect(iim[116]).toBe("© 2026 Hurrdat Sports");
+    expect(iim[40]).toBe("Not for syndication");
+    expect(iim[85]).toBe("Staff photographer");
+    expect(iim[80]).toBe("Eli Larson");
+    expect(iim[55]).toBe("20260905");
+    expect(count("photoshop:Credit=", packet)).toBe(1);
+    expect(packet).toContain("Alt text.");
+    // The built template stays valid XML: every prefix it uses is declared.
+    for (const prefix of ["dc", "photoshop", "xmpRights", "Iptc4xmpCore"]) expect(packet).toContain(`xmlns:${prefix}=`);
+  });
+  it("escapes what a desk types, and leaves blank fields out", () => {
+    const odd = new IPTCTemplate(TemplateBuilder.build({ credit: 'Smith & Sons "Photo"', copyright: "" }));
+    expect(odd.declaredFields["photoshop:Credit"]).toBe("Smith &amp; Sons &quot;Photo&quot;");
+    expect(XMPToIIM.attribute("photoshop:Credit", odd.source)).toBe('Smith & Sons "Photo"');
+    expect(odd.source).not.toContain("dc:rights");
+    expect(odd.source).not.toContain("xmpRights:Marked");
+    expect(TemplateBuilder.hasContent({ credit: "  " })).toBe(false);
+    expect(TemplateBuilder.hasContent({ phone: "1" })).toBe(true);
+  });
+  it("suggests the credit and copyright from the byline", () => {
+    const s = TemplateBuilder.suggest({ photographer: "Jane Doe", house: "The Ledger" });
+    expect(s.credit).toBe("Jane Doe/The Ledger");
+    expect(s.copyright).toMatch(/^© \d{4} The Ledger$/);
+    expect(s.name).toBe("The Ledger");
+    expect(TemplateBuilder.suggest({ photographer: "", house: "" }).name).toBe("My desk");
   });
 });

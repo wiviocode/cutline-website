@@ -56,7 +56,7 @@ function composePlayerCaption(vision: VisionResult, context: CompositionContext,
                               namedTeamIDs: Set<string>, warnings: ComposerWarning[]): string {
   const matcher = new RosterMatcher(context.roster, context.sport);
   const resolved: Resolved[] = vision.players.map((player) => {
-    const r = matcher.match(player.jerseyNumber, player.jerseyColor, player.action);
+    const r = matcher.match(player.jerseyNumber, player.jerseyColor, player.action, player.flags, player.unit);
     return { observation: player, match: r.ok ? r.match : null };
   });
 
@@ -342,7 +342,7 @@ function countRendered(vision: VisionResult, context: CompositionContext): numbe
   if (isSceneFallback(vision.sceneType)) return 0;
   const matcher = new RosterMatcher(context.roster, context.sport);
   return vision.players.filter((p) => {
-    if (matcher.match(p.jerseyNumber, p.jerseyColor, p.action).ok) return true;
+    if (matcher.match(p.jerseyNumber, p.jerseyColor, p.action, p.flags, p.unit).ok) return true;
     return context.fallback === "markUnidentified" || context.fallback === "describeWithoutName";
   }).length;
 }

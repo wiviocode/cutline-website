@@ -457,7 +457,8 @@ describe("Kit colour, model choice and cost", () => {
     expect(TeamColorArbiter.sameFamily("white", "blue")).toBe(false);
   });
   it("prices every model, cheaper ones cheaper, Haiku a fifth of Opus", () => {
-    expect(VisionModel.default.relativeCost).toBe("most capable");
+    expect(VisionModel.default.relativeCost).toBe("balanced");
+    expect(VisionModel.default.id).toBe("claude-sonnet-5");
     for (const m of VISION_MODELS) { expect(m.inputPricePerMillion).toBeGreaterThan(0); expect(m.outputPricePerMillion).toBeGreaterThan(0); }
     const opus = VisionModel.byID("claude-opus-5"), haiku = VisionModel.byID("claude-haiku-4-5-20251001");
     for (const m of VISION_MODELS) expect(Math.abs(VisionModel.cost(m, 1_000_000, 1_000_000) - (m.inputPricePerMillion + m.outputPricePerMillion))).toBeLessThan(1e-9);
@@ -542,5 +543,58 @@ describe("Parsing what the model returns", () => {
     expect(VisionResult.fromJSON(VisionResult.toJSON(v))).toEqual(v);
     expect(SCENE_TYPES.length).toBe(10);
     expect(VisionResult.fromJSON({ scene_type: "nonsense" }).sceneType).toBe<SceneType>("other");
+  });
+});
+
+describe("Two-way players and the unit the play shows", () => {
+  const team = Team.make("Ashland-Greenwood", "white", "Bluejays");
+  const other = Team.make("Syracuse", "navy", "Rockets");
+  const twoWay = RosterPlayer.make({ teamID: team.id, jerseyNumber: "2", firstName: "Sam", lastName: "Mundt", position: "running back", side: "offense", secondary: { position: "middle linebacker", side: "defense" } });
+  const m = new RosterMatcher(Roster.make(team, other, [twoWay]), "football");
+  const pos = (r: ReturnType<RosterMatcher["match"]>) => (r.ok ? RosterPlayer.positionFor(r.match.player, r.match.impliedSide) : null);
+
+  it("names the position of the unit shown: the ball, the verb, or the model's own call", () => {
+    expect(pos(m.match("2", "white", "runs with the ball", ["ball_carrier"]))).toBe("running back");
+    expect(pos(m.match("2", "white", "tackles the runner"))).toBe("middle linebacker");
+    expect(pos(m.match("2", "white", "lines up", [], "defense"))).toBe("middle linebacker");
+    // A defender who has just taken the ball is still a defender.
+    expect(pos(m.match("2", "white", "intercepts a pass", ["has_ball"]))).toBe("middle linebacker");
+    expect(pos(m.match("2", "white", "celebrates"))).toBe("running back");
+  });
+  it("renders that position in AP style", () => {
+    const tackle = m.match("2", "white", "tackles the runner");
+    expect(tackle.ok && PlayerReference.render(tackle.match, "apSports", false)).toBe("Ashland-Greenwood Bluejays middle linebacker Sam Mundt (2)");
+    const carry = m.match("2", "white", "carries the ball");
+    expect(carry.ok && PlayerReference.render(carry.match, "apSports", false)).toBe("Ashland-Greenwood Bluejays running back Sam Mundt (2)");
+  });
+  it("reads the unit from the model first, then possession, then the verb, and says nothing otherwise", () => {
+    expect(RosterMatcher.impliedSide("stands", [], "special teams")).toBe("specialTeams");
+    expect(RosterMatcher.impliedSide("tackles", ["has_ball"], "offense")).toBe("offense");
+    expect(RosterMatcher.impliedSide("runs", ["ball_carrier"])).toBe("offense");
+    expect(RosterMatcher.impliedSide("pressures the quarterback")).toBe("defense");
+    expect(RosterMatcher.impliedSide("throws a pass")).toBe("offense");
+    expect(RosterMatcher.impliedSide("walks to the sideline")).toBeNull();
+    expect(new RosterMatcher(Roster.make(team, other, [twoWay]), "basketball").match("2", "white", "tackles").ok && true).toBe(true);
+  });
+  it("a number listed twice for one person is never ambiguous; for two people it needs the unit", () => {
+    const twice = Roster.make(team, other, [
+      RosterPlayer.make({ teamID: team.id, jerseyNumber: "7", firstName: "Liam", lastName: "Curtis", position: "wide receiver", side: "offense" }),
+      RosterPlayer.make({ teamID: team.id, jerseyNumber: "7", firstName: "Liam", lastName: "Curtis", position: "free safety", side: "defense" }),
+    ]);
+    const mm = new RosterMatcher(twice, "football");
+    const neutral = mm.match("7", "white", "celebrates");
+    expect(neutral.ok && RosterPlayer.fullName(neutral.match.player)).toBe("Liam Curtis");
+    const cover = mm.match("7", "white", "covers the receiver");
+    expect(cover.ok && cover.match.player.position).toBe("free safety");
+    const twoPeople = Roster.make(team, other, [
+      RosterPlayer.make({ teamID: team.id, jerseyNumber: "9", firstName: "A", lastName: "One", position: "wide receiver", side: "offense" }),
+      RosterPlayer.make({ teamID: team.id, jerseyNumber: "9", firstName: "B", lastName: "Two", position: "cornerback", side: "defense" }),
+    ]);
+    const m2 = new RosterMatcher(twoPeople, "football");
+    expect(m2.match("9", "white", "stands").ok).toBe(false);
+    const catches = m2.match("9", "white", "catches a pass");
+    expect(catches.ok && catches.match.player.lastName).toBe("One");
+    const breaks = m2.match("9", "white", "breaks up a pass");
+    expect(breaks.ok && breaks.match.player.lastName).toBe("Two");
   });
 });

@@ -270,3 +270,23 @@ describe("RAW previews", () => {
     expect(jpeg[jpeg.length - 2]).toBe(0xff); expect(jpeg[jpeg.length - 1]).toBe(0xd9);
   });
 });
+
+describe("What the model is told, and what it says back", () => {
+  const roster = Roster.make(Team.make("Nebraska", "red", "Cornhuskers"), Team.make("Iowa", "black", "Hawkeyes"));
+  it("puts the photographer's note on one frame last, and marks it authoritative", () => {
+    const ctx = VisionPrompt.context({ sportLabel: "Football", roster, notes: "cold night", note: "No. 22 in white is the tackler" });
+    expect(ctx.indexOf("cold night")).toBeLessThan(ctx.indexOf("No. 22 in white is the tackler"));
+    expect(ctx).toMatch(/authoritative/);
+    expect(VisionPrompt.context({ sportLabel: "Football", roster })).not.toMatch(/authoritative/);
+    expect(VisionPrompt.system).toContain('"unit"');
+    expect(VisionPrompt.system).not.toContain("Audio Note");
+  });
+  it("keeps the unit the model gives a player, and leaves it null when it gives none", () => {
+    const v = VisionResult.fromJSON({ scene_type: "players_action", players: [{ jersey_number: "2", jersey_color: "white", action: "tackles", unit: "defense" }, { jersey_number: "3", jersey_color: "navy", action: "runs" }] });
+    expect(v.players[0].unit).toBe("defense");
+    expect(v.players[1].unit).toBeNull();
+    const round = VisionResult.fromJSON(VisionResult.toJSON(v));
+    expect(round.players[0].unit).toBe("defense");
+    expect(round.players[1].unit).toBeNull();
+  });
+});

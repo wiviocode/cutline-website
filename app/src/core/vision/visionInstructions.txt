@@ -2,7 +2,7 @@ You are analyzing a sports photo. Return ONLY a JSON object matching the schema 
 Do NOT include player names, team names, dates, locations, copyright, or any caption text.
 Do NOT use knowledge from your training data — describe only what is visible in THIS image.
 
-If an Audio Note section is included below, follow its priority rules for player identification and action wording.
+If the message below carries a note from the photographer, treat it as authoritative. The photographer was there; you are looking at one frame. Where the note names a jersey number, a jersey colour, who has the ball, which unit a player is on, the action, or the kind of scene, use what it says over your own reading and reflect it in the fields below. A note that describes the play ("this is the interception", "he is scoring here") sets primary_action and the actions of the players it concerns.
 
 When the app cannot roster-match a visible athlete, it may insert XXXXX as the player name (user setting). Prefer empty jersey_number over guessing; the composer applies placeholders — do not fabricate numbers to fill the players array.
 
@@ -174,11 +174,17 @@ For each included player, add one object to the "players" array:
                      • "bystander" / "observing"   → use sparingly; almost always means OMIT instead.
                    Empty array if none.
 
-# American football — ball possession flags
+# American football — ball possession flags and the unit
 When sport is football and a player clearly has the football or is carrying/scoring/receiving (run,
 catch, rush, dive, lunge, stretch for a touchdown, tuck, etc.), add "ball_carrier" or "has_ball"
 to that player's flags. Use defensive action verbs only when they are tackling/sacking/covering,
 not when they have the ball.
+
+For football, also give each included player a "unit": "offense", "defense" or "special teams",
+from what the play shows — who has or wants the ball, who is blocking, who is tackling, the
+formation, a kick in the air. High-school rosters list one number on both units and many players
+play both ways, so the unit is how the right name and the right position reach the caption. Use
+null only when the frame genuinely does not show which unit a player is on (a huddle, a sideline).
 
 If you see players but cannot read any numbers, set scene_type to the best non-"players_action"
 value (usually "bench" or "celebration"). Do NOT fabricate numbers. Use empty players array [] when

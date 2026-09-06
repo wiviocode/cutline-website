@@ -13,7 +13,7 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { SavedTeam } from "@core/roster/SavedTeam";
 import type { RecentGame } from "@core/setup/GameLibrary";
 import type { CaptionStyle } from "@core/caption/CompositionContext";
-import type { AltTextMode } from "@core/anthropic/VisionModel";
+import { DEFAULT_VISION_MODEL, type AltTextMode } from "@core/anthropic/VisionModel";
 import { NamingPattern } from "@core/naming/NamingPattern";
 
 export interface Settings {
@@ -41,7 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   embedInFile: true,
   writeSidecars: false,
   altTextMode: "simple",
-  model: "claude-opus-5",
+  model: DEFAULT_VISION_MODEL,
   longEdge: 1616,
   concurrency: 4,
   namingPattern: NamingPattern.hurrdat,

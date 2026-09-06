@@ -27,7 +27,10 @@ export const PlayerReference = {
     // 19 shipped captions ("Kansas State Wildcats guard Nate Johnson (34)").
     const teamLabel = Team.fullName(match.team);
     const parts = [teamLabel];
-    if (WireStyle.includesPosition(style) && match.player.position) parts.push(match.player.position);
+    // A two-way player is named by the unit the photograph shows: the linebacker making the
+    // tackle, the running back carrying the ball, one roster row.
+    const position = RosterPlayer.positionFor(match.player, match.impliedSide);
+    if (WireStyle.includesPosition(style) && position) parts.push(position);
     parts.push(name);
 
     if (style === "simple") return `${name} ${number}`;
@@ -41,7 +44,7 @@ export const PlayerReference = {
     // The AP form is team, position, name. A roster that gives no position — most high-school
     // rosters — would leave "Syracuse Rockets Logan Jazbec", so the school takes the possessive
     // instead: "Syracuse's Logan Jazbec (22)".
-    if (WireStyle.includesPosition(style) && !match.player.position) return `${PlayerReference.possessive(match.team.name)} ${name} ${number}`;
+    if (WireStyle.includesPosition(style) && !position) return `${PlayerReference.possessive(match.team.name)} ${name} ${number}`;
     return `${parts.join(" ")} ${number}`;
   },
 

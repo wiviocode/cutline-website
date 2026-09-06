@@ -22,9 +22,12 @@ export const VISION_MODELS: VisionModel[] = [
   { id: "claude-haiku-4-5-20251001",  name: "Haiku 4.5", relativeCost: "fastest",      inputPricePerMillion: 1.00, outputPricePerMillion: 5.00 },
 ];
 
+/** Sonnet 5: most of Opus's reading of a moving number at less than half the price. */
+export const DEFAULT_VISION_MODEL: VisionModelID = "claude-sonnet-5";
+
 export const VisionModel = {
-  default: VISION_MODELS[0],
-  byID(id: string): VisionModel { return VISION_MODELS.find((m) => m.id === id) ?? VISION_MODELS[0]; },
+  default: VISION_MODELS.find((m) => m.id === DEFAULT_VISION_MODEL)!,
+  byID(id: string): VisionModel { return VISION_MODELS.find((m) => m.id === id) ?? VisionModel.default; },
   /**
    * Cached prompt tokens are billed too: writing the cache costs 1.25× the input rate, reading it
    * 0.1×. Leaving them out understated a cached run by several times.

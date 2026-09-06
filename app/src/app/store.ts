@@ -15,7 +15,8 @@ import { fetchPage, fetchLogo, relayAvailable } from "@platform/fetchPage";
 
 import { GameSelection, RecentGame, SportCatalogue, captionQualifier, type Level, type Gender, type RosterMode } from "@core/setup/GameLibrary";
 import { KitColourDiagnosis } from "@core/setup/KitColourDiagnosis";
-import { Roster, RosterPlayer, Team, type Roster as RosterT } from "@core/roster/Roster";
+import { Roster, RosterPlayer, Team, type Roster as RosterT, type PlayerSide } from "@core/roster/Roster";
+import { Positions } from "@core/roster/Positions";
 import { TeamColorArbiter } from "@core/roster/TeamColorArbiter";
 import { TeamName } from "@core/roster/TeamName";
 import { SavedTeam, TeamLibrary } from "@core/roster/SavedTeam";
@@ -66,6 +67,9 @@ export interface Frame {
 }
 
 export interface SideState { name: string; colour: string; rosterURL: string; team: SavedTeam | null; /** The user set the colour for this fixture; an import must not propose over it. */ colourSet: boolean }
+/** One side's roster import, so both can run at once and the sheet can be closed on either. */
+export interface ImportState { busy: boolean; status: string; error: string | null; warnings: string[] }
+const NO_IMPORT: ImportState = { busy: false, status: "", error: null, warnings: [] };
 
 export const thumbnails = new ImageCache(3);
 export const previews = new ImageCache(2);
@@ -97,10 +101,11 @@ interface State {
   folder: PhotoFolder | null;
   photoCount: number;
   shootDate: Date | null;
-  importing: Side | null;
-  importStatus: string;
-  importError: string | null;
-  importWarnings: string[];
+  imports: Record<Side, ImportState>;
+  /** The rename sheet has been offered for this folder once every caption was approved. */
+  renameOffered: boolean;
+  /** The rename sheet is open because the app offered it, not because it was asked for. */
+  renamePrompted: boolean;
 
   frames: Frame[];
   isRunning: boolean;
@@ -205,7 +210,7 @@ export const derive = {
     const t1 = Team.make(h.school, s.home.colour, h.nickname, "home");
     const t2 = Team.make(a.school, s.away.colour, a.nickname, "away");
     if (s.rosterMode === "noRosters") return Roster.make(t1, t2, []);
-    const players = (team: SavedTeam | null, id: string) => (team?.players ?? []).map((p) => toRosterPlayer(p, id));
+    const players = (team: SavedTeam | null, id: string) => (team?.players ?? []).map((p) => toRosterPlayer(p, id, s.selection.sportID));
     return Roster.make(t1, t2, [...players(s.home.team, "home"), ...players(s.away.team, "away")]);
   },
 
@@ -316,9 +321,16 @@ function describeFailure(e: unknown): string {
   return String((e as Error)?.message ?? e);
 }
 
-function toRosterPlayer(p: ImportedPlayer, teamID: string): RosterPlayer {
-  const side = p.side === "offense" || p.side === "defense" || p.side === "specialTeams" ? p.side : "unknown";
-  return RosterPlayer.make({ teamID, jerseyNumber: p.jerseyNumber, firstName: p.firstName, lastName: p.lastName, position: p.position, side });
+/**
+ * A saved player into the matcher's shape. The side is what the import recorded, else what the
+ * position implies — so a roster saved before positions carried sides still resolves duplicates.
+ */
+function toRosterPlayer(p: ImportedPlayer, teamID: string, sport: string): RosterPlayer {
+  const asSide = (v: string | null | undefined): PlayerSide | null => (v === "offense" || v === "defense" || v === "specialTeams" ? v : null);
+  const side = asSide(p.side) ?? Positions.side(p.position, sport);
+  const secondaryPosition = p.secondaryPosition?.trim();
+  const secondary = secondaryPosition ? { position: secondaryPosition, side: asSide(p.secondarySide) ?? Positions.side(secondaryPosition, sport) } : null;
+  return RosterPlayer.make({ teamID, jerseyNumber: p.jerseyNumber, firstName: p.firstName, lastName: p.lastName, position: p.position, side, secondary });
 }
 
 let runGeneration = 0;
@@ -441,7 +453,7 @@ export const useStore = create<State>()((set, get) => {
     const dates: Date[] = [];
     for (const p of photos.slice(0, 12)) { const m = await readPhotoMetadata(await p.file()); if (m.captureDate) dates.push(m.captureDate); }
     const shootDate = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
-    set({ frames, photoCount: photos.length, shootDate, selectedID: frames[0]?.id ?? null, statusLine: `${frames.length} photos — ${frames.filter((f) => f.state === "pending").length} to do` });
+    set({ frames, photoCount: photos.length, shootDate, selectedID: frames[0]?.id ?? null, renameOffered: false, renamePrompted: false, statusLine: `${frames.length} photos — ${frames.filter((f) => f.state === "pending").length} to do` });
   };
 
   const adoptTeam = (side: Side, team: SavedTeam) => {
@@ -482,6 +494,23 @@ export const useStore = create<State>()((set, get) => {
     set({ logoURLs: urls });
   };
 
+  const setImport = (side: Side, patch: Partial<ImportState>) =>
+    set((st) => ({ imports: { ...st.imports, [side]: { ...st.imports[side], ...patch } } }));
+
+  /**
+   * Once every caption is approved the shoot is ready to be named. The sheet is opened for the
+   * photographer once per folder, with the plan on screen; nothing is renamed unless they say so.
+   */
+  const offerRename = async () => {
+    const s = get();
+    if (s.renameOffered || s.panel || !s.folder?.writable || s.rosterMode === "noTeams" || !s.frames.length) return;
+    if (s.frames.some((f) => !f.approved)) return;
+    set({ renameOffered: true });
+    const plan = await get().renamePlan(s.shootDate ?? new Date(), true);
+    if (!plan || !PhotoRenamer.isRunnable(plan)) return;
+    if (get().screen === "review") set({ panel: "rename", renamePrompted: true });
+  };
+
   const remember = async () => {
     const s = get();
     const game = RecentGame.make({
@@ -507,7 +536,7 @@ export const useStore = create<State>()((set, get) => {
     away: { name: "", colour: "navy", rosterURL: "", team: null, colourSet: false },
     eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
     folder: null, photoCount: 0, shootDate: null,
-    importing: null, importStatus: "", importError: null, importWarnings: [],
+    imports: { home: NO_IMPORT, away: NO_IMPORT }, renameOffered: false, renamePrompted: false,
     frames: [], isRunning: false, progressDone: 0, progressTotal: 0, statusLine: "", notice: null, tokensIn: 0, tokensOut: 0, tokensCacheWrite: 0, tokensCacheRead: 0,
     selectedID: null, filter: "all", bulkLabel: "",
 
@@ -520,7 +549,7 @@ export const useStore = create<State>()((set, get) => {
       relayAvailable().then((relay) => set({ relay }));
     },
     setScreen: (screen) => set({ screen }),
-    setPanel: (panel) => set({ panel }),
+    setPanel: (panel) => set({ panel, ...(panel === null ? { renamePrompted: false } : {}) }),
     notify: (text, kind = "error") => set({ notice: { text, kind } }),
     clearNotice: () => set({ notice: null }),
 
@@ -566,10 +595,12 @@ export const useStore = create<State>()((set, get) => {
         selection: sel, rosterMode: game.rosterMode, eventName: game.eventName, participantNoun: game.participantNoun,
         home: { name: game.homeName, colour: game.homeColor, rosterURL: game.homeRosterURL, team: lib.find((t) => t.id === game.homeTeamID) ?? null, colourSet: true },
         away: { name: game.awayName, colour: game.awayColor, rosterURL: game.awayRosterURL, team: lib.find((t) => t.id === game.awayTeamID) ?? null, colourSet: true },
-        venue: game.venue, city: game.city, state: game.state, notes: game.notes, importError: null, importWarnings: [], importStatus: "",
+        venue: game.venue, city: game.city, state: game.state, notes: game.notes, imports: { home: NO_IMPORT, away: NO_IMPORT },
       });
-      const missing = [game.homeTeamID && !get().home.team ? "home" : null, game.awayTeamID && !get().away.team ? "away" : null].filter(Boolean);
-      if (missing.length) set({ importError: `The ${missing.join(" and ")} team is no longer in the library — import it again.` });
+      for (const side of ["home", "away"] as Side[]) {
+        const id = side === "home" ? game.homeTeamID : game.awayTeamID;
+        if (id && !get()[side].team) setImport(side, { error: "This team is no longer in the library — read it again." });
+      }
       const handle = await Storage.folderHandle(game.id);
       if (handle) {
         try {
@@ -591,7 +622,7 @@ export const useStore = create<State>()((set, get) => {
       set({ home: { name: "", colour: "white", rosterURL: GameSelection.suggestedHomeURL(get().selection) ?? "", team: null, colourSet: false },
             away: { name: "", colour: "navy", rosterURL: "", team: null, colourSet: false },
             eventName: "", participantNoun: "", venue: "", city: "", state: "", notes: "",
-            folder: null, frames: [], photoCount: 0, shootDate: null, importError: null, importWarnings: [], importStatus: "", importing: null,
+            folder: null, frames: [], photoCount: 0, shootDate: null, imports: { home: NO_IMPORT, away: NO_IMPORT }, renameOffered: false, renamePrompted: false,
             statusLine: "", tokensIn: 0, tokensOut: 0, tokensCacheWrite: 0, tokensCacheRead: 0, selectedID: null, filter: "all", screen: "start" });
       thumbnails.clear(); previews.clear();
     },
@@ -608,24 +639,25 @@ export const useStore = create<State>()((set, get) => {
 
     async importTeam(side) {
       const s = get();
-      if (!s.apiKey) { set({ importError: "Add your Anthropic API key in Settings before importing a team." }); return; }
+      if (s.imports[side].busy) return;
+      if (!s.apiKey) { setImport(side, { error: "Add your Anthropic API key in Settings before importing a team." }); return; }
       const pasted = s[side].rosterURL.trim();
-      if (!pasted) { set({ importError: "Paste a link to the team's page first." }); return; }
+      if (!pasted) { setImport(side, { error: "Paste a link to the team's page first." }); return; }
       const parsed = TeamPageURL.parse(pasted);
-      if (!parsed) { set({ importError: "That does not look like a web address." }); return; }
+      if (!parsed) { setImport(side, { error: "That does not look like a web address." }); return; }
       const candidates = TeamPageURL.rosterCandidates(parsed, s.selection.sportID, s.selection.gender);
-      if (!candidates.length) { set({ importError: `Could not work out the roster page for ${s.selection.sportID} from that link.` }); return; }
-      set({ importing: side, importError: null, importWarnings: [], importStatus: "Resolving…" });
+      if (!candidates.length) { setImport(side, { error: `Could not work out the roster page for ${s.selection.sportID} from that link.` }); return; }
+      setImport(side, { busy: true, error: null, warnings: [], status: "Resolving…" });
 
       let chosen: { url: string; html: string; identity: TeamIdentity | null } | null = null;
       let lastFailure: Error | null = null;
       for (const url of candidates) {
-        set({ importStatus: `Trying ${new URL(url).pathname}…` });
+        setImport(side, { status: `Trying ${new URL(url).pathname}…` });
         try {
           const page = await fetchPage(url);
           const identity = TeamPageParser.parse(page.text, page.url);
           if (identity) {
-            set({ importStatus: `Found ${TeamIdentity.fullName(identity)} — reading the roster…` });
+            setImport(side, { status: `Found ${TeamIdentity.fullName(identity)} — reading the roster…` });
             const wanted = s.selection.gender === "womens" ? ["girls", "women", "women's"] : ["boys", "men", "men's"];
             const reported = identity.reportedGender?.toLowerCase();
             if (!reported || wanted.includes(reported)) { chosen = { url: page.url, html: page.text, identity }; break; }
@@ -634,7 +666,7 @@ export const useStore = create<State>()((set, get) => {
         } catch (e) { lastFailure = e as Error; }
       }
       if (!chosen) {
-        set({ importing: null, importStatus: "", importError: lastFailure ? `Could not load that page: ${lastFailure.message}` : "No roster page responded." });
+        setImport(side, { busy: false, status: "", error: lastFailure ? `Could not load that page: ${lastFailure.message}` : "No roster page responded." });
         return;
       }
       await get().importTeamFromHTML(side, chosen.html, chosen.url);
@@ -642,8 +674,8 @@ export const useStore = create<State>()((set, get) => {
 
     async importTeamFromHTML(side, html, sourceURL) {
       const s = get();
-      if (!s.apiKey) { set({ importError: "Add your Anthropic API key in Settings before importing a team." }); return; }
-      set({ importing: side, importError: null, importWarnings: [], importStatus: "Reading the page…" });
+      if (!s.apiKey) { setImport(side, { error: "Add your Anthropic API key in Settings before importing a team." }); return; }
+      setImport(side, { busy: true, error: null, warnings: [], status: "Reading the page…" });
       try {
         const identity = (sourceURL ? TeamPageParser.parse(html, sourceURL) : null) ?? TeamIdentity.make({ schoolName: s[side].name, sourceURL: sourceURL ?? null });
         identity.rosterURL = sourceURL ?? identity.rosterURL ?? null;
@@ -651,28 +683,31 @@ export const useStore = create<State>()((set, get) => {
         if (!identity.schoolName) warnings.push("Could not read the team's name from that page — type it in.");
         if (!identity.colorHexes.length) warnings.push("That site does not publish team colours — set them by hand.");
 
+        // The logo is fetched while the roster is read, not after it.
+        const logoFetch = identity.logoURL ? fetchLogo(identity.logoURL).catch(() => null) : Promise.resolve(null);
         // Extraction is a text job on a few thousand tokens, so it runs on the cheap model
-        // whatever the vision pass is set to.
+        // whatever the vision pass is set to. A MaxPreps page never reaches the model at all.
         const client = new AnthropicClient({ apiKey: s.apiKey, model: "claude-haiku-4-5-20251001", maxTokens: 8000 });
-        const { players, source, usage } = await RosterImporter.importRoster(html, client, () => set({ importStatus: "Nothing in the page text — reading its data…" }));
+        const { players, source, usage } = await RosterImporter.importRoster(html, client, () => setImport(side, { status: "Nothing in the page text — reading its data…" }), s.selection.sportID);
         const reader = VisionModel.byID(client.model);
         const spent = VisionModel.cost(reader, usage.inputTokens, usage.outputTokens);
-        const how = `${reader.name} read ${source === "scriptPayload" ? "the page's data" : "the page"} · ${(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens · ${spent < 0.005 ? "under a cent" : "$" + spent.toFixed(2)}`;
+        const how = source === "structured" ? "read from the page's own data · no model, no cost"
+          : `${reader.name} read ${source === "scriptPayload" ? "the page's data" : "the page"} · ${(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens · ${spent < 0.005 ? "under a cent" : "$" + spent.toFixed(2)}`;
 
         let team = SavedTeam.make({ identity, level: s.selection.level, sport: s.selection.sportID, gender: s.selection.gender, players });
         if (SavedTeam.genderMismatch(team) && identity.reportedGender) warnings.push(`That page is the ${identity.reportedGender.toLowerCase()} team — check this is the squad you meant.`);
         if (identity.logoURL) {
-          set({ importStatus: "Saving the logo…" });
-          const logo = await fetchLogo(identity.logoURL).catch(() => null);
+          const logo = await logoFetch;
           if (logo) { const key = `${team.id}.${logo.extension}`; await Storage.saveLogo(key, logo.blob); team = { ...team, logoKey: key }; }
           else warnings.push("The team's logo could not be saved.");
         }
         const stored = await persistTeam(team);
         await loadLogos([stored]);
         adoptTeam(side, stored);
-        set({ importing: null, importWarnings: warnings, importStatus: `${SavedTeam.fullName(stored)} — ${stored.players.length} players · ${how}` });
+        const twoWay = stored.players.filter((p) => p.secondaryPosition).length;
+        setImport(side, { busy: false, warnings, status: `${SavedTeam.fullName(stored)} — ${stored.players.length} players${twoWay ? `, ${twoWay} two-way` : ""} · ${how}` });
       } catch (e) {
-        set({ importing: null, importStatus: "", importWarnings: [], importError: e instanceof ImportError ? e.message : describeFailure(e) });
+        setImport(side, { busy: false, status: "", warnings: [], error: e instanceof ImportError ? e.message : describeFailure(e) });
       }
     },
 
@@ -687,11 +722,11 @@ export const useStore = create<State>()((set, get) => {
           players: players.filter((p) => p.role === "player").map((p) => ({ jerseyNumber: p.jerseyNumber, firstName: p.firstName, lastName: p.lastName, position: p.position })) });
         const stored = await persistTeam(team);
         adoptTeam(side, stored);
-        set({ importError: null, importWarnings: [], importStatus: `${SavedTeam.fullName(stored)} — ${stored.players.length} players` });
-      } catch (e) { set({ importError: (e as Error).message }); }
+        setImport(side, { error: null, warnings: [], status: `${SavedTeam.fullName(stored)} — ${stored.players.length} players` });
+      } catch (e) { setImport(side, { error: (e as Error).message }); }
     },
 
-    pickLibraryTeam(side, team) { adoptTeam(side, team); set({ importError: null, importWarnings: [], importStatus: `${SavedTeam.fullName(team)} — ${team.players.length} players` }); },
+    pickLibraryTeam(side, team) { adoptTeam(side, team); setImport(side, { error: null, warnings: [], status: `${SavedTeam.fullName(team)} — ${team.players.length} players` }); },
     clearTeam(side) { set({ [side]: { ...get()[side], team: null } } as Partial<State>); },
     async forgetTeam(team) {
       const library = TeamLibrary.remove(get().library, team.id);
@@ -871,6 +906,7 @@ export const useStore = create<State>()((set, get) => {
       if (after.some((f) => f.id === row.id)) get().step(1);
       else if (!after.length) set({ selectedID: null });
       else set({ selectedID: after[Math.min(Math.max(position, 0), after.length - 1)].id });
+      void offerRename();
     },
 
     /** Caption one frame again, with something the photographer knows that the model missed. */

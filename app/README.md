@@ -47,10 +47,12 @@ Two things follow from the split, and they are the reason for it:
 * **Style is a function, not a prompt.** Seven house styles — AP, Getty, Getty (parenthetical),
   Imagn, Icon Sportswire, Hurrdat, and plain — each written the way that desk writes it.
 
-Rosters come from a team's own web page: paste any link, and the page is reduced to text and
-read by the model. A small relay at `/api/fetch` does the reading, because a browser cannot fetch
-another site for itself; when the relay is out of reach, paste the page's text instead. A CSV
-works too. Teams are kept in a library so a squad is only ever read once a season.
+Rosters come from a team's own web page: paste any link. A MaxPreps page is read from the data
+it embeds, with no model and both of a two-way player's positions; any other page is reduced to
+text and read by Haiku. A small relay at `/api/fetch` does the fetching, because a browser cannot
+fetch another site for itself; when the relay is out of reach, paste the page's text instead. A
+CSV works too. Teams are kept in a library so a squad is only ever read once a season, and both
+sides can be read at once.
 
 RAW files are shown through the JPEG preview the camera embedded, and their metadata goes to a
 sidecar beside them.

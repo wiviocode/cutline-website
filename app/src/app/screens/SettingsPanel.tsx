@@ -84,7 +84,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <span className="c"><Select<AltTextMode> value={settings.altTextMode} options={ALT_TEXT_MODES.map((m) => ({ id: m.id, name: m.name }))} onChange={(v) => set({ altTextMode: v })} ariaLabel="Alt text" /></span>
           </div>
           <div className="row">
-            <span className="k">IPTC template<small>Your desk's standing credit, copyright and source, exported from Photo Mechanic as a .XMP stationery pad. The per-shoot fields are written over it; without one the caption, date, By-line, headline, place and codes are still written.</small></span>
+            <span className="k">IPTC template<small>Your desk's standing credit, copyright and source — made here, or exported from Photo Mechanic as a .XMP stationery pad. The per-shoot fields are written over it; without one the caption, date, By-line, headline, place and codes are still written.</small></span>
             <span className="c"><TemplatePicker /></span>
           </div>
         </div>

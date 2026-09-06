@@ -6,6 +6,10 @@
  * per school and per season. So the page is reduced to **visible text** and a model extracts the
  * rows, which is robust to markup it has never seen.
  *
+ * One site is read without a model: MaxPreps embeds its roster as data, and `MaxPrepsRoster`
+ * reads it straight off the page — instant, free, and with both of a two-way player's positions.
+ * Every other site goes to the model.
+ *
  * Reduction matters: `huskers.com/sports/soccer/roster` is 1 MB of HTML but 18 KB of text
  * (~4,500 tokens), so extraction costs about a cent.
  *
@@ -15,22 +19,28 @@
 
 import type { AnthropicClient, Usage } from "../anthropic/AnthropicClient";
 import { CaptionResponseParser } from "../vision/CaptionResponseParser";
+import { MaxPrepsRoster } from "./MaxPrepsRoster";
+import { Positions } from "./Positions";
 
 export interface ImportedPlayer {
   jerseyNumber: string;
   firstName: string;
   lastName: string;
+  /** Full lowercase word: "running back". The first position listed. */
   position: string;
   classYear?: string | null;
   /**
-   * "offense", "defense" or "specialTeams" where the source says so. Football rosters routinely
-   * reuse a number across the two units, and the composer resolves that from the action verb —
-   * but only if it knows which side each player is on.
+   * "offense", "defense" or "specialTeams" where the source says so or the position implies it.
+   * Football rosters routinely reuse a number across the two units, and the composer resolves
+   * that from the play — but only if it knows which side each player is on.
    */
   side?: string | null;
+  /** A two-way player's other position, on the other unit — the "MLB" of "RB, MLB". */
+  secondaryPosition?: string | null;
+  secondarySide?: string | null;
 }
 
-export type ImportSource = "visibleText" | "scriptPayload";
+export type ImportSource = "structured" | "visibleText" | "scriptPayload";
 
 export class ImportError extends Error {
   constructor(public readonly kind: "fetchFailed" | "emptyPage" | "noPlayersFound", detail = "") {
@@ -41,26 +51,33 @@ export class ImportError extends Error {
   }
 }
 
-/** Same discipline as the vision prompt: structured rows only, never prose, never invent a player. */
+/**
+ * Same discipline as the vision prompt: structured rows only, never prose, never invent a player.
+ * Rows are arrays rather than objects — the same roster in a third fewer output tokens, which is
+ * most of what the import's wait is.
+ */
 export const EXTRACTION_PROMPT = `You are extracting a sports team roster from the visible text of a team's roster web page.
 
-Return ONLY a JSON array. No prose, no markdown fences, no commentary.
+Return ONLY a JSON array of rows. No prose, no markdown fences, no commentary.
 
-Each element:
-{
-  "jerseyNumber": "9",          // as printed; keep leading zeros; "" if the page shows none
-  "firstName": "Alessandra",
-  "lastName": "Geraneo",
-  "position": "midfielder",     // lowercase full word: goalkeeper, defender, midfielder,
-                                // forward, quarterback, guard, forward, center, …
-  "classYear": "Sophomore"      // optional; omit if absent
-}
+Each row is an array of exactly six strings, in this order:
+  [jerseyNumber, firstName, lastName, positions, classYear, unit]
+
+  jerseyNumber  as printed; keep leading zeros; "" if the page shows none
+  firstName     "Alessandra"
+  lastName      "Geraneo"
+  positions     the position abbreviations exactly as the page prints them, every one of them,
+                separated by ", " — "GK", "MF/D" becomes "MF, D", "RB, MLB" stays "RB, MLB".
+                Do not expand abbreviations and do not drop a second position.
+  classYear     "Sophomore", "Sr.", "12" — as printed; "" if absent
+  unit          for American football ONLY, and only when the page groups players by unit
+                (an "Offense" heading, a "Defense" heading): "offense", "defense" or
+                "specialTeams". Otherwise "".
+
+Example: [["9", "Alessandra", "Geraneo", "MF", "Sophomore", ""], ["2", "Sam", "Mundt", "RB, MLB", "Sr.", ""]]
 
 Rules:
 - Include every player on the page, in the order listed.
-- Expand position abbreviations to full lowercase words: GK -> goalkeeper, D -> defender,
-  MF -> midfielder, F -> forward, QB -> quarterback, RB -> running back, WR -> wide receiver,
-  G -> guard, C -> center. For a dual position such as "MF/D" use the first: "midfielder".
 - Do NOT invent players, numbers, or positions. If a jersey number is genuinely absent from
   the page, use "" rather than guessing.
 - Ignore coaches, staff, navigation, schedules, news and sponsor text.`;
@@ -116,15 +133,24 @@ export const RosterImporter = {
   },
 
   /** Extract players from already-fetched text. */
-  async extract(text: string, client: AnthropicClient): Promise<ImportedPlayer[]> {
-    return (await RosterImporter.extractWithUsage(text, client)).players;
+  async extract(text: string, client: AnthropicClient, sport = ""): Promise<ImportedPlayer[]> {
+    return (await RosterImporter.extractWithUsage(text, client, sport)).players;
   },
 
   /** The same, with what the call cost in tokens, so the import can say so. */
-  async extractWithUsage(text: string, client: AnthropicClient): Promise<{ players: ImportedPlayer[]; usage: Usage }> {
+  async extractWithUsage(text: string, client: AnthropicClient, sport = ""): Promise<{ players: ImportedPlayer[]; usage: Usage }> {
     const clipped = text.slice(0, 120_000);
     const reply = await client.describeText(EXTRACTION_PROMPT, `Roster page text:\n\n${clipped}`, 8000);
-    const unwrapped = CaptionResponseParser.unwrapFence(reply.text);
+    const players = RosterImporter.decode(reply.text, sport);
+    return { players, usage: reply.usage };
+  },
+
+  /**
+   * Rows out of the model's reply — arrays as asked for, or the objects an older prompt asked
+   * for, since a record saved by an earlier build may still be replayed through here.
+   */
+  decode(replyText: string, sport = ""): ImportedPlayer[] {
+    const unwrapped = CaptionResponseParser.unwrapFence(replyText);
     let parsed: unknown;
     try { parsed = JSON.parse(unwrapped); }
     catch {
@@ -134,31 +160,52 @@ export const RosterImporter = {
       catch { throw new ImportError("noPlayersFound", unwrapped.slice(0, 200)); }
     }
     if (!Array.isArray(parsed) || parsed.length === 0) throw new ImportError("noPlayersFound", unwrapped.slice(0, 200));
-    const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
-    const players = parsed.filter((p) => p && typeof p === "object").map((p) => {
-      const q = p as Record<string, unknown>;
-      return {
-        jerseyNumber: str(q.jerseyNumber), firstName: str(q.firstName), lastName: str(q.lastName),
-        position: str(q.position), classYear: q.classYear == null ? null : str(q.classYear), side: q.side == null ? null : str(q.side),
-      } as ImportedPlayer;
-    });
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : v == null ? "" : String(v).trim());
+    const players: ImportedPlayer[] = [];
+    for (const row of parsed) {
+      let jersey = "", first = "", last = "", positions = "", classYear = "", unit = "";
+      if (Array.isArray(row)) {
+        [jersey, first, last, positions, classYear, unit] = [0, 1, 2, 3, 4, 5].map((i) => str(row[i]));
+      } else if (row && typeof row === "object") {
+        const q = row as Record<string, unknown>;
+        jersey = str(q.jerseyNumber); first = str(q.firstName); last = str(q.lastName);
+        positions = [str(q.position), str(q.secondaryPosition)].filter(Boolean).join(", ");
+        classYear = str(q.classYear); unit = str(q.side ?? q.unit);
+      } else continue;
+      if (!first && !last) continue;
+      const parsed = Positions.parse(positions, sport);
+      const unitSide = unit === "offense" || unit === "defense" || unit === "specialTeams" ? unit : null;
+      players.push({
+        jerseyNumber: jersey, firstName: first, lastName: last,
+        position: parsed.position,
+        side: unitSide ?? (parsed.side === "unknown" ? null : parsed.side),
+        secondaryPosition: parsed.secondary?.position ?? null,
+        secondarySide: parsed.secondary?.side ?? null,
+        classYear: classYear || null,
+      });
+    }
     if (players.length === 0) throw new ImportError("noPlayersFound", unwrapped.slice(0, 200));
-    return { players, usage: reply.usage };
+    return players;
   },
 
   /**
-   * Import a roster from a page's HTML, escalating only as far as necessary: visible text for
-   * server-rendered pages, then the script payload for React/Next sites that embed their data.
-   * Each step costs more than the last, so the cheapest sufficient one wins.
+   * Import a roster from a page's HTML, escalating only as far as necessary: the page's own data
+   * where a site embeds it, then visible text for server-rendered pages, then the script payload
+   * for React/Next sites that embed their data less tidily. Each step costs more than the last,
+   * so the cheapest sufficient one wins.
    */
-  async importRoster(html: string, client: AnthropicClient, onEscalate?: (source: ImportSource) => void):
+  async importRoster(html: string, client: AnthropicClient, onEscalate?: (source: ImportSource) => void, sport = ""):
     Promise<{ players: ImportedPlayer[]; source: ImportSource; usage: Usage }> {
+    const none: Usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: null, cacheReadInputTokens: null };
+    const structured = MaxPrepsRoster.parse(html, sport);
+    if (structured) return { players: structured, source: "structured", usage: none };
+
     const plain = RosterImporter.strip(html);
-    let spent: Usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: null, cacheReadInputTokens: null };
+    let spent: Usage = none;
     const add = (u: Usage) => { spent = { ...spent, inputTokens: spent.inputTokens + u.inputTokens, outputTokens: spent.outputTokens + u.outputTokens }; };
     if (!RosterImporter.looksLikeEmptyShell(plain)) {
       try {
-        const { players, usage } = await RosterImporter.extractWithUsage(plain, client);
+        const { players, usage } = await RosterImporter.extractWithUsage(plain, client, sport);
         add(usage);
         if (players.length) return { players, source: "visibleText", usage: spent };
       } catch (e) {
@@ -172,7 +219,7 @@ export const RosterImporter = {
       onEscalate?.("scriptPayload");
       // Keep the visible text as context — headings and labels help the model.
       const combined = plain + "\n\n" + payload.slice(0, 150_000);
-      const { players, usage } = await RosterImporter.extractWithUsage(combined, client);
+      const { players, usage } = await RosterImporter.extractWithUsage(combined, client, sport);
       add(usage);
       if (players.length) return { players, source: "scriptPayload", usage: spent };
     }

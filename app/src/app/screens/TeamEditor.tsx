@@ -18,12 +18,15 @@ export function TeamEditor({ side, onClose }: { side: Side; onClose: () => void 
   const [paste, setPaste] = useState(false);
   const [pasted, setPasted] = useState("");
   const csv = useRef<HTMLInputElement>(null);
-  const busy = s.importing === side;
+  const im = s.imports[side];
+  const busy = im.busy;
   const matching = s.library.filter((t) => t.sport === s.selection.sportID && t.gender === s.selection.gender && t.level === s.selection.level);
   const canFetch = s.relay !== false;
 
   return (
-    <Sheet title={side === "home" ? "Home team" : "Away team"} onClose={onClose} busy={busy} footer={<><span className="spacer" /><Button onClick={onClose} disabled={busy}>Done</Button></>}>
+    <Sheet title={side === "home" ? "Home team" : "Away team"} onClose={onClose} footer={<>
+      {busy && <span className="dim small">Reading carries on if you close this — set up the other side meanwhile.</span>}
+      <span className="spacer" /><Button onClick={onClose}>Done</Button></>}>
       <div className="card stack">
         <Field label="Team">
           <TextInput value={st.name} placeholder="Nebraska Cornhuskers" autoFocus={!st.name} onChange={(e) => s.setSide(side, { name: e.target.value })} />
@@ -58,9 +61,9 @@ export function TeamEditor({ side, onClose }: { side: Side; onClose: () => void 
                 <div className="keyrow"><span className="spacer" /><Button disabled={busy || pasted.trim().length < 40} onClick={() => void s.importTeamFromHTML(side, pasted).then(() => setPasted(""))}>Read the roster</Button></div>
               </div>
             )}
-            {(s.importStatus || busy) && <p className="note" role="status" aria-live="polite">{s.importStatus}{busy ? "…" : ""}</p>}
-            {s.importError && <Callout kind="warn">{s.importError}</Callout>}
-            {s.importWarnings.map((w, i) => <Callout key={i} kind="note">{w}</Callout>)}
+            {(im.status || busy) && <p className={"note" + (busy ? " busy-note" : "")} role="status" aria-live="polite">{busy && <span className="busy-dot" aria-hidden="true" />}{im.status}</p>}
+            {im.error && <Callout kind="warn">{im.error}</Callout>}
+            {im.warnings.map((w, i) => <Callout key={i} kind="note">{w}</Callout>)}
             {st.team && (
               <div className="lib-row">
                 <Crest name={SavedTeam.fullName(st.team)} colour={st.colour} logoURL={s.logoURLs[st.team.id]} size={26} />
@@ -71,7 +74,7 @@ export function TeamEditor({ side, onClose }: { side: Side; onClose: () => void 
             {st.team && st.team.players.length > 0 && (
               <div className="roster-list">
                 {st.team.players.slice(0, 60).map((p, i) => (
-                  <span key={i} className="roster-row"><span className="mono">#{p.jerseyNumber || "—"}</span> {p.firstName} {p.lastName}{p.position ? <span className="dim"> · {p.position}</span> : null}</span>
+                  <span key={i} className="roster-row"><span className="mono">#{p.jerseyNumber || "—"}</span> {p.firstName} {p.lastName}{p.position ? <span className="dim"> · {p.position}{p.secondaryPosition ? ` / ${p.secondaryPosition}` : ""}</span> : null}</span>
                 ))}
                 {st.team.players.length > 60 && <span className="dim small">and {st.team.players.length - 60} more</span>}
               </div>
@@ -86,8 +89,8 @@ export function TeamEditor({ side, onClose }: { side: Side; onClose: () => void 
                   <div key={t.id} className="lib-row">
                     <Crest name={SavedTeam.fullName(t)} colour={st.team?.id === t.id ? st.colour : "grey"} logoURL={s.logoURLs[t.id]} size={26} />
                     <span className="name">{SavedTeam.fullName(t)} <span className="dim">· {t.players.length} player{t.players.length === 1 ? "" : "s"}</span></span>
-                    <Button variant="secondary" disabled={busy} onClick={() => s.pickLibraryTeam(side, t)}>Use</Button>
-                    <button type="button" className="linky" disabled={busy} onClick={() => void s.forgetTeam(t)}>Forget</button>
+                    <Button variant="secondary" onClick={() => s.pickLibraryTeam(side, t)}>Use</Button>
+                    <button type="button" className="linky" onClick={() => void s.forgetTeam(t)}>Forget</button>
                   </div>
                 ))}
               </div>

@@ -48,15 +48,19 @@ Two things follow from that split, and they are the reason for it:
   its own date form, state form, and credit line.
 
 Rosters are read from a team's own web page by a small relay, because a browser cannot fetch
-another site for itself. Teams are kept in a library so a squad is read once a season. RAW files
+another site for itself. A MaxPreps page is read from the data it embeds — instant, and no model
+involved — with both of a two-way player's positions, so a caption names the linebacker making the
+tackle and the running back carrying the ball as the same player. Other sites are reduced to text
+and read by Haiku for about a cent. Teams are kept in a library so a squad is read once a season. RAW files
 are shown through the JPEG preview the camera embedded, and their metadata goes to a sidecar
 beside them.
 
 **What it writes** is the same on-disk format as the original macOS app: an XMP packet and a
 legacy IPTC-IIM block embedded by segment surgery, so EXIF, maker notes, thumbnail and scan data
 stay byte-identical; `.xmp` sidecars for RAW and PNG; a `.caption-data/` folder of per-frame
-records; a `.caption-manifest.json` so a second run never captions a frame twice. Photo Mechanic
-`.XMP` stationery pads work as templates, `{token:modifier}` variables included.
+records; a `.caption-manifest.json` so a second run never captions a frame twice. A desk's
+standing fields — credit, copyright, source, contact — come from an IPTC template made in the
+setup, or from a Photo Mechanic `.XMP` stationery pad, `{token:modifier}` variables included.
 
 ## This repository
 

@@ -80,7 +80,10 @@ function Header({ list, position, frame }: { list: Frame[]; position: number; fr
   const title = derive.eventTitle(s);
   return (
     <header className="review-head">
-      <Button variant="secondary" onClick={() => s.setScreen("game")} title="Back to the game">‹ Game</Button>
+      <Button variant="secondary" className="back" onClick={() => s.setScreen("game")} title="Back to the game — the shoot and its captions are kept">
+        <svg viewBox="0 0 16 16" width={13} height={13} aria-hidden="true"><path d="M10 2.5 4.5 8 10 13.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        Back
+      </Button>
       <span className="divider" aria-hidden="true" />
       {s.rosterMode === "noTeams" ? <b className="team">{title}</b> : (
         <>
@@ -121,26 +124,79 @@ function KitColourAlarm() {
   );
 }
 
+const ZOOM = 2.4;
+
+/**
+ * The photograph, filling the stage. The strip's thumbnail is shown at full size the instant a
+ * frame is chosen, so nothing is ever small or blank while the large decode runs. A click zooms
+ * in on that point; zoomed in, the picture can be dragged, and a click that did not move zooms
+ * back out.
+ */
 function Stage({ frame, zoom, onToggleZoom }: { frame: Frame | null; zoom: boolean; onToggleZoom: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [origin, setOrigin] = useState("50% 50%");
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
+  const img = useRef<HTMLImageElement>(null);
+
   useEffect(() => {
     let alive = true;
-    // The thumbnail stands in while a 20 MB frame decodes, so the stage is never blank.
     setUrl(frame ? previews.cached(frame.id) ?? thumbnails.cached(frame.id) : null);
     if (frame) void previews.url(frame.id, () => frame.photo.file(), PREVIEW_EDGE).then((u) => { if (alive) setUrl(u); }).catch(() => {});
     return () => { alive = false; };
   }, [frame?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const r = (e.currentTarget.querySelector("img") as HTMLImageElement | null)?.getBoundingClientRect();
-    if (r) setOrigin(`${Math.round(((e.clientX - r.left) / r.width) * 100)}% ${Math.round(((e.clientY - r.top) / r.height) * 100)}%`);
-    onToggleZoom();
+  useEffect(() => { setPan({ x: 0, y: 0 }); }, [zoom, frame?.id]);
+
+  // Mouse events rather than pointer events: every pointer fires them, and so does anything that
+  // drives the page synthetically. The move and release are watched on the window, so a drag
+  // that leaves the stage still ends cleanly.
+  const zoomRef = useRef(zoom); zoomRef.current = zoom;
+  const toggleRef = useRef(onToggleZoom); toggleRef.current = onToggleZoom;
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, moved: false };
   };
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      const d = drag.current;
+      if (!d) return;
+      const dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if (!d.moved && Math.hypot(dx, dy) < 4) return;
+      d.moved = true;
+      if (!zoomRef.current) return;
+      // Keep some of the picture on the stage however far it is dragged.
+      const el = img.current;
+      const limitX = el ? (ZOOM - 1) * el.offsetWidth : Infinity;
+      const limitY = el ? (ZOOM - 1) * el.offsetHeight : Infinity;
+      setDragging(true);
+      setPan({ x: Math.max(-limitX, Math.min(limitX, d.px + dx)), y: Math.max(-limitY, Math.min(limitY, d.py + dy)) });
+    };
+    const up = (e: MouseEvent) => {
+      const d = drag.current;
+      drag.current = null;
+      setDragging(false);
+      if (!d || (d.moved && zoomRef.current)) return; // a drag, not a click
+      if (!zoomRef.current) {
+        const r = img.current?.getBoundingClientRect();
+        if (r) setOrigin(`${Math.round(((e.clientX - r.left) / r.width) * 100)}% ${Math.round(((e.clientY - r.top) / r.height) * 100)}%`);
+      }
+      toggleRef.current();
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+  }, []);
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+
   return (
-    <div className={"stage" + (zoom ? " zoomed" : "")} onClick={onClick} title={zoom ? "Click to fit" : "Click to zoom in at that point — or press space"}>
-      {url ? <img src={url} alt={frame?.name ?? ""} style={{ transformOrigin: origin, transform: zoom ? "scale(2.4)" : "none" }} /> : <div className="stage-empty">{frame ? "Loading…" : "Nothing selected"}</div>}
+    <div className={"stage" + (zoom ? " zoomed" : "") + (dragging ? " dragging" : "")} onMouseDown={onMouseDown}>
+      {url ? <img ref={img} src={url} alt={frame?.name ?? ""} draggable={false}
+        style={{ transformOrigin: origin, transform: zoom ? `translate(${pan.x}px, ${pan.y}px) scale(${ZOOM})` : "none", transition: dragging ? "none" : undefined }} />
+        : <div className="stage-empty">{frame ? "Loading…" : "Nothing selected"}</div>}
       {frame && <span className="stage-name">{frame.name}</span>}
-      <StartCard />
+      <div onMouseDown={stop} onMouseUp={stop} onClick={stop} style={{ display: "contents" }}><StartCard /></div>
     </div>
   );
 }
@@ -154,7 +210,7 @@ function StartCard() {
   const run = useStore((s) => s.run);
   if (v.running || v.touched || v.pending === 0) return null;
   return (
-    <div className="stage-cta" role="group" aria-label="Start captioning" onClick={(e) => e.stopPropagation()}>
+    <div className="stage-cta" role="group" aria-label="Start captioning">
       <b>{v.total} photograph{v.total === 1 ? "" : "s"} ready.</b>
       <span>{v.hasKey ? `${v.model} reads each one, and the caption is written into the file as it comes back.` : "Add your Anthropic API key in Settings to begin."}</span>
       <div className="stage-cta-actions">
@@ -206,7 +262,9 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
     if (value) void assignNumber(frame.id, pop.slot, value);
     setPop(null);
   };
-  const state = frame.state === "failed" ? `Failed: ${frame.error}` : frame.state === "working" ? "Captioning…" : frame.state === "pending" ? "Not captioned yet"
+  const redo = (text: string) => { void recaption(frame.id, text.trim()); setNoteOpen(false); setNote(""); };
+  const working = frame.state === "working";
+  const state = frame.state === "failed" ? `Failed: ${frame.error}` : working ? "Captioning…" : frame.state === "pending" ? "Not captioned yet"
     : frame.writeError ? `Not written: ${frame.writeError}` : frame.edited ? "Edited and written into the photograph" : "Written into the photograph";
 
   return (
@@ -216,7 +274,7 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
           <Overline style={{ marginBottom: 6 }}>Caption</Overline>
           {!editing ? (
             <div className="caption" role="button" tabIndex={0} title="Click to edit — or press e" onClick={() => setEditing(true)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); setEditing(true); } }}>
-              {frame.caption ? spans.map((sp) => (sp.player ? <b key={sp.id} title={sp.team?.name ?? ""}>{sp.text}</b> : <span key={sp.id}>{sp.text}</span>)) : <span className="placeholder">{frame.state === "pending" ? "Not captioned yet." : frame.state === "working" ? "Captioning…" : "—"}</span>}
+              {frame.caption ? spans.map((sp) => (sp.player ? <b key={sp.id} title={sp.team?.name ?? ""}>{sp.text}</b> : <span key={sp.id}>{sp.text}</span>)) : <span className="placeholder">{frame.state === "pending" ? "Not captioned yet." : working ? "Captioning…" : "—"}</span>}
             </div>
           ) : (
             <div>
@@ -231,7 +289,7 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
           <Overline style={{ marginBottom: 6 }}>Numbers read</Overline>
           <div className="chips">
             {players.map((p, slot) => {
-              const m = p.jerseyNumber ? matcher.match(p.jerseyNumber, p.jerseyColor, p.action) : null;
+              const m = p.jerseyNumber ? matcher.match(p.jerseyNumber, p.jerseyColor, p.action, p.flags, p.unit) : null;
               const name = m?.ok ? RosterPlayer.fullName(m.match.player) : null;
               return <KitChip key={slot} number={p.jerseyNumber || "?"} name={name} colour={swatchColour(p.jerseyColor)} flagged={!p.jerseyNumber}
                 title={m?.ok && m.match.wasFuzzy ? `Corrected from ${p.jerseyNumber}` : "Click to correct the number"}
@@ -260,15 +318,24 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
         </div>}
 
         {frame.record && (
-          <div>
-            {!noteOpen ? (
-              <button type="button" className="redo-open" onClick={(e) => { e.currentTarget.blur(); setNoteOpen(true); }}>Redo with a note to the model…</button>
+          <div className="redo">
+            <Overline style={{ marginBottom: 6 }}>Not right?</Overline>
+            {working ? (
+              <p className="note busy-note"><span className="busy-dot" aria-hidden="true" />Reading the photograph again…</p>
+            ) : !noteOpen ? (
+              <>
+                <div className="redo-actions">
+                  <Button variant="secondary" onClick={(e) => { e.currentTarget.blur(); setNoteOpen(true); }}>Redo with a note…</Button>
+                  <Button variant="ghost" onClick={(e) => { e.currentTarget.blur(); redo(""); }} title="Send the photograph again with no note">Redo as is</Button>
+                </div>
+                <p className="note">A note corrects what the model <em>read</em> — a number, a colour, who has the ball, the play. The wording is built here from that reading, so to change the words, edit the caption above.</p>
+              </>
             ) : (
               <>
-                <TextArea value={note} autoFocus minHeight={62} rows={3} placeholder="A change kit, a borrowed number, who is who…" ariaLabel="Note to the model" onChange={(e) => setNote(e.target.value)}
-                  onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") { setNoteOpen(false); setNote(""); } }} />
+                <TextArea value={note} autoFocus minHeight={62} rows={3} placeholder="No. 22 in white is the tackler, not the runner · they wore black tonight · this is the interception" ariaLabel="Note to the model" onChange={(e) => setNote(e.target.value)}
+                  onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") { setNoteOpen(false); setNote(""); } if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && note.trim()) redo(note); }} />
                 <div className="redo-row">
-                  <Button variant="secondary" disabled={frame.state === "working"} onClick={() => { void recaption(frame.id, note); setNoteOpen(false); setNote(""); }}>{frame.state === "working" ? "Captioning…" : note.trim() ? "Redo with this note" : "Redo caption"}</Button>
+                  <Button disabled={!note.trim()} onClick={() => redo(note)}>Redo with this note</Button>
                   <button type="button" className="linky" onClick={() => { setNoteOpen(false); setNote(""); }}>cancel</button>
                 </div>
               </>

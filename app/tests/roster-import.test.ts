@@ -8,7 +8,10 @@ import { TeamPageURL, MAXPREPS_SPORT_SLUG } from "../src/core/roster/TeamPageURL
 import { TeamPageParser } from "../src/core/roster/TeamPageParser";
 import { TeamIdentity, HexColour } from "../src/core/roster/TeamIdentity";
 import { SavedTeam, TeamLibrary } from "../src/core/roster/SavedTeam";
-import { RosterImporter } from "../src/core/roster/RosterImporter";
+import { RosterImporter, EXTRACTION_PROMPT } from "../src/core/roster/RosterImporter";
+import { Positions } from "../src/core/roster/Positions";
+import { MaxPrepsRoster } from "../src/core/roster/MaxPrepsRoster";
+import type { AnthropicClient } from "../src/core/anthropic/AnthropicClient";
 import { CSVRosterImporter } from "../src/core/roster/CSVRosterImporter";
 import { COLOUR_SYNONYMS } from "../src/core/roster/TeamColorArbiter";
 
@@ -161,5 +164,62 @@ describe("CSV rosters", () => {
     expect(CSVRosterImporter.import("number,name,first_name,last_name\n5,Full Name,Ignored,Also\n").players[0].fullName).toBe("Full Name");
     expect(() => CSVRosterImporter.import("foo,bar\n1,2\n")).toThrow();
     expect(() => CSVRosterImporter.import("number,pos\n1,QB\n")).toThrow();
+  });
+});
+
+describe("Positions and the unit they imply", () => {
+  it("expands what a roster prints and knows which unit a football position is on", () => {
+    expect(Positions.expand("QB", "football")).toBe("quarterback");
+    expect(Positions.expand("MLB", "football")).toBe("middle linebacker");
+    expect(Positions.expand("Running Back", "football")).toBe("running back");
+    expect(Positions.expand("MF", "soccer")).toBe("midfielder");
+    expect(Positions.expand("OH", "volleyball")).toBe("outside hitter");
+    expect(Positions.expand("ZZ", "football")).toBe("ZZ");
+    expect(Positions.side("QB", "football")).toBe("offense");
+    expect(Positions.side("outside linebacker", "football")).toBe("defense");
+    expect(Positions.side("K", "football")).toBe("specialTeams");
+    expect(Positions.side("guard", "basketball")).toBe("unknown");
+  });
+  it("keeps a two-way player's other position only when it is on the other unit", () => {
+    expect(Positions.parse("RB, MLB", "football")).toEqual({ position: "running back", side: "offense", secondary: { position: "middle linebacker", side: "defense" } });
+    expect(Positions.parse("WR, TE", "football")).toEqual({ position: "wide receiver", side: "offense", secondary: null });
+    expect(Positions.parse("MF/D", "soccer")).toEqual({ position: "midfielder", side: "unknown", secondary: null });
+    expect(Positions.parse("", "football")).toEqual({ position: "", side: "unknown", secondary: null });
+  });
+});
+
+describe("MaxPreps' embedded roster", () => {
+  const html = fixture("teampages/maxpreps_roster.html");
+  const silent = (): AnthropicClient => {
+    let asked = 0;
+    return { model: "x", get asked() { return asked; }, describeText: async () => { asked++; return { text: "[]", usage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: null, cacheReadInputTokens: null }, stopReason: null }; } } as unknown as AnthropicClient;
+  };
+  it("is read straight off the page, with both positions and no model", async () => {
+    const players = MaxPrepsRoster.parse(html, "football")!;
+    expect(players.map((p) => `${p.jerseyNumber} ${p.firstName} ${p.lastName}`)).toEqual(["2 Avery Stone", "3 Jordan Reyes", "55 Casey Nguyen", "8 Riley Okafor", "2 Sam Lindqvist"]);
+    expect(players[0]).toMatchObject({ position: "running back", side: "offense", secondaryPosition: "middle linebacker", secondarySide: "defense", classYear: "Sr." });
+    expect(players[3]).toMatchObject({ position: "quarterback", side: "offense", secondaryPosition: null });
+    const client = silent();
+    const r = await RosterImporter.importRoster(html, client, undefined, "football");
+    expect(r.source).toBe("structured");
+    expect(r.usage.inputTokens).toBe(0);
+    expect((client as unknown as { asked: number }).asked).toBe(0);
+  });
+  it("refuses a row whose columns disagree, so a changed layout goes to the model instead", () => {
+    expect(MaxPrepsRoster.parse(html.replace('"Avery Stone"', '"Somebody Else"'), "football")).toBeNull();
+    expect(MaxPrepsRoster.parse(fixture("teampages/maxpreps_football_boys.html"), "football")).toBeNull();
+    expect(MaxPrepsRoster.parse("<html></html>", "football")).toBeNull();
+  });
+});
+
+describe("What the extraction model returns", () => {
+  it("decodes rows as arrays — and the older objects — into positions with sides", () => {
+    const rows = RosterImporter.decode('[["2","Sam","Mundt","RB, MLB","Sr.",""],["9","Ana","Geraneo","MF/D","",""]]', "football");
+    expect(rows[0]).toMatchObject({ jerseyNumber: "2", position: "running back", side: "offense", secondaryPosition: "middle linebacker", secondarySide: "defense", classYear: "Sr." });
+    const older = RosterImporter.decode('```json\n[{"jerseyNumber":"9","firstName":"A","lastName":"B","position":"midfielder"}]\n```', "soccer");
+    expect(older[0]).toMatchObject({ jerseyNumber: "9", position: "midfielder", side: null, secondaryPosition: null });
+    expect(RosterImporter.decode('[["22","C","D","WR","","defense"]]', "football")[0].side).toBe("defense");
+    expect(EXTRACTION_PROMPT).toContain("RB, MLB");
+    expect(() => RosterImporter.decode("no rows here", "football")).toThrow();
   });
 });

@@ -34,6 +34,11 @@ export interface RosterPlayer {
   position: string;
   role: RosterRole;
   side: PlayerSide;
+  /**
+   * A two-way player's other position, on the other unit — "RB, MLB" on a high-school roster.
+   * The caption names whichever unit the photograph shows.
+   */
+  secondary?: { position: string; side: PlayerSide } | null;
 }
 
 export interface Roster {
@@ -96,6 +101,7 @@ export const RosterPlayer = {
       position: p.position ?? "",
       role: p.role ?? "player",
       side: p.side ?? "unknown",
+      secondary: p.secondary ?? null,
     };
   },
 
@@ -103,6 +109,20 @@ export const RosterPlayer = {
     const o = p.fullNameOverride?.trim();
     if (o) return o;
     return [p.firstName, p.lastName].filter((s) => s.length > 0).join(" ");
+  },
+
+  /** True when the player lines up on `side`, in either of their positions. */
+  playsOn(p: RosterPlayer, side: PlayerSide): boolean {
+    return p.side === side || p.secondary?.side === side;
+  },
+
+  /**
+   * The position to print for a play on `side`: the secondary one when that is the unit shown,
+   * otherwise the primary. A photograph that shows no particular unit gets the primary.
+   */
+  positionFor(p: RosterPlayer, side: PlayerSide | null): string {
+    if (side && p.secondary && p.secondary.side === side && p.side !== side) return p.secondary.position;
+    return p.position;
   },
 };
 

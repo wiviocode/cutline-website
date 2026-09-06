@@ -7,11 +7,12 @@
  *     so `#5 in blue` can never match `#5` on the red roster.
  *  2. **Fuzzy correction** — a near-miss number is corrected against the roster, but only when
  *     the correction is unambiguous.
- *  3. **Offense-aware** — in football, a number carried by both an offensive and a defensive
- *     player is resolved from the action verb.
+ *  3. **Unit-aware** — in football, the unit the photograph shows decides between two players who
+ *     share a number, and which of a two-way player's positions the caption prints. The unit is
+ *     the model's own call when it made one, else the ball, else the verb.
  */
 
-import { Roster, type RosterPlayer, type Team } from "./Roster";
+import { Roster, RosterPlayer, type Team, type PlayerSide } from "./Roster";
 import { TeamColorArbiter } from "./TeamColorArbiter";
 
 export interface Match {
@@ -19,6 +20,8 @@ export interface Match {
   team: Team;
   /** True when the jersey number was corrected rather than matched exactly. */
   wasFuzzy: boolean;
+  /** The unit the play put this player on, when the observation says. Picks a two-way player's position. */
+  impliedSide: PlayerSide | null;
 }
 
 export type MatchFailure =
@@ -30,12 +33,31 @@ export type MatchFailure =
 
 export type MatchResult = { ok: true; match: Match } | { ok: false; failure: MatchFailure };
 
-const DEFENSIVE_VERBS = ["tackle", "sack", "intercept", "break up", "defend", "cover", "blitz", "strip", "recover"];
+/** What a player is doing when they are on defence, as the vision model phrases it. */
+const DEFENSIVE_VERBS = [
+  "tackle", "sack", "intercept", "break up", "breaks up", "defend", "cover", "blitz", "strip", "recover", "pressure",
+  "pursue", "chase", "wrap up", "wraps up", "bring down", "brings down", "drag down", "drags down", "knock", "deflect",
+  "swat", "bat down", "bats down", "stuff", "jam", "rush the quarterback", "rushes the quarterback", "rushes the passer",
+  "chases down", "closes in", "hit the", "hits the", "block a kick", "blocks a kick", "blocks a punt", "blocks the kick",
+  "forces a fumble", "force a fumble", "wraps", "grabs the ball carrier", "reaches for the runner", "dive at", "dives at",
+];
+/** And on offence. Checked second, so "intercepts a pass" is defence before "pass" is offence. */
+const OFFENSIVE_VERBS = [
+  "throw", "pass", "hand off", "hands off", "handoff", "catch", "receiv", "run with", "runs with", "carr", "rush", "dive for",
+  "dives for", "stretch", "scor", "spike", "hurdle", "stiff-arm", "stiff arm", "break a tackle", "breaks a tackle",
+  "break free", "breaks free", "scramble", "drop back", "drops back", "look downfield", "looks downfield", "take the snap",
+  "takes the snap", "snap", "block for", "blocks for", "leap over", "leaps over", "lunge", "reach for the end zone",
+  "reaches for the end zone", "reaches the end zone", "crosses the goal line", "touchdown", "juke", "cut", "sprint", "elude",
+];
 
 export class RosterMatcher {
   constructor(public readonly roster: Roster, public readonly sport: string) {}
 
-  match(rawNumber: string, color: string, action = ""): MatchResult {
+  /**
+   * `action`, `flags` and `unit` come straight from the vision observation. Only football reads
+   * them; everywhere else the unit is null and a shared number stays ambiguous.
+   */
+  match(rawNumber: string, color: string, action = "", flags: string[] = [], unit: string | null = null): MatchResult {
     const number = normalise(rawNumber);
     if (!number) return { ok: false, failure: { kind: "unreadableNumber" } };
 
@@ -44,33 +66,57 @@ export class RosterMatcher {
 
     const squad = Roster.players(this.roster, team.id);
     const exact = squad.filter((p) => normalise(p.jerseyNumber) === number);
+    const side = this.sport === "football" ? RosterMatcher.impliedSide(action, flags, unit) : null;
 
-    if (exact.length === 0) return this.fuzzy(number, squad, team);
-    if (exact.length === 1) return { ok: true, match: { player: exact[0], team, wasFuzzy: false } };
-    return this.resolveDuplicate(exact, number, team, action);
+    if (exact.length === 0) return this.fuzzy(number, squad, team, side);
+    if (exact.length === 1) return { ok: true, match: { player: exact[0], team, wasFuzzy: false, impliedSide: side } };
+    return this.resolveDuplicate(exact, number, team, side);
   }
 
-  /** Football rosters routinely reuse a number across offense and defense. The action verb decides. */
-  private resolveDuplicate(candidates: RosterPlayer[], number: string, team: Team, action: string): MatchResult {
-    if (this.sport !== "football") return { ok: false, failure: { kind: "ambiguousDuplicate", number, team: team.name } };
-    const wanted = RosterMatcher.impliesDefense(action) ? "defense" : "offense";
-    const sided = candidates.filter((p) => p.side === wanted);
-    if (sided.length === 1) return { ok: true, match: { player: sided[0], team, wasFuzzy: false } };
+  /**
+   * Football rosters reuse a number across offence and defence. The unit the play shows decides;
+   * two rows that are the same person (a two-way player listed twice) are never ambiguous.
+   */
+  private resolveDuplicate(candidates: RosterPlayer[], number: string, team: Team, side: PlayerSide | null): MatchResult {
+    const samePerson = candidates.every((p) => RosterPlayer.fullName(p).toLowerCase() === RosterPlayer.fullName(candidates[0]).toLowerCase());
+    if (this.sport !== "football" && !samePerson) return { ok: false, failure: { kind: "ambiguousDuplicate", number, team: team.name } };
+    const sided = side ? candidates.filter((p) => RosterPlayer.playsOn(p, side)) : [];
+    if (sided.length === 1) return { ok: true, match: { player: sided[0], team, wasFuzzy: false, impliedSide: side } };
+    if (samePerson) return { ok: true, match: { player: sided[0] ?? candidates[0], team, wasFuzzy: false, impliedSide: side } };
     return { ok: false, failure: { kind: "ambiguousDuplicate", number, team: team.name } };
   }
 
-  static impliesDefense(action: string): boolean {
+  /**
+   * Which unit an observed player is on. The model's explicit call wins; then possession — a
+   * player flagged with the ball is on offence unless the verb says they took it away; then the
+   * verb. Null when nothing in the observation says.
+   */
+  static impliedSide(action: string, flags: string[] = [], unit: string | null = null): PlayerSide | null {
+    const u = (unit ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+    if (u === "offense" || u === "offence") return "offense";
+    if (u === "defense" || u === "defence") return "defense";
+    if (u === "specialteams") return "specialTeams";
     const a = action.toLowerCase();
-    return DEFENSIVE_VERBS.some((v) => a.includes(v));
+    const defensive = DEFENSIVE_VERBS.some((v) => a.includes(v));
+    if (defensive) return "defense";
+    const hasBall = flags.some((f) => /ball_carrier|has_ball/i.test(f));
+    if (hasBall) return "offense";
+    if (OFFENSIVE_VERBS.some((v) => a.includes(v))) return "offense";
+    return null;
+  }
+
+  /** Kept for callers that only want the old yes/no. */
+  static impliesDefense(action: string): boolean {
+    return RosterMatcher.impliedSide(action) === "defense";
   }
 
   /**
    * Correct a misread number against the squad, accepting only an unambiguous single candidate.
    * Anything ambiguous is refused so the caption says nothing rather than something wrong.
    */
-  private fuzzy(number: string, squad: RosterPlayer[], team: Team): MatchResult {
+  private fuzzy(number: string, squad: RosterPlayer[], team: Team, side: PlayerSide | null): MatchResult {
     const candidates = squad.filter((p) => RosterMatcher.isPlausibleMisread(number, normalise(p.jerseyNumber)));
-    if (candidates.length === 1) return { ok: true, match: { player: candidates[0], team, wasFuzzy: true } };
+    if (candidates.length === 1) return { ok: true, match: { player: candidates[0], team, wasFuzzy: true, impliedSide: side } };
     if (candidates.length > 1) return { ok: false, failure: { kind: "ambiguousFuzzy", number } };
     return { ok: false, failure: { kind: "notOnRoster", number, team: team.name } };
   }

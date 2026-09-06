@@ -62,7 +62,9 @@ export function GameScreen() {
                 <span className="vs" aria-hidden="true">VS</span>
                 <TeamCard side="away" onEdit={() => setEditing("away")} />
               </div>
-              {s.importError && <Callout kind="warn">{s.importError}</Callout>}
+              {(["home", "away"] as Side[]).filter((side) => s.imports[side].error).map((side) => (
+                <Callout key={side} kind="warn"><b>{s[side].name || (side === "home" ? "Home" : "Away")}:</b> {s.imports[side].error}</Callout>
+              ))}
             </section>
           )}
 
@@ -157,12 +159,12 @@ function TeamCard({ side, onEdit }: { side: Side; onEdit: () => void }) {
   const st = useStore((s) => s[side]);
   const logoURLs = useStore((s) => s.logoURLs);
   const rosterMode = useStore((s) => s.rosterMode);
-  const importing = useStore((s) => s.importing);
+  const busy = useStore((s) => s.imports[side].busy);
   const label = side === "home" ? "Home" : "Away";
   if (!st.name) return <button type="button" className="teamcard empty" onClick={onEdit}>Name the {label.toLowerCase()} team</button>;
-  const roster = importing === side ? "importing…" : rosterMode === "rosters" ? (st.team ? `${st.team.players.length} player${st.team.players.length === 1 ? "" : "s"}` : "no roster yet") : "no roster";
+  const roster = busy ? "reading the roster…" : rosterMode === "rosters" ? (st.team ? `${st.team.players.length} player${st.team.players.length === 1 ? "" : "s"}` : "no roster yet") : "no roster";
   return (
-    <button type="button" className="teamcard" onClick={onEdit} aria-label={`${label} team: ${st.name}`}>
+    <button type="button" className={"teamcard" + (busy ? " busy" : "")} onClick={onEdit} aria-label={`${label} team: ${st.name}`}>
       <Crest name={st.name} colour={st.colour} logoURL={st.team ? logoURLs[st.team.id] : null} size={40} />
       <span style={{ minWidth: 0 }}>
         <span className="tc-name">{st.name}</span>

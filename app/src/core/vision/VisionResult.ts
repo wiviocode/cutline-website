@@ -29,6 +29,8 @@ export interface VisionPlayer {
   confidence: number;
   /** Free-form model annotations, e.g. `unreadable_number`, `partial_frame`. */
   flags: string[];
+  /** Football only: "offense", "defense" or "special teams" as the model saw the play. Null when not said. */
+  unit: string | null;
 }
 
 /** A relational play between exactly two identified players. */
@@ -58,8 +60,8 @@ export interface VisionResult {
 }
 
 export const VisionPlayer = {
-  make(jerseyNumber: string, jerseyColor: string, action: string, confidence = 1.0, flags: string[] = []): VisionPlayer {
-    return { jerseyNumber, jerseyColor, action, confidence, flags };
+  make(jerseyNumber: string, jerseyColor: string, action: string, confidence = 1.0, flags: string[] = [], unit: string | null = null): VisionPlayer {
+    return { jerseyNumber, jerseyColor, action, confidence, flags, unit };
   },
 };
 
@@ -99,6 +101,7 @@ export const VisionResult = {
             action: str(q.action),
             confidence: num(q.confidence, 1.0),
             flags: Array.isArray(q.flags) ? (q.flags as unknown[]).map((f) => str(f)) : [],
+            unit: q.unit == null || q.unit === "" ? null : str(q.unit),
           };
         })
       : [];
@@ -138,7 +141,7 @@ export const VisionResult = {
       scene_type: v.sceneType,
       players: v.players.map((p) => ({
         jersey_number: p.jerseyNumber, jersey_color: p.jerseyColor, action: p.action,
-        confidence: p.confidence, flags: p.flags,
+        confidence: p.confidence, flags: p.flags, ...(p.unit ? { unit: p.unit } : {}),
       })),
       interaction: v.interaction ? {
         subject_jersey_number: v.interaction.subjectJerseyNumber, subject_jersey_color: v.interaction.subjectJerseyColor,

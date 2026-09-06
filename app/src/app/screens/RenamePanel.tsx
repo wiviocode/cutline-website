@@ -44,6 +44,7 @@ export function RenamePanel({ onClose }: { onClose: () => void }) {
         <Callout kind={noTeams ? "note" : "stop"}>{reason}</Callout>
       ) : (
         <>
+          {s.renamePrompted && <Callout kind="note"><b>Every caption is approved.</b> The shoot can be named now — check the plan below, or Cancel and rename later from More.</Callout>}
           <section className="section">
             <div className="section-head"><Overline>Which team were you covering?</Overline><span className="hint">The covered team leads the name; v when they hosted, at when they travelled.</span></div>
             <div className="card stack">

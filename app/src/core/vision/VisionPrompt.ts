@@ -34,7 +34,9 @@ export const VisionPrompt = {
     const note = (opts.note ?? "").trim();
     let out = base;
     if (notes) out += `\n\nAlso note, from the photographer:\n${notes}`;
-    if (note) out += `\n\nAlso note, from the photographer:\n${note}`;
+    // A note written for this one frame is the photographer correcting the model's first reading.
+    // It has to beat everything above it, and it says what it may change.
+    if (note) out += `\n\nThe photographer's note on THIS photograph, which is authoritative — use it over your own reading for jersey numbers, colours, who has the ball, the unit, the action and the scene type:\n${note}`;
     return out;
   },
 };

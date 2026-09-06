@@ -24,6 +24,7 @@ export const XMPToIIM = {
     add(IPTCIIM.copyright,   XMPToIIM.langAlt("dc:rights", xmp));
     add(IPTCIIM.byline,      XMPToIIM.seqFirst("dc:creator", xmp));
     add(IPTCIIM.headline,    XMPToIIM.attribute("photoshop:Headline", xmp));
+    add(IPTCIIM.instructions, XMPToIIM.attribute("photoshop:Instructions", xmp));
     add(IPTCIIM.bylineTitle, XMPToIIM.attribute("photoshop:AuthorsPosition", xmp));
     add(IPTCIIM.credit,      XMPToIIM.attribute("photoshop:Credit", xmp));
     add(IPTCIIM.source,      XMPToIIM.attribute("photoshop:Source", xmp));

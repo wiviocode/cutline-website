@@ -42,6 +42,7 @@ function concat(parts: Uint8Array[]): Uint8Array {
 export const IPTCIIM = {
   // Dataset numbers and their IIM length limits.
   objectName:   { ds: 5,   max: 64 } as Dataset,
+  instructions: { ds: 40,  max: 256 } as Dataset,
   category:     { ds: 15,  max: 3 } as Dataset,
   suppCategory: { ds: 20,  max: 32 } as Dataset,
   keywords:     { ds: 25,  max: 64 } as Dataset,

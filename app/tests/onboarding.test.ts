@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { needsOnboarding, firstStep, nextStep, previousStep, keyProblem, WELCOME_STEPS, NAMING_PRESETS, presetFor } from "../src/app/onboarding";
 import { NamingPattern } from "../src/core/naming/NamingPattern";
+import { DEFAULT_SETTINGS } from "../src/platform/storage";
+import { VisionModel } from "../src/core/anthropic/VisionModel";
 
 describe("The first-time setup", () => {
   it("runs until it has been finished once and there is a key", () => {
@@ -35,5 +37,10 @@ describe("The first-time setup", () => {
     expect(presetFor("{date}_{team}_{vs}_{opponent}_{seq}")).toBe("dateTeams");
     expect(presetFor("{date}_{seq}")).toBe("custom");
     expect(NAMING_PRESETS[0].pattern).toBe(NamingPattern.hurrdat);
+  });
+  it("starts a new desk on Sonnet 5", () => {
+    expect(DEFAULT_SETTINGS.model).toBe("claude-sonnet-5");
+    expect(VisionModel.default.id).toBe("claude-sonnet-5");
+    expect(VisionModel.byID("nonsense").id).toBe("claude-sonnet-5");
   });
 });
