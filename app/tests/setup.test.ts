@@ -54,6 +54,12 @@ describe("Level, sport and gender stay legal", () => {
     expect(GameSelection.label(GameSelection.make("nebraskaHS", "basketball", "womens"))).toBe("Girls Basketball");
     expect(GameSelection.label(GameSelection.make("nebraskaHS", "football", "mens"))).toBe("Boys Football");
     expect(GameSelection.label(GameSelection.make("divisionI", "trackAndField", "mens"))).toBe("Men's Track & Field");
+    // A college sport with one gender is named without it — "Nebraska Football", "Nebraska Volleyball".
+    expect(GameSelection.label(GameSelection.make("divisionI", "football", "mens"))).toBe("Football");
+    expect(GameSelection.label(GameSelection.make("divisionI", "volleyball", "womens"))).toBe("Volleyball");
+    expect(GameSelection.label(GameSelection.make("divisionI", "softball", "womens"))).toBe("Softball");
+    expect(GameSelection.label(GameSelection.make("nebraskaHS", "volleyball", "womens"))).toBe("Girls Volleyball");
+    expect(GameSelection.label(GameSelection.make("professional", "softball", "womens"))).toBe("Softball");
     expect(genderLabel("womens", "divisionI")).toBe("Women's");
   });
   it("suggests roster URLs only where there is something to suggest", () => {

@@ -17,6 +17,18 @@ export const COMPOUND_NICKNAMES = [
   "Red Raiders", "Sun Devils", "Wolf Pack", "Golden Flashes",
 ];
 
+/**
+ * Words that begin a two-word nickname — "Black Knights", "Silver Hawks", "Golden Bears",
+ * "Fighting Scots", "Running Rebels". When the word before the last is one of these, the
+ * nickname is both. Schools whose own name ends in such a word are listed so they are left alone.
+ */
+export const NICKNAME_QUALIFIERS = new Set([
+  "black", "blue", "red", "golden", "green", "crimson", "scarlet", "purple", "white", "silver", "yellow", "orange", "maroon", "cardinal",
+  "fighting", "fightin", "fightin'", "ragin", "ragin'", "runnin", "runnin'", "running", "flying", "flyin'", "screaming", "thundering",
+  "mighty", "mean", "big", "great", "wild", "nittany", "horned", "tar", "sun", "sea", "river", "mountain", "demon", "lady", "little", "flying",
+]);
+const SCHOOLS_ENDING_IN_A_QUALIFIER = ["bowling green", "big rapids", "red bank", "white plains", "blue island", "little rock", "green bay", "mountain view", "river falls"];
+
 export const TeamName = {
   /**
    * `("Notre Dame", "Fighting Irish")` from `"Notre Dame Fighting Irish"`. A single-word input
@@ -34,6 +46,11 @@ export const TeamName = {
     }
     const parts = trimmed.split(" ").filter((p) => p.length > 0);
     if (parts.length <= 1) return { school: trimmed, nickname: null };
+    if (parts.length >= 3 && NICKNAME_QUALIFIERS.has(parts[parts.length - 2].toLowerCase())) {
+      // "Bowling Green Falcons": the qualifier is the school's own last word, not the nickname's first.
+      const upToLast = parts.slice(0, -1).join(" ").toLowerCase();
+      if (!SCHOOLS_ENDING_IN_A_QUALIFIER.some((s) => upToLast.endsWith(s))) return { school: parts.slice(0, -2).join(" "), nickname: parts.slice(-2).join(" ") };
+    }
     return { school: parts.slice(0, -1).join(" "), nickname: parts[parts.length - 1] };
   },
 };

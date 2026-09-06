@@ -48,6 +48,18 @@ export function genderLabel(gender: Gender, level: Level, sport?: string): strin
   return gender === "mens" ? "Boys" : "Girls";
 }
 
+/**
+ * The event as a desk names it: "Nebraska Football", "Nebraska Volleyball", "Nebraska Women's
+ * Basketball" — the gender word only where the college plays both. High school keeps "Boys" and
+ * "Girls" throughout, which is how those sports are named; a professional fixture takes its league.
+ */
+export function eventLabel(level: Level, sport: string, gender: Gender, name: string): string {
+  const genders = Sports.info(sport)?.genders[level] ?? [];
+  const single = genders.length === 1;
+  const word = level === "nebraskaHS" || !single || (level === "professional" && Sports.league(sport, gender)) ? genderLabel(gender, level, sport) : "";
+  return `${word} ${name}`.trim();
+}
+
 export const RosterModes: { id: RosterMode; label: string; explanation: string }[] = [
   { id: "rosters",   label: "Rosters",    explanation: "Players are named from each team's roster." },
   { id: "noRosters", label: "No rosters", explanation: "Two teams, no player lists — players are described by team and jersey number." },
@@ -141,8 +153,8 @@ export const GameSelection = {
     return SportCatalogue.option(s.sportID, s.level)?.name ?? (s.sportID[0]?.toUpperCase() + s.sportID.slice(1));
   },
 
-  /** "Women's Soccer" / "Boys Basketball" / "NFL Football" / "Auto Racing" — what the event is actually called. */
-  label(s: GameSelection): string { return `${genderLabel(s.gender, s.level, s.sportID)} ${GameSelection.sportName(s)}`.trim(); },
+  /** "Women's Soccer" / "Football" / "Girls Volleyball" / "NFL Football" / "Auto Racing" — what the event is actually called. */
+  label(s: GameSelection): string { return eventLabel(s.level, s.sportID, s.gender, GameSelection.sportName(s)); },
 
   /** The team situation a sport is usually shot in: rosters, two sides without them, or none. */
   defaultRosterMode(s: GameSelection): RosterMode { return Sports.defaultRosterMode(s.sportID); },
@@ -222,7 +234,7 @@ export const RecentGame = {
   sportLabel(g: RecentGame): string {
     if (g.rosterMode === "noTeams") return "";
     const name = SportCatalogue.option(g.sport, g.level)?.name ?? (g.sport[0]?.toUpperCase() + g.sport.slice(1));
-    return `${genderLabel(g.gender, g.level, g.sport)} ${name}`.trim();
+    return eventLabel(g.level, g.sport, g.gender, name);
   },
 
   /**

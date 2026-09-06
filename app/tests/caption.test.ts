@@ -18,6 +18,7 @@ import { TeamNoun } from "../src/core/caption/TeamNoun";
 import { Cleanup } from "../src/core/caption/Cleanup";
 import { UNIDENTIFIED_TOKEN, PlayerReference } from "../src/core/caption/PlayerReference";
 import { SampleCaption } from "../src/core/caption/SampleCaption";
+import { Article } from "../src/core/caption/Article";
 import { CaptionParts } from "../src/core/caption/CaptionParts";
 import { KitColourDiagnosis } from "../src/core/setup/KitColourDiagnosis";
 import { VISION_MODELS, VisionModel, ALT_TEXT_MODES, ImagePrep } from "../src/core/anthropic/VisionModel";
@@ -510,7 +511,12 @@ describe("Team names and colour families", () => {
     expect(TeamName.split("Nebraska")).toEqual({ school: "Nebraska", nickname: null });
     expect(TeamName.split("Millard South Patriots")).toEqual({ school: "Millard South", nickname: "Patriots" });
     expect(TeamName.split("   ")).toEqual({ school: "", nickname: null });
-    expect(TeamName.split("Lincoln Southwest Silver Hawks")).toEqual({ school: "Lincoln Southwest Silver", nickname: "Hawks" });
+    expect(TeamName.split("Lincoln Southwest Silver Hawks")).toEqual({ school: "Lincoln Southwest", nickname: "Silver Hawks" });
+    expect(TeamName.split("Army Black Knights")).toEqual({ school: "Army", nickname: "Black Knights" });
+    expect(TeamName.split("Army West Point Black Knights")).toEqual({ school: "Army West Point", nickname: "Black Knights" });
+    expect(TeamName.split("Bowling Green Falcons")).toEqual({ school: "Bowling Green", nickname: "Falcons" });
+    expect(TeamName.split("Penn State Nittany Lions")).toEqual({ school: "Penn State", nickname: "Nittany Lions" });
+    expect(TeamName.split("Ashland-Greenwood Bluejays")).toEqual({ school: "Ashland-Greenwood", nickname: "Bluejays" });
   });
   it("tells kit colours apart by family", () => {
     expect(TeamColorArbiter.sameFamily("white", "navy")).toBe(false);
@@ -624,5 +630,24 @@ describe("Every sport names its event, and every league takes the right article"
     expect(clause("basketball", "apSports", "WNBA")).toContain("during a WNBA basketball game");
     expect(clause("lacrosse", "apSports", "PLL")).toContain("during a PLL lacrosse game");
     expect(clause("soccer", "gettySports", "MLS")).toContain("during an MLS soccer match");
+  });
+});
+
+describe("The article follows the sound of the name", () => {
+  it("a or an, by initialism, by a long u, and by the first letter", () => {
+    const an = ["Army", "Ithaca", "Argentina", "Ohio State", "Iowa", "NYU", "LSU", "SMU", "XFL", "umpire", "Ursinus", "hour", "NCAA college"];
+    const a = ["Utah", "Union", "UMass", "UCLA", "USC", "European", "Xavier", "Michigan", "Nebraska", "one-run", "Hawaii", "PGA Tour", "WNBA"];
+    for (const w of an) expect(Article.indefinite(w), w).toBe("an");
+    for (const w of a) expect(Article.indefinite(w), w).toBe("a");
+    expect(Article.leading("Ithaca")).toBe("An");
+    expect(Article.before("Utah")).toBe("a ");
+  });
+  it("reaches the descriptive and participant forms", () => {
+    expect(PlayerReference.renderDescriptive("7", Team.make("Army", "white", "Black Knights"), "apSports")).toBe("an Army Black Knight (7)");
+    expect(PlayerReference.renderDescriptive("8", Team.make("Ithaca", "white", "Bombers"), "hurrdatSports")).toBe("an Ithaca Bomber (8)");
+    expect(PlayerReference.renderDescriptive("1", Team.make("Utah", "white", "Utes"), "apSports")).toBe("a Utah Ute (1)");
+    expect(PlayerReference.renderDescriptive("", Team.make("Argentina", "navy"), "apSports")).toBe("an Argentina player");
+    expect(PlayerReference.renderParticipant("4", "athlete", "apSports")).toBe("an athlete (4)");
+    expect(PlayerReference.renderParticipant("", "runner", "apSports")).toBe("a runner");
   });
 });

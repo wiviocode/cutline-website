@@ -10,6 +10,7 @@
 import { Team, RosterPlayer } from "../roster/Roster";
 import type { Match } from "../roster/RosterMatcher";
 import { TeamNoun } from "./TeamNoun";
+import { Article } from "./Article";
 import { WireStyle } from "./WireStyle";
 import type { CaptionStyle } from "./CompositionContext";
 
@@ -60,27 +61,30 @@ export const PlayerReference = {
   renderDescriptive(number: string, team: Team | null, style: CaptionStyle): string {
     const formatted = formatNumber(number, style);
     if (!team) return formatted ? `a player ${formatted}` : "a player";
+    const full = Team.fullName(team);
+    const a = Article.before(full);
 
     if (WireStyle.usesOfTheTeamForm(style)) {
       if (!formatted) {
-        return Team.takesDefiniteArticle(team) ? `a player of ${Team.withArticle(team)}` : `a ${Team.fullName(team)} player`;
+        return Team.takesDefiniteArticle(team) ? `a player of ${Team.withArticle(team)}` : `${a}${full} player`;
       }
       return Team.takesDefiniteArticle(team)
         ? `a player ${formatted} of ${Team.withArticle(team)}`
-        : `a ${Team.fullName(team)} player ${formatted}`;
+        : `${a}${full} player ${formatted}`;
     }
 
-    // "a Nebraska Cornhusker (2)" where the nickname has a singular, otherwise
-    // "a Notre Dame Fighting Irish player (2)".
+    // "a Nebraska Cornhusker (2)", "an Army Black Knight (7)"; where the nickname has no
+    // singular, "a Notre Dame Fighting Irish player (2)".
     const singular = TeamNoun.singularTeamLabel(team.name, team.nickname);
-    if (singular) return formatted ? `a ${singular} ${formatted}` : `a ${singular}`;
-    return formatted ? `a ${Team.fullName(team)} player ${formatted}` : `a ${Team.fullName(team)} player`;
+    if (singular) return formatted ? `${a}${singular} ${formatted}` : `${a}${singular}`;
+    return formatted ? `${a}${full} player ${formatted}` : `${a}${full} player`;
   },
 
   /** Describe a competitor at an event with no teams: "a rider (12)". */
   renderParticipant(number: string, noun: string, style: CaptionStyle): string {
     const formatted = formatNumber(number, style);
-    return formatted ? `a ${noun} ${formatted}` : `a ${noun}`;
+    const a = Article.before(noun);
+    return formatted ? `${a}${noun} ${formatted}` : `${a}${noun}`;
   },
 
   /** Render an athlete who could not be matched to the roster. */

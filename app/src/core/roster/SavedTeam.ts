@@ -7,7 +7,7 @@
  */
 
 import type { Gender, Level } from "../setup/GameLibrary";
-import { genderLabel, SportCatalogue } from "../setup/GameLibrary";
+import { eventLabel, SportCatalogue } from "../setup/GameLibrary";
 import { TeamIdentity } from "./TeamIdentity";
 import type { ImportedPlayer } from "./RosterImporter";
 import { newID } from "./Roster";
@@ -45,7 +45,7 @@ export const SavedTeam = {
 
   sportLabel(t: SavedTeam): string {
     const name = SportCatalogue.option(t.sport, t.level)?.name ?? (t.sport[0].toUpperCase() + t.sport.slice(1));
-    return `${genderLabel(t.gender, t.level, t.sport)} ${name}`.trim();
+    return eventLabel(t.level, t.sport, t.gender, name);
   },
 
   /** The same school in the same sport and gender is the same team, however it was reached. */

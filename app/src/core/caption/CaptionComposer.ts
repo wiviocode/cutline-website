@@ -20,6 +20,7 @@ import { PlayerReference } from "./PlayerReference";
 import { Cleanup } from "./Cleanup";
 import { PrependComposer, type ComposerWarning } from "./PrependComposer";
 import { Sports } from "../setup/Sports";
+import { Article } from "./Article";
 
 export interface ComposerOutput {
   caption: string;
@@ -304,12 +305,7 @@ function appositiveTail(body: string, gameClause: string, teamClause: string, co
  * letter decides: "an NFL game", "an MLB game", "an NCAA college game", but "a WNBA game" and "a
  * PGA Tour event".
  */
-function article(next: string): string {
-  const word = next.trim();
-  if (!word) return "a ";
-  if (/^[A-Z]{2,}(?![a-z])/.test(word)) return "AEFHILMNORSX".includes(word[0]) ? "an " : "a ";
-  return "aeiou".includes(word[0].toLowerCase()) ? "an " : "a ";
-}
+function article(next: string): string { return Article.before(next); }
 
 // ---- Helpers ----
 

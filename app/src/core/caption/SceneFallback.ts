@@ -6,13 +6,14 @@
  * stage adds it — duplicating it yields "Cheerleaders Cheerleaders perform".
  */
 
+import { Article } from "./Article";
 import { Team } from "../roster/Roster";
 import type { SceneType } from "../vision/VisionResult";
 import type { CaptionStyle } from "./CompositionContext";
 
 /** "An" before a vowel sound: "An Ohio State coach", "A Nebraska coach", "A Utah coach". */
 export function indefiniteArticle(word: string): string {
-  return /^[aeio]/i.test(word.trim()) ? "An" : "A";
+  return Article.leading(word);
 }
 
 export const SceneFallback = {
