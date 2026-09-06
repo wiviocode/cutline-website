@@ -26,11 +26,8 @@ export function Welcome() {
     <div className="welcome">
       <div className="welcome-inner">
         <div className="welcome-brand">
-          <Mark size={40} />
-          <div>
-            <h1>Welcome to Cutline.</h1>
-            <p>Four short steps, then it is ready for a card of photographs.</p>
-          </div>
+          <Mark size={26} />
+          <h1>Cutline</h1>
         </div>
         <ol className="stepper" aria-label="Setup steps">
           {WELCOME_STEPS.map((s, i) => (

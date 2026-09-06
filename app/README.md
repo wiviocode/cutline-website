@@ -83,6 +83,7 @@ embedding rewrites the user's originals in place.
 ## Deploying
 
 The repository root's `vercel.json` builds this folder into `dist/app` and serves it at `/app`,
-beside the marketing page at `/`, with the relay as one serverless function. Any host that serves
+and at `/`, the site's front door; the marketing page sits at `/about`. The relay is one serverless
+function. Any host that serves
 `dist/` works for everything except reading a team's page by link; without the relay the app
 offers paste instead.

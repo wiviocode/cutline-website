@@ -230,3 +230,10 @@ from its record reads its EXIF before recomposing, so the weekday is not lost; a
 player whose roster gives no position by the school's possessive — "Syracuse's Logan Jazbec (22)"
 rather than "Syracuse Rockets Logan Jazbec (22)".
 
+## The app is the homepage
+
+`cutline.photo/` now serves the app, so a first visit lands on the setup; the marketing page moved
+to `/about`. The setup's heading is the mark and the word Cutline, nothing more, and the serif face
+is gone from the interface — headings, sample captions and the review caption are all set in the
+system face.
+

@@ -62,7 +62,7 @@ records; a `.caption-manifest.json` so a second run never captions a frame twice
 
 | Path | What it is |
 |---|---|
-| `Cutline.dc.html`, `support.js`, `docs/` | The marketing site at `/`. A [Claude Design](https://claude.ai/design) document and its runtime. |
+| `Cutline.dc.html`, `support.js`, `docs/` | The marketing page, at `/about`. A [Claude Design](https://claude.ai/design) document and its runtime. |
 | `app/` | The app at `/app`. Vite, React, TypeScript. Its own [README](app/README.md) covers the code. |
 | `api/fetch.ts` | The relay: reads a public web page for the roster importer. A Vercel function. |
 | `scripts/build-site.mjs`, `vercel.json` | One build: the site copied to `dist/`, the app built to `dist/app`. |

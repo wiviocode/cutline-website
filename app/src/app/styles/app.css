@@ -147,9 +147,8 @@ button.chip:hover { border-color: #4c5462; }
 /* ---- welcome ---- */
 .welcome { flex: 1; min-height: 0; overflow-y: auto; }
 .welcome-inner { max-width: 620px; margin: 0 auto; padding: clamp(24px, 6vh, 56px) 24px 40px; display: flex; flex-direction: column; gap: 22px; }
-.welcome-brand { display: flex; align-items: center; gap: 12px; }
-.welcome-brand h1 { font-family: var(--font-display); font-optical-sizing: auto; font-weight: 500; font-size: 30px; letter-spacing: -.02em; line-height: 1.1; }
-.welcome-brand p { color: var(--text-3); font-size: 13.5px; }
+.welcome-brand { display: flex; align-items: center; gap: 10px; }
+.welcome-brand h1 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; line-height: 1.1; }
 .stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .stepper .st { display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; color: var(--text-5); }
 .stepper .st i { display: block; height: 3px; border-radius: 2px; background: var(--ink-4); }
@@ -166,7 +165,7 @@ button.chip:hover { border-color: #4c5462; }
 .keystate { font-size: 12.5px; display: flex; align-items: center; gap: 8px; min-height: 20px; }
 .keystate.ok { color: #7ed48f; }
 .keystate.bad { color: #eda1a1; }
-.sample { border-left: 2px solid var(--gold); padding: 2px 0 2px 12px; font-family: var(--font-display); font-optical-sizing: auto; font-size: 15px; line-height: 1.5; color: var(--text-2); user-select: text; }
+.sample { border-left: 2px solid var(--gold); padding: 2px 0 2px 12px; font-size: 13px; line-height: 1.55; color: var(--text-2); user-select: text; }
 
 /* ---- start ---- */
 .start { max-width: 880px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 30px; padding: 40px 28px; }
@@ -226,7 +225,7 @@ button.chip:hover { border-color: #4c5462; }
 .rail { width: 320px; flex: 0 0 320px; background: #20242a; border-left: 1px solid var(--border-control); display: flex; flex-direction: column; min-height: 0; }
 .rail-body { padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .rail-body > * { flex: none; }
-.caption { font-family: var(--font-display); font-optical-sizing: auto; font-size: 15px; line-height: 1.5; background: var(--ink-3); border: 1px solid var(--border-control); border-radius: 8px; padding: 10px 12px; user-select: text; cursor: text; width: 100%; text-align: left; color: var(--text-1); }
+.caption { font-size: 13.5px; line-height: 1.55; background: var(--ink-3); border: 1px solid var(--border-control); border-radius: 8px; padding: 10px 12px; user-select: text; cursor: text; width: 100%; text-align: left; color: var(--text-1); }
 .caption:hover { border-color: #4c5462; }
 .caption b { font-weight: 600; border-bottom: 1.5px dotted var(--gold); }
 .caption .placeholder { color: var(--text-4); font-family: var(--font-body); font-size: 12.5px; }
@@ -292,7 +291,7 @@ button.chip:hover { border-color: #4c5462; }
 .row.stacked .k { margin-bottom: 8px; }
 .saved { color: #7ed48f; font-size: 12px; }
 .example { border-top: 1px solid var(--border-control); padding-top: 10px; margin-top: 4px; }
-.example .sample { font-size: 14px; }
+.example .sample { font-size: 12.5px; }
 .tokens { line-height: 2; font-size: 11.5px; color: var(--text-4); }
 .tokens code { font-family: var(--font-mono); color: var(--text-1); background: var(--ink-3); border-radius: 4px; padding: 1px 5px; }
 .problem { color: #eda1a1; }
