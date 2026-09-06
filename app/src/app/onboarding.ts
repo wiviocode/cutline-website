@@ -6,6 +6,16 @@
 import { NamingPattern } from "@core/naming/NamingPattern";
 
 export type WelcomeStep = "key" | "byline" | "output" | "naming";
+/** The whole first-run flow: a welcome that a returning user does not see, then the numbered steps. */
+export type WelcomeStage = "intro" | WelcomeStep;
+
+/** The short how-it-works shown on the welcome, one line each, in the order a shoot goes. */
+export const TUTORIAL_STEPS: { title: string; detail: string }[] = [
+  { title: "Drop a folder of photographs", detail: "Point Cutline at a shoot. Nothing is uploaded anywhere but the model you choose." },
+  { title: "Set the game", detail: "Name the two teams and the colours they wore. Rosters come from a team's own page, so jersey numbers become names." },
+  { title: "Caption, then review", detail: "The model reads every frame. Check the numbers, fix any it missed, approve — a fix rebuilds the caption at once, with no new request." },
+  { title: "Filed into every photograph", detail: "The caption, credit, date and codes are written into the file's IPTC metadata, ready for Photo Mechanic or a wire desk." },
+];
 
 export const WELCOME_STEPS: { id: WelcomeStep; title: string; blurb: string }[] = [
   { id: "key",    title: "Your key",         blurb: "Cutline reads photographs with a model you pay for directly." },
@@ -35,6 +45,15 @@ export function needsOnboarding(settings: { onboarded: boolean }, apiKey: string
 /** The step to open on: the first one whose answer is missing. */
 export function firstStep(settings: { onboarded: boolean }, apiKey: string): WelcomeStep {
   return apiKey.trim() ? "byline" : "key";
+}
+
+/**
+ * Where the welcome screen opens. A brand-new desk — never set up, no key — gets the welcome and
+ * its tutorial first; anyone reopening setup from Settings goes straight to the step they need.
+ */
+export function initialStage(settings: { onboarded: boolean }, apiKey: string): WelcomeStage {
+  if (!settings.onboarded && !apiKey.trim()) return "intro";
+  return firstStep(settings, apiKey);
 }
 
 export function nextStep(step: WelcomeStep): WelcomeStep | null {

@@ -10,7 +10,7 @@ import { Button, Callout, Field, Mark, RadioCards, Select, Switch, TextInput } f
 import { KeyField } from "./KeyField";
 import { TemplatePicker } from "./TemplatePicker";
 import { NamingPicker } from "./NamingPicker";
-import { WELCOME_STEPS, firstStep, nextStep, previousStep, type WelcomeStep } from "../onboarding";
+import { WELCOME_STEPS, TUTORIAL_STEPS, initialStage, nextStep, previousStep, type WelcomeStage } from "../onboarding";
 import { CAPTION_STYLES, type CaptionStyle } from "@core/caption/CompositionContext";
 import { WireStyle } from "@core/caption/WireStyle";
 import { SampleCaption } from "@core/caption/SampleCaption";
@@ -19,8 +19,18 @@ import { VISION_MODELS, ALT_TEXT_MODES, type AltTextMode } from "@core/anthropic
 export function Welcome() {
   const settings = useStore((s) => s.settings);
   const apiKey = useStore((s) => s.apiKey);
-  const [step, setStep] = useState<WelcomeStep>(() => firstStep(settings, apiKey));
+  const [step, setStep] = useState<WelcomeStage>(() => initialStage(settings, apiKey));
   const at = WELCOME_STEPS.findIndex((s) => s.id === step);
+
+  if (step === "intro") {
+    return (
+      <div className="welcome">
+        <div className="welcome-inner">
+          <IntroStep onNext={() => setStep("key")} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="welcome">
@@ -43,6 +53,30 @@ export function Welcome() {
         {step === "naming" && <NamingStep onBack={() => setStep(previousStep("naming")!)} />}
       </div>
     </div>
+  );
+}
+
+/** The welcome: what Cutline is, how a shoot goes through it, and the way into the setup. */
+function IntroStep({ onNext }: { onNext: () => void }) {
+  const writable = useStore((s) => s.writableFolders);
+  return (
+    <section className="wstep intro" aria-labelledby="w-intro">
+      <div className="intro-hero">
+        <Mark size={44} />
+        <h1 id="w-intro">Welcome to Cutline</h1>
+        <p className="lede">Caption a whole shoot in one pass. Cutline reads each photograph, names the players from their rosters, writes the caption in your desk's house style, and files it into the image where every wire system can read it.</p>
+      </div>
+      <ol className="tutorial" aria-label="How Cutline works">
+        {TUTORIAL_STEPS.map((t, i) => (
+          <li key={i} className="tut">
+            <span className="tut-n" aria-hidden="true">{i + 1}</span>
+            <span className="tut-body"><b>{t.title}</b><span className="tut-text">{t.detail}</span></span>
+          </li>
+        ))}
+      </ol>
+      <p className="intro-need">Four short steps set it up. You will need an <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Anthropic API key</a>{writable ? "" : ", and Chrome, Edge or Brave to write captions into the files"}.</p>
+      <div className="wnav"><span className="spacer" /><Button size="lg" onClick={onNext}>Get started</Button></div>
+    </section>
   );
 }
 

@@ -159,6 +159,20 @@ button.chip:hover { border-color: #4c5462; }
 .wstep { display: flex; flex-direction: column; gap: 16px; }
 .wstep h2 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
 .wstep .lede { color: var(--text-3); font-size: 13.5px; margin-top: -8px; }
+
+.wstep.intro { gap: 22px; }
+.intro-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 6px 0 2px; }
+.intro-hero h1 { font-size: 27px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+.intro-hero .lede { max-width: 48ch; margin: 0; color: var(--text-3); font-size: 13.5px; line-height: 1.5; }
+.tutorial { display: flex; flex-direction: column; gap: 8px; }
+.tut { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: var(--ink-2); border: 1px solid var(--border-control); border-radius: 10px; }
+.tut-n { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--gold); color: var(--on-gold); font: 700 12px/24px var(--font-mono); text-align: center; }
+.tut-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tut-body b { font-size: 13.5px; font-weight: 600; }
+.tut-text { font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
+.intro-need { font-size: 12.5px; color: var(--text-4); text-align: center; line-height: 1.5; margin: 0; }
+.intro-need a { color: var(--text-2); }
+
 .wnav { display: flex; align-items: center; gap: 10px; padding-top: 4px; }
 .keyrow { display: flex; gap: 8px; align-items: center; }
 .keyrow .input { flex: 1; }

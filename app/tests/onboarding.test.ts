@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { needsOnboarding, firstStep, nextStep, previousStep, keyProblem, WELCOME_STEPS, NAMING_PRESETS, presetFor } from "../src/app/onboarding";
+import { needsOnboarding, firstStep, initialStage, nextStep, previousStep, keyProblem, WELCOME_STEPS, TUTORIAL_STEPS, NAMING_PRESETS, presetFor } from "../src/app/onboarding";
 import { NamingPattern } from "../src/core/naming/NamingPattern";
 import { DEFAULT_SETTINGS } from "../src/platform/storage";
 import { VisionModel } from "../src/core/anthropic/VisionModel";
@@ -15,6 +15,14 @@ describe("The first-time setup", () => {
   it("opens on the first missing answer", () => {
     expect(firstStep({ onboarded: false }, "")).toBe("key");
     expect(firstStep({ onboarded: false }, "sk-ant-x")).toBe("byline");
+  });
+  it("shows the welcome and tutorial to a brand-new desk, and skips it on a return", () => {
+    expect(initialStage({ onboarded: false }, "")).toBe("intro");
+    expect(initialStage({ onboarded: true }, "")).toBe("key");
+    expect(initialStage({ onboarded: true }, "sk-ant-x")).toBe("byline");
+    expect(initialStage({ onboarded: false }, "sk-ant-x")).toBe("byline");
+    expect(TUTORIAL_STEPS.length).toBe(4);
+    expect(TUTORIAL_STEPS.every((t) => t.title && t.detail)).toBe(true);
   });
   it("walks the steps in order and stops at the ends", () => {
     expect(WELCOME_STEPS.map((s) => s.id)).toEqual(["key", "byline", "output", "naming"]);
