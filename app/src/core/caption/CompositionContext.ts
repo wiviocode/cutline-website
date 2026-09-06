@@ -107,6 +107,8 @@ export interface CompositionContext {
   isProfessionalLeague: boolean;
   /** Photographer, for styles that close with a credit line. */
   photographer?: string | null;
+  /** The agency, desk or publication in the credit line; null for the style's own. */
+  house?: string | null;
   /** Weekday for the date, when the house style sets the date off appositively. */
   weekday?: string | null;
   /** Set for events with no teams. */
@@ -127,6 +129,7 @@ export const CompositionContext = {
       appendCredit: p.appendCredit ?? false,
       isProfessionalLeague: p.isProfessionalLeague ?? false,
       photographer: p.photographer ?? null,
+      house: p.house ?? null,
       weekday: p.weekday ?? null,
       event: p.event ?? null,
       captureDate: p.captureDate ?? null,

@@ -150,7 +150,7 @@ button.chip:hover { border-color: #4c5462; }
 .welcome-brand { display: flex; align-items: center; gap: 12px; }
 .welcome-brand h1 { font-family: var(--font-display); font-optical-sizing: auto; font-weight: 500; font-size: 30px; letter-spacing: -.02em; line-height: 1.1; }
 .welcome-brand p { color: var(--text-3); font-size: 13.5px; }
-.stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .stepper .st { display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; color: var(--text-5); }
 .stepper .st i { display: block; height: 3px; border-radius: 2px; background: var(--ink-4); }
 .stepper .st.done { color: var(--text-4); }
@@ -330,6 +330,6 @@ button.chip:hover { border-color: #4c5462; }
 }
 @media (max-width: 560px) {
   .field-row { flex-direction: column; }
-  .stepper { grid-template-columns: 1fr 1fr 1fr; }
+  .stepper { grid-template-columns: repeat(4, 1fr); }
   .stepper .st { font-size: 10.5px; }
 }

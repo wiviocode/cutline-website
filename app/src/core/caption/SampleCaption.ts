@@ -26,7 +26,7 @@ const frame = VisionResult.make({
 });
 
 export const SampleCaption = {
-  text(style: CaptionStyle, photographer: string): string {
+  text(style: CaptionStyle, photographer: string, house = ""): string {
     const trimmed = photographer.trim();
     const context = CompositionContext.make({
       style,
@@ -34,6 +34,7 @@ export const SampleCaption = {
       roster,
       iptc: { dateText: "Sept. 14, 2024", venue: "Memorial Stadium", city: "Lincoln", state: "Neb.", leagueLevel: "college" },
       photographer: trimmed || null,
+      house: house.trim() || null,
       weekday: "Saturday",
       captureDate: localDate(2024, 9, 14), // a Saturday
     });

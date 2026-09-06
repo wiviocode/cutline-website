@@ -201,7 +201,7 @@ function imagnRecord(body: string, gameClause: string, teamClause: string, conte
   const date = dateText(context); if (date) lead.push(date);
   const place = placeText(context); if (place) lead.push(place);
   let out = lead.length ? lead.join("; ") + "; " + sentence : sentence;
-  const credit = WireStyle.creditLine(context.style, context.photographer);
+  const credit = WireStyle.creditLine(context.style, context.photographer, context.house);
   if (credit) out += ` ${credit}`;
   return out;
 }
@@ -222,7 +222,7 @@ function applyTail(body: string, context: CompositionContext, namedTeamIDs: Set<
     const place = placeText(context); if (place) parts.push(`in ${place}`);
     let sentence = dateline(context) + parts.join(" ");
     if (!sentence.endsWith(".")) sentence += ".";
-    const credit = WireStyle.creditLine(context.style, context.photographer);
+    const credit = WireStyle.creditLine(context.style, context.photographer, context.house);
     if (credit) sentence += ` ${credit}`;
     return sentence;
   }
@@ -253,7 +253,7 @@ function applyTail(body: string, context: CompositionContext, namedTeamIDs: Set<
   const place = placeText(context); if (place) parts.push(`in ${place}`);
   let sentence = dateline(context) + parts.join(" ");
   if (!sentence.endsWith(".")) sentence += ".";
-  const credit = WireStyle.creditLine(context.style, context.photographer);
+  const credit = WireStyle.creditLine(context.style, context.photographer, context.house);
   if (credit) sentence += ` ${credit}`;
   return sentence;
 }
@@ -286,7 +286,7 @@ function appositiveTail(body: string, gameClause: string, teamClause: string, co
   }
   // "Neb." already ends the sentence; a second full stop would give "Neb..".
   if (!sentence.endsWith(".")) sentence += ".";
-  const credit = WireStyle.creditLine(context.style, context.photographer);
+  const credit = WireStyle.creditLine(context.style, context.photographer, context.house);
   if (credit) sentence += ` ${credit}`;
   return sentence;
 }

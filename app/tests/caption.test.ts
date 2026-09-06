@@ -12,7 +12,7 @@ import { VisionResult, VisionPlayer, type SceneType, SCENE_TYPES } from "../src/
 import { CaptionResponseParser } from "../src/core/vision/CaptionResponseParser";
 import { CaptionComposer } from "../src/core/caption/CaptionComposer";
 import { CompositionContext, EventDescription, CAPTION_STYLES, type CaptionStyle } from "../src/core/caption/CompositionContext";
-import { WireDate } from "../src/core/caption/WireStyle";
+import { WireDate, WireStyle } from "../src/core/caption/WireStyle";
 import { USState, APState } from "../src/core/caption/USState";
 import { TeamNoun } from "../src/core/caption/TeamNoun";
 import { Cleanup } from "../src/core/caption/Cleanup";
@@ -96,6 +96,20 @@ describe("Documented rules", () => {
     expect(RosterMatcher.isPlausibleMisread("0", "3")).toBe(true);
     expect(RosterMatcher.isPlausibleMisread("7", "22")).toBe(false);
     expect(RosterMatcher.isPlausibleMisread("0", "00")).toBe(false);
+  });
+  it("puts the house in the credit line where the style's own name goes", () => {
+    const credit = (s: CaptionStyle, house?: string) => WireStyle.creditLine(s, "Eli Larson", house);
+    expect(credit("apSports")).toBe("(AP Photo/Eli Larson)");
+    expect(credit("apSports", "Lincoln Journal Star")).toBe("(Lincoln Journal Star/Eli Larson)");
+    expect(credit("gettySports", "Hurrdat Sports")).toBe("(Photo by Eli Larson/Hurrdat Sports)");
+    expect(credit("iconSports")).toBe("(Photo by Eli Larson/Icon Sportswire via Getty Images)");
+    expect(credit("imagnImages", "Hurrdat Sports")).toBe("Mandatory Credit: Eli Larson-Hurrdat Sports");
+    expect(credit("hurrdatSports")).toBe("Photo by Eli Larson.");
+    expect(credit("hurrdatSports", "Hurrdat Sports")).toBe("Photo by Eli Larson/Hurrdat Sports.");
+    expect(credit("simple", "Anyone")).toBeNull();
+    expect(WireStyle.creditLine("apSports", "", "Hurrdat Sports")).toBeNull();
+    expect(SampleCaption.text("apSports", "Eli Larson", "Hurrdat Sports").endsWith("(Hurrdat Sports/Eli Larson)")).toBe(true);
+    expect(SampleCaption.text("apSports", "Eli Larson", "  ").endsWith("(AP Photo/Eli Larson)")).toBe(true);
   });
   it("names a player whose roster gives no position by the school's possessive", () => {
     const ag = Team.make("Ashland-Greenwood", "blue", "Bluejays");

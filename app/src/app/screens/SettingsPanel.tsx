@@ -8,13 +8,11 @@ import { useStore } from "../store";
 import { Button, Overline, Select, Sheet, Switch, TextInput } from "../components";
 import { KeyField } from "./KeyField";
 import { TemplatePicker } from "./TemplatePicker";
+import { NamingPicker } from "./NamingPicker";
 import { CAPTION_STYLES, type CaptionStyle } from "@core/caption/CompositionContext";
 import { WireStyle } from "@core/caption/WireStyle";
 import { SampleCaption } from "@core/caption/SampleCaption";
 import { VISION_MODELS, ALT_TEXT_MODES, ImagePrep, type AltTextMode } from "@core/anthropic/VisionModel";
-import { NamingPattern } from "@core/naming/NamingPattern";
-import { HDSNaming } from "@core/naming/HDSNaming";
-import { localDate } from "@core/images/PhotoMetadata";
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const settings = useStore((s) => s.settings);
@@ -22,9 +20,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const writable = useStore((s) => s.writableFolders);
   const reopenSetup = useStore((s) => s.reopenSetup);
 
-  const sample = SampleCaption.text(settings.style, settings.photographer.trim() || "Your Name");
-  const namingExample = NamingPattern.filename(settings.namingPattern, { initials: HDSNaming.initials(settings.photographer) || "EL", date: localDate(2024, 9, 14), sportCode: "FB", covered: "Nebraska", opponent: "Ohio State", coveredIsHome: true }, 1, "jpg");
-  const unknown = NamingPattern.unknownTokens(settings.namingPattern);
+  const sample = SampleCaption.text(settings.style, settings.photographer.trim() || "Your Name", settings.house);
   const altCost: Partial<Record<AltTextMode, string>> = { brief: "A second look at a small copy of each photo, about $0.45 per 500 frames.", detailed: "A second look at each photo, about $1 per 500 frames." };
 
   return (
@@ -40,6 +36,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="row">
             <span className="k">Photographer<small>As it should appear in the credit line.</small></span>
             <span className="c"><TextInput value={settings.photographer} placeholder="Jane Doe" style={{ width: 220 }} onChange={(e) => set({ photographer: e.target.value })} ariaLabel="Photographer" /></span>
+          </div>
+          <div className="row">
+            <span className="k">House<small>The agency, desk or publication in the credit line. Blank uses the style's own{WireStyle.defaultHouse(settings.style) ? `: ${WireStyle.defaultHouse(settings.style)}` : ""}.</small></span>
+            <span className="c"><TextInput value={settings.house} placeholder={WireStyle.defaultHouse(settings.style) ?? "Hurrdat Sports"} style={{ width: 220 }} onChange={(e) => set({ house: e.target.value })} ariaLabel="House" /></span>
           </div>
           <div className="row">
             <span className="k">House style<small>How the date, the state and the credit are written.</small></span>
@@ -92,24 +92,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
       <section className="section">
         <div className="section-head"><Overline>File names</Overline><span className="hint">Used by Rename photos… on the review screen.</span></div>
-        <div className="card rows">
-          <div className="row stacked">
-            <span className="k">Pattern</span>
-            <TextInput mono spellCheck={false} value={settings.namingPattern} onChange={(e) => set({ namingPattern: e.target.value })} ariaLabel="File name pattern" />
-            <p className="tokens">{NamingPattern.tokens.map((t) => <span key={t.token}><code>{t.token}</code> {t.meaning} · </span>)}</p>
-          </div>
-          <div className="row">
-            <span className="k">Example<small className="mono selectable">{namingExample}</small>{unknown.length > 0 && <small className="problem">Not a token this app knows: {unknown.join(", ")} — it will appear in the name exactly as written.</small>}</span>
-            <span className="c"><Button variant="secondary" disabled={settings.namingPattern === NamingPattern.hurrdat} onClick={() => set({ namingPattern: NamingPattern.hurrdat })}>Reset to default</Button></span>
-          </div>
-        </div>
+        <div className="card"><NamingPicker /></div>
       </section>
 
       <section className="section">
         <div className="section-head"><Overline>Setup</Overline></div>
         <div className="card rows">
           <div className="row">
-            <span className="k">First-time setup<small>Walk through the key, byline, model and output again.</small></span>
+            <span className="k">First-time setup<small>Walk through the key, byline and house, model, output and file names again.</small></span>
             <span className="c"><Button variant="secondary" onClick={reopenSetup}>Run it again</Button></span>
           </div>
         </div>

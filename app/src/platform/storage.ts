@@ -19,6 +19,8 @@ import { NamingPattern } from "@core/naming/NamingPattern";
 export interface Settings {
   style: CaptionStyle;
   photographer: string;
+  /** The agency, desk or publication in the credit line; blank for the style's own. */
+  house: string;
   embedInFile: boolean;
   writeSidecars: boolean;
   altTextMode: AltTextMode;
@@ -35,6 +37,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   style: "apSports",
   photographer: "",
+  house: "",
   embedInFile: true,
   writeSidecars: false,
   altTextMode: "simple",

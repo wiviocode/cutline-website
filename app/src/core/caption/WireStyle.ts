@@ -56,18 +56,35 @@ export const WireStyle = {
    * The credit as it appears inside the caption, or null when the desk keeps it in the IPTC
    * fields. Nothing is emitted when no photographer is set, rather than a credit with an empty
    * name in it.
+   *
+   * `house` is the agency, desk or publication the photographer works for. Blank means the
+   * style's own — a paper on AP style with its own name writes "(Lincoln Journal Star/Name)"
+   * where AP writes "(AP Photo/Name)".
    */
-  creditLine(s: CaptionStyle, photographer: string | null | undefined): string | null {
+  creditLine(s: CaptionStyle, photographer: string | null | undefined, house?: string | null): string | null {
     const name = photographer?.trim();
     if (!name) return null;
+    const own = house?.trim() || null;
     switch (s) {
-      case "apSports":         return `(AP Photo/${name})`;
+      case "apSports":         return `(${own ?? "AP Photo"}/${name})`;
       case "gettySports":
-      case "gettySportsParen": return `(Photo by ${name}/Getty Images)`;
-      case "iconSports":       return `(Photo by ${name}/Icon Sportswire via Getty Images)`;
-      case "imagnImages":      return `Mandatory Credit: ${name}-Imagn Images`;
-      case "hurrdatSports":    return `Photo by ${name}.`;
+      case "gettySportsParen": return `(Photo by ${name}/${own ?? "Getty Images"})`;
+      case "iconSports":       return `(Photo by ${name}/${own ?? "Icon Sportswire via Getty Images"})`;
+      case "imagnImages":      return `Mandatory Credit: ${name}-${own ?? "Imagn Images"}`;
+      case "hurrdatSports":    return own ? `Photo by ${name}/${own}.` : `Photo by ${name}.`;
       case "simple":           return null;
+    }
+  },
+
+  /** The name a style credits by default, shown as the placeholder for the house field. */
+  defaultHouse(s: CaptionStyle): string | null {
+    switch (s) {
+      case "apSports":         return "AP Photo";
+      case "gettySports":
+      case "gettySportsParen": return "Getty Images";
+      case "iconSports":       return "Icon Sportswire via Getty Images";
+      case "imagnImages":      return "Imagn Images";
+      default:                 return null;
     }
   },
 

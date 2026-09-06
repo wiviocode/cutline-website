@@ -358,7 +358,7 @@ export const useStore = create<State>()((set, get) => {
     if (!s.folder.writable) { patchFrame(f.id, { writeError: "This browser cannot write into the photographs." }); return; }
     try {
       const exif = f.exif ?? (await readPhotoMetadata(await f.photo.file()));
-      const packet = MetadataOutput.packet(f.caption, f.altText, f.name, exif, { template: await template(), city: s.city, state: s.state, fields: derive.deskFields(s), photographer: s.settings.photographer }, f.edited ? "manual" : "ai");
+      const packet = MetadataOutput.packet(f.caption, f.altText, f.name, exif, { template: await template(), city: s.city, state: s.state, fields: derive.deskFields(s), photographer: s.settings.photographer, house: s.settings.house }, f.edited ? "manual" : "ai");
       if (s.settings.writeSidecars || !SupportedFormats.canEmbed(f.name)) {
         await s.folder.writeText(MetadataOutput.plan(f.name, packet, null).kind === "sidecar" ? f.name.replace(/\.[^.]+$/, "") + ".xmp" : f.name.replace(/\.[^.]+$/, "") + ".xmp", packet);
       }
@@ -383,6 +383,7 @@ export const useStore = create<State>()((set, get) => {
       roster,
       iptc: { dateText: rec.capturedAt, venue: s.venue || null, city: s.city || null, state: s.state || null, leagueLevel: captionQualifier(s.selection.level) },
       photographer: s.settings.photographer || null,
+      house: s.settings.house || null,
       weekday: exif ? PhotoMetadata.weekdayName(exif) : null,
       event: derive.event(s),
       captureDate: exif?.captureDate ?? null,

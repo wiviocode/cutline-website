@@ -25,6 +25,8 @@ export interface OutputOptions {
   fields?: HurrdatFields | null;
   /** The By-line, when the template supplies none — the name from Settings. */
   photographer?: string | null;
+  /** The Credit, when the template supplies none — "Name/House", the way a stationery pad writes it. */
+  house?: string | null;
 }
 
 export const MetadataOutput = {
@@ -71,6 +73,8 @@ export const MetadataOutput = {
     // The photographer's name is the By-line. A template that names a creator keeps its own.
     const photographer = options.photographer?.trim();
     if (photographer && !/<dc:creator[\s>]/.test(packet)) packet = XMPFieldWriter.setSeq("dc:creator", [photographer], packet);
+    const house = options.house?.trim();
+    if (house && !/photoshop:Credit=/.test(packet)) packet = XMPFieldWriter.setAttribute("photoshop:Credit", photographer ? `${photographer}/${house}` : house, packet);
     return packet;
   },
 

@@ -9,6 +9,7 @@ import { useStore } from "../store";
 import { Button, Callout, Field, Mark, RadioCards, Select, Switch, TextInput } from "../components";
 import { KeyField } from "./KeyField";
 import { TemplatePicker } from "./TemplatePicker";
+import { NamingPicker } from "./NamingPicker";
 import { WELCOME_STEPS, firstStep, nextStep, previousStep, type WelcomeStep } from "../onboarding";
 import { CAPTION_STYLES, type CaptionStyle } from "@core/caption/CompositionContext";
 import { WireStyle } from "@core/caption/WireStyle";
@@ -28,7 +29,7 @@ export function Welcome() {
           <Mark size={40} />
           <div>
             <h1>Welcome to Cutline.</h1>
-            <p>Three short steps, then it is ready for a card of photographs.</p>
+            <p>Four short steps, then it is ready for a card of photographs.</p>
           </div>
         </div>
         <ol className="stepper" aria-label="Setup steps">
@@ -41,7 +42,8 @@ export function Welcome() {
         </ol>
         {step === "key" && <KeyStep onNext={() => setStep("byline")} />}
         {step === "byline" && <BylineStep onBack={() => setStep(previousStep("byline")!)} onNext={() => setStep(nextStep("byline")!)} />}
-        {step === "output" && <OutputStep onBack={() => setStep(previousStep("output")!)} />}
+        {step === "output" && <OutputStep onBack={() => setStep(previousStep("output")!)} onNext={() => setStep(nextStep("output")!)} />}
+        {step === "naming" && <NamingStep onBack={() => setStep(previousStep("naming")!)} />}
       </div>
     </div>
   );
@@ -70,20 +72,26 @@ function KeyStep({ onNext }: { onNext: () => void }) {
 
 function BylineStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const photographer = useStore((s) => s.settings.photographer);
+  const house = useStore((s) => s.settings.house);
   const style = useStore((s) => s.settings.style);
   const set = useStore((s) => s.setSetting);
   const name = photographer.trim() || "Your Name";
   return (
     <section className="wstep" aria-labelledby="w-byline">
       <h2 id="w-byline">Your byline and house style</h2>
-      <p className="lede">The name goes in the credit line. The style decides how the date, the state and the credit are written — each row shows the same photograph captioned that way.</p>
+      <p className="lede">The name and the house go in the credit line. The style decides how the date, the state and the credit are written — each row shows the same photograph captioned that way.</p>
       <div className="card">
-        <Field label="Photographer" hint="As it should appear in the credit: “(AP Photo/Jane Doe)”, “Photo by Jane Doe/Getty Images”.">
-          <TextInput value={photographer} placeholder="Jane Doe" autoFocus onChange={(e) => set({ photographer: e.target.value })} ariaLabel="Photographer" />
-        </Field>
+        <div className="field-row">
+          <Field label="Photographer" hint="As it should appear in the credit.">
+            <TextInput value={photographer} placeholder="Jane Doe" autoFocus onChange={(e) => set({ photographer: e.target.value })} ariaLabel="Photographer" />
+          </Field>
+          <Field label="House" hint={`The agency, desk or publication you shoot for. Blank uses the style's own${WireStyle.defaultHouse(style) ? `, ${WireStyle.defaultHouse(style)}` : ""}; a paper on AP style writes its own name where "AP Photo" goes.`}>
+            <TextInput value={house} placeholder={WireStyle.defaultHouse(style) ?? "Hurrdat Sports"} onChange={(e) => set({ house: e.target.value })} ariaLabel="House" />
+          </Field>
+        </div>
       </div>
       <RadioCards<CaptionStyle> name="style" value={style} onChange={(v) => set({ style: v })}
-        options={CAPTION_STYLES.map((st) => ({ id: st, title: WireStyle.displayName(st), detail: <span className="sample">{SampleCaption.text(st, name)}</span> }))} />
+        options={CAPTION_STYLES.map((st) => ({ id: st, title: WireStyle.displayName(st), detail: <span className="sample">{SampleCaption.text(st, name, house)}</span> }))} />
       <div className="wnav">
         <Button variant="ghost" size="lg" onClick={onBack}>Back</Button>
         <span className="spacer" />
@@ -93,11 +101,10 @@ function BylineStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
   );
 }
 
-function OutputStep({ onBack }: { onBack: () => void }) {
+function OutputStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const settings = useStore((s) => s.settings);
   const writable = useStore((s) => s.writableFolders);
   const set = useStore((s) => s.setSetting);
-  const finish = useStore((s) => s.finishOnboarding);
   return (
     <section className="wstep" aria-labelledby="w-output">
       <h2 id="w-output">Model and output</h2>
@@ -126,6 +133,22 @@ function OutputStep({ onBack }: { onBack: () => void }) {
           <span className="field-hint">Optional. A .XMP stationery pad exported from Photo Mechanic carries the standing fields the app cannot know — credit line, copyright, source, contact — and every frame gets them. Without one, the caption, capture date, By-line, headline, place and category codes are still written into each photograph.</span>
         </div>
       </div>
+      <div className="wnav">
+        <Button variant="ghost" size="lg" onClick={onBack}>Back</Button>
+        <span className="spacer" />
+        <Button size="lg" onClick={onNext}>Continue</Button>
+      </div>
+    </section>
+  );
+}
+
+function NamingStep({ onBack }: { onBack: () => void }) {
+  const finish = useStore((s) => s.finishOnboarding);
+  return (
+    <section className="wstep" aria-labelledby="w-naming">
+      <h2 id="w-naming">How your files are named</h2>
+      <p className="lede">When you ask the review screen to rename a shoot, the names follow this convention. Renaming never happens on its own, and the pattern can be changed in Settings at any time.</p>
+      <div className="card"><NamingPicker /></div>
       <div className="wnav">
         <Button variant="ghost" size="lg" onClick={onBack}>Back</Button>
         <span className="spacer" />

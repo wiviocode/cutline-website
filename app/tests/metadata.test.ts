@@ -410,7 +410,7 @@ describe("Writing into a real camera JPEG", () => {
       descriptor: HurrdatFields.descriptor("Ashland-Greenwood", "Boys Football", "Syracuse", HurrdatFields.datePlaceholder),
       supplementalCategory: "FB", city: "Ashland", state: "Neb.", sublocation: "",
     });
-    const packet = MetadataOutput.packet(caption, "Two players compete.", "DSC01715.JPG", exif, { template: null, city: "Ashland", state: "Neb.", fields, photographer: "Eli Larson" }, "ai");
+    const packet = MetadataOutput.packet(caption, "Two players compete.", "DSC01715.JPG", exif, { template: null, city: "Ashland", state: "Neb.", fields, photographer: "Eli Larson", house: "Hurrdat Sports" }, "ai");
     const used = new Set<string>();
     for (const m of packet.matchAll(/<\/?([A-Za-z][\w]*):[\w]+/g)) used.add(m[1]);
     for (const m of packet.matchAll(/\s([A-Za-z][\w]*):[\w]+="/g)) used.add(m[1]);
@@ -421,6 +421,7 @@ describe("Writing into a real camera JPEG", () => {
     const ds = (n: number) => iim.find((f) => f.dataset === n)?.value;
     expect(ds(55)).toBe("20260904");
     expect(ds(80)).toBe("Eli Larson");
+    expect(ds(110)).toBe("Eli Larson/Hurrdat Sports");
     expect(ds(105)).toBe("Ashland-Greenwood Boys Football v Syracuse - 2026-09-04");
     expect(ds(15)).toBe("S");
     expect(ds(20)).toBe("FB");

@@ -43,7 +43,7 @@ Welcome (first run)  →  Start  →  Game  →  Review
 
 ### Welcome — the first-time setup
 
-Shown when the app has never been set up, or when there is no key. Three steps, one screen
+Shown when the app has never been set up, or when there is no key. Four steps, one screen
 each, with a progress rail. The user cannot reach the app without a key that has been checked.
 
 1. **Your key.** One field. A **Check key** button makes the free `models.list` call and
@@ -51,14 +51,19 @@ each, with a progress rail. The user cannot reach the app without a key that has
    A line on where the key lives (this browser, this site, sent to nothing but
    api.anthropic.com) and a link to get one. If the browser cannot write into files, it says so
    here, before any work is done, with the two browsers that can.
-2. **Your byline.** Photographer name, and the house style as a list of radio rows, each
-   showing the real sample caption it produces. This is what makes a caption read as AP or
-   Getty; it belongs at the start, not in a tab.
+2. **Your byline.** Photographer name, the house — the agency, desk or publication in the
+   credit line, blank for the style's own — and the house style as a list of radio rows, each
+   showing the real sample caption it produces. A paper on AP style writes its own name where
+   "AP Photo" goes. This is what makes a caption read as AP or Getty; it belongs at the start,
+   not in a tab.
 3. **Model and output.** Which model reads the photographs (three cards: capability, speed,
    list price per million tokens), whether captions are written into the photographs (on when
    the browser can), alt text, and the desk's IPTC template — a Photo Mechanic stationery pad,
    optional, with a line on what it adds and what is written without one. **Finish** marks the
    app as set up.
+4. **File names.** The convention the renamer follows, from a short list — Hurrdat's, date and
+   teams, home and away — or a pattern typed from the tokens, with the resulting name shown as
+   it is typed. Renaming never happens on its own. **Finish** marks the app as set up.
 
 Settings keeps a "Run the setup again" link so it is never a one-way door.
 
