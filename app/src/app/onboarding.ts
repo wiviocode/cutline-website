@@ -8,7 +8,7 @@ export type WelcomeStep = "key" | "byline" | "output";
 export const WELCOME_STEPS: { id: WelcomeStep; title: string; blurb: string }[] = [
   { id: "key",    title: "Your key",         blurb: "Cutline reads photographs with a model you pay for directly." },
   { id: "byline", title: "Your byline",      blurb: "The name in the credit line, and the house style the captions follow." },
-  { id: "output", title: "Model and output", blurb: "Which model reads the photographs, and where the captions go." },
+  { id: "output", title: "Model and output", blurb: "Which model reads the photographs, where the captions go, and your desk's template." },
 ];
 
 /** Setup runs until it has been finished once and there is a key to work with. */

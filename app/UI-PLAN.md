@@ -56,7 +56,9 @@ each, with a progress rail. The user cannot reach the app without a key that has
    Getty; it belongs at the start, not in a tab.
 3. **Model and output.** Which model reads the photographs (three cards: capability, speed,
    list price per million tokens), whether captions are written into the photographs (on when
-   the browser can), and alt text. **Finish** marks the app as set up.
+   the browser can), alt text, and the desk's IPTC template — a Photo Mechanic stationery pad,
+   optional, with a line on what it adds and what is written without one. **Finish** marks the
+   app as set up.
 
 Settings keeps a "Run the setup again" link so it is never a one-way door.
 

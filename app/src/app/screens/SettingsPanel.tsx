@@ -3,10 +3,11 @@
  * sits under its control, always visible, one line. The saved key is never shown back.
  */
 
-import React, { useRef } from "react";
+import React from "react";
 import { useStore } from "../store";
 import { Button, Overline, Select, Sheet, Switch, TextInput } from "../components";
 import { KeyField } from "./KeyField";
+import { TemplatePicker } from "./TemplatePicker";
 import { CAPTION_STYLES, type CaptionStyle } from "@core/caption/CompositionContext";
 import { WireStyle } from "@core/caption/WireStyle";
 import { SampleCaption } from "@core/caption/SampleCaption";
@@ -19,11 +20,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const settings = useStore((s) => s.settings);
   const set = useStore((s) => s.setSetting);
   const writable = useStore((s) => s.writableFolders);
-  const templateNames = useStore((s) => s.templateNames);
-  const addTemplate = useStore((s) => s.addTemplate);
-  const removeTemplate = useStore((s) => s.removeTemplate);
   const reopenSetup = useStore((s) => s.reopenSetup);
-  const tplInput = useRef<HTMLInputElement>(null);
 
   const sample = SampleCaption.text(settings.style, settings.photographer.trim() || "Your Name");
   const namingExample = NamingPattern.filename(settings.namingPattern, { initials: HDSNaming.initials(settings.photographer) || "EL", date: localDate(2024, 9, 14), sportCode: "FB", covered: "Nebraska", opponent: "Ohio State", coveredIsHome: true }, 1, "jpg");
@@ -87,13 +84,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <span className="c"><Select<AltTextMode> value={settings.altTextMode} options={ALT_TEXT_MODES.map((m) => ({ id: m.id, name: m.name }))} onChange={(v) => set({ altTextMode: v })} ariaLabel="Alt text" /></span>
           </div>
           <div className="row">
-            <span className="k">IPTC template<small>Your desk's standing credit, copyright and source, exported from Photo Mechanic as a .XMP stationery pad. The per-shoot fields are written over it.</small></span>
-            <span className="c">
-              <Select value={settings.templateName ?? ""} options={[{ id: "", name: "None" }, ...templateNames.map((n) => ({ id: n, name: n }))]} onChange={(v) => set({ templateName: v || null })} ariaLabel="IPTC template" />
-              <Button variant="secondary" onClick={() => tplInput.current?.click()}>Add…</Button>
-              {settings.templateName && <button type="button" className="linky" onClick={() => void removeTemplate(settings.templateName!)}>Remove</button>}
-              <input ref={tplInput} type="file" accept=".xmp,.XMP,text/xml,application/xml" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) await addTemplate(f.name, await f.text()); e.target.value = ""; }} />
-            </span>
+            <span className="k">IPTC template<small>Your desk's standing credit, copyright and source, exported from Photo Mechanic as a .XMP stationery pad. The per-shoot fields are written over it; without one the caption, date, By-line, headline, place and codes are still written.</small></span>
+            <span className="c"><TemplatePicker /></span>
           </div>
         </div>
       </section>

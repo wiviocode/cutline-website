@@ -8,6 +8,7 @@ import React, { useState } from "react";
 import { useStore } from "../store";
 import { Button, Callout, Field, Mark, RadioCards, Select, Switch, TextInput } from "../components";
 import { KeyField } from "./KeyField";
+import { TemplatePicker } from "./TemplatePicker";
 import { WELCOME_STEPS, firstStep, nextStep, previousStep, type WelcomeStep } from "../onboarding";
 import { CAPTION_STYLES, type CaptionStyle } from "@core/caption/CompositionContext";
 import { WireStyle } from "@core/caption/WireStyle";
@@ -100,7 +101,7 @@ function OutputStep({ onBack }: { onBack: () => void }) {
   return (
     <section className="wstep" aria-labelledby="w-output">
       <h2 id="w-output">Model and output</h2>
-      <p className="lede">Reading a jersey number off a moving player is the hardest thing this asks of a model. All three can be changed later in Settings.</p>
+      <p className="lede">Reading a jersey number off a moving player is the hardest thing this asks of a model. Everything here can be changed later in Settings.</p>
       <RadioCards name="model" value={settings.model} onChange={(v) => set({ model: v })}
         options={VISION_MODELS.map((m) => ({
           id: m.id, title: m.name, aside: `$${m.inputPricePerMillion} in · $${m.outputPricePerMillion} out, per million tokens`,
@@ -116,6 +117,13 @@ function OutputStep({ onBack }: { onBack: () => void }) {
         <div className="row">
           <span className="k">Alt text<small>A sentence for screen readers, written into the file with the caption. Simple is built from the caption and costs nothing.</small></span>
           <span className="c"><Select<AltTextMode> value={settings.altTextMode} options={ALT_TEXT_MODES.map((m) => ({ id: m.id, name: m.name }))} onChange={(v) => set({ altTextMode: v })} ariaLabel="Alt text" /></span>
+        </div>
+      </div>
+      <div className="card">
+        <div className="field">
+          <span className="field-label">Your desk's IPTC template</span>
+          <div className="keyrow" style={{ flexWrap: "wrap", justifyContent: "flex-start" }}><TemplatePicker /></div>
+          <span className="field-hint">Optional. A .XMP stationery pad exported from Photo Mechanic carries the standing fields the app cannot know — credit line, copyright, source, contact — and every frame gets them. Without one, the caption, capture date, By-line, headline, place and category codes are still written into each photograph.</span>
         </div>
       </div>
       <div className="wnav">
