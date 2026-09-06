@@ -110,6 +110,9 @@ describe("Documented rules", () => {
     expect(WireStyle.creditLine("apSports", "", "Hurrdat Sports")).toBeNull();
     expect(SampleCaption.text("apSports", "Eli Larson", "Hurrdat Sports").endsWith("(Hurrdat Sports/Eli Larson)")).toBe(true);
     expect(SampleCaption.text("apSports", "Eli Larson", "  ").endsWith("(AP Photo/Eli Larson)")).toBe(true);
+    // Imagn's record ends on the credit, with no period, for any house.
+    expect(SampleCaption.text("imagnImages", "Eli Larson", "Lincoln Journal Star").endsWith("Mandatory Credit: Eli Larson-Lincoln Journal Star")).toBe(true);
+    expect(SampleCaption.text("imagnImages", "Eli Larson").endsWith("Mandatory Credit: Eli Larson-Imagn Images")).toBe(true);
   });
   it("names a player whose roster gives no position by the school's possessive", () => {
     const ag = Team.make("Ashland-Greenwood", "blue", "Bluejays");

@@ -19,7 +19,8 @@ export const Cleanup = {
 
     // A caption that closes with a bracketed credit — "(AP Photo/Eli Larson)" — is already
     // finished. Adding a full stop after the bracket gives "…Larson)." which no desk writes.
-    if (s && !s.endsWith(".") && !s.endsWith("!") && !s.endsWith("?") && !s.endsWith(")") && !s.endsWith("Images")) s += ".";
+    // Imagn's record ends on its credit with no period, whatever the house is called.
+    if (s && !s.endsWith(".") && !s.endsWith("!") && !s.endsWith("?") && !s.endsWith(")") && !/Mandatory Credit: /.test(s)) s += ".";
     return s;
   },
 };
