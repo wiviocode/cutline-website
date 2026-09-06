@@ -36,6 +36,7 @@ export type FallbackBehavior =
 export const SPORTS = [
   "autoRacing", "baseball", "basketball", "crossCountry", "cricket", "football", "golf", "hockey",
   "horseRacing", "lacrosse", "soccer", "softball", "tennis", "trackAndField", "volleyball",
+  "wrestling", "swimming", "gymnastics", "fieldHockey", "waterPolo",
 ] as const;
 export type Sport = (typeof SPORTS)[number];
 

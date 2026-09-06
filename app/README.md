@@ -46,6 +46,11 @@ Two things follow from the split, and they are the reason for it:
   locally, with no second API call.
 * **Style is a function, not a prompt.** Seven house styles — AP, Getty, Getty (parenthetical),
   Imagn, Icon Sportswire, Hurrdat, and plain — each written the way that desk writes it.
+* **Twenty sports, three levels.** One table (`src/core/setup/Sports.ts`) says what each sport is
+  called, whether its event is a game, a match, a meet, a dual, a tournament or a race, which
+  levels and genders play it, its professional league, where MaxPreps keeps its rosters, and its
+  file-name code; the model gets a few lines on the sport's numbers, colours and verbs with every
+  frame.
 
 Rosters come from a team's own web page: paste any link. A MaxPreps page is read from the data
 it embeds, with no model and both of a two-way player's positions; any other page is reduced to

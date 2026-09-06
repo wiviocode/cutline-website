@@ -13,6 +13,7 @@
 import instructions from "./visionInstructions.txt?raw";
 import { Team, type Roster } from "../roster/Roster";
 import type { EventDescription } from "../caption/CompositionContext";
+import { SportGuide } from "./SportGuide";
 
 export const VisionPrompt = {
   system: instructions as string,
@@ -23,7 +24,7 @@ export const VisionPrompt = {
    * go last so they can correct what is above them: a note saying a side changed kit has to beat
    * the colour already stated.
    */
-  context(opts: { sportLabel: string; roster: Roster; event?: EventDescription | null; notes?: string; note?: string }): string {
+  context(opts: { sportLabel: string; roster: Roster; event?: EventDescription | null; notes?: string; note?: string; sport?: string | null }): string {
     const base = opts.event
       ? `Event: ${opts.event.name}\nThere are no teams in this event; competitors are individuals.\n\nAnalyze this sports photo. Return JSON per the schema.`
       : `Sport: ${opts.sportLabel}\n` +
@@ -33,6 +34,9 @@ export const VisionPrompt = {
     const notes = (opts.notes ?? "").trim();
     const note = (opts.note ?? "").trim();
     let out = base;
+    // What this sport's numbers, colours and verbs are, before the photographer's own notes.
+    const guide = SportGuide.for(opts.sport);
+    if (guide) out += `\n\nAbout this sport:\n${guide}`;
     if (notes) out += `\n\nAlso note, from the photographer:\n${notes}`;
     // A note written for this one frame is the photographer correcting the model's first reading.
     // It has to beat everything above it, and it says what it may change.

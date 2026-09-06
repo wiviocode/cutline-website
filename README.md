@@ -47,6 +47,11 @@ Two things follow from that split, and they are the reason for it:
   Imagn, Icon Sportswire, Hurrdat, and plain — each written the way that desk writes it, with
   its own date form, state form, and credit line.
 
+Twenty sports — football, basketball, baseball, softball, soccer, volleyball, ice hockey,
+lacrosse, field hockey, water polo, wrestling, tennis, golf, track and field, cross country,
+swimming and diving, gymnastics, auto racing, horse racing and cricket — at college, high-school
+and professional level, each with its own event word, positions, league and notes for the model.
+
 Rosters are read from a team's own web page by a small relay, because a browser cannot fetch
 another site for itself. A MaxPreps page is read from the data it embeds — instant, and no model
 involved — with both of a two-way player's positions, so a caption names the linebacker making the

@@ -37,6 +37,8 @@ const OTHER: Record<string, Record<string, string>> = {
   lacrosse: { G: "goalie", D: "defender", M: "midfielder", A: "attacker", LSM: "long-stick midfielder", FO: "faceoff specialist", FOGO: "faceoff specialist" },
 };
 OTHER.softball = OTHER.baseball;
+OTHER.fieldHockey = { GK: "goalkeeper", G: "goalkeeper", D: "defender", DEF: "defender", B: "back", M: "midfielder", MF: "midfielder", MID: "midfielder", F: "forward", FW: "forward", FWD: "forward", ST: "striker" };
+OTHER.waterPolo = { GK: "goalkeeper", G: "goalkeeper", D: "driver", DR: "driver", A: "attacker", ATT: "attacker", U: "utility", UT: "utility", UTL: "utility", C: "center", CTR: "center", "2M": "center", "2MD": "center defender", CD: "center defender", W: "wing", F: "field player" };
 
 /** Words the football table produces, so a position already written out can be sided too. */
 const FOOTBALL_WORDS: Record<string, PlayerSide> = {};
@@ -54,6 +56,8 @@ export const Positions = {
   expand(raw: string, sport: string): string {
     const key = raw.trim();
     if (!key) return "";
+    // A wrestling roster's "position" is the weight class, which is not a thing a caption says.
+    if (sport === "wrestling") return "";
     const upper = key.toUpperCase();
     if (sport === "football" && FOOTBALL[upper]) return FOOTBALL[upper][0];
     const table = OTHER[sport];

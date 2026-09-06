@@ -45,7 +45,7 @@ export const SavedTeam = {
 
   sportLabel(t: SavedTeam): string {
     const name = SportCatalogue.option(t.sport, t.level)?.name ?? (t.sport[0].toUpperCase() + t.sport.slice(1));
-    return `${genderLabel(t.gender, t.level)} ${name}`;
+    return `${genderLabel(t.gender, t.level, t.sport)} ${name}`.trim();
   },
 
   /** The same school in the same sport and gender is the same team, however it was reached. */

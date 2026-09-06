@@ -34,7 +34,12 @@ describe("The document's worked examples", () => {
     expect(HDSNaming.sportCode("basketball", "mens")).toBe("MBB");
     expect(HDSNaming.sportCode("basketball", "womens")).toBe("WBB");
     expect(HDSNaming.sportCode("trackAndField", "mens")).toBe("TF");
-    expect(HDSNaming.sportCode("hockey", "mens")).toBeNull();
+    expect(HDSNaming.sportCode("hockey", "mens")).toBe("MHKY");
+    expect(HDSNaming.sportCode("hockey", "womens")).toBe("WHKY");
+    expect(HDSNaming.sportCode("wrestling", "mens")).toBe("WRES");
+    expect(HDSNaming.sportCode("fieldHockey", "womens")).toBe("FH");
+    expect(HDSNaming.sportCode("horseRacing", "mens")).toBe("HORSE");
+    expect(HDSNaming.sportCode("curling", "mens")).toBeNull();
   });
   it("gives school codes, and marks the guesses", () => {
     expect(HDSNaming.schoolCode("Nebraska").code).toBe("NU");

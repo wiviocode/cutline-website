@@ -393,7 +393,7 @@ export const useStore = create<State>()((set, get) => {
       fallback: derive.rosterless(s) ? "describeWithoutName" : "markUnidentified",
       sport: asSport(s.selection.sportID),
       roster,
-      iptc: { dateText: rec.capturedAt, venue: s.venue || null, city: s.city || null, state: s.state || null, leagueLevel: captionQualifier(s.selection.level) },
+      iptc: { dateText: rec.capturedAt, venue: s.venue || null, city: s.city || null, state: s.state || null, leagueLevel: captionQualifier(s.selection.level, s.selection.sportID, s.selection.gender) },
       photographer: s.settings.photographer || null,
       house: s.settings.house || null,
       weekday: exif ? PhotoMetadata.weekdayName(exif) : null,
@@ -626,13 +626,9 @@ export const useStore = create<State>()((set, get) => {
             statusLine: "", tokensIn: 0, tokensOut: 0, tokensCacheWrite: 0, tokensCacheRead: 0, selectedID: null, filter: "all", screen: "start" });
       thumbnails.clear(); previews.clear();
     },
-    setLevel(level) {
-      const sel = GameSelection.setLevel(get().selection, level);
-      set({ selection: sel });
-      refreshSuggestedURL(sel);
-    },
-    setSport(id) { const sel = GameSelection.setSport(get().selection, id); set({ selection: sel }); refreshSuggestedURL(sel); },
-    setGender(g) { const sel = GameSelection.setGender(get().selection, g); set({ selection: sel }); refreshSuggestedURL(sel); },
+    setLevel(level) { select(GameSelection.setLevel(get().selection, level)); },
+    setSport(id) { select(GameSelection.setSport(get().selection, id)); },
+    setGender(g) { select(GameSelection.setGender(get().selection, g)); },
     setRosterMode: (rosterMode) => set({ rosterMode }),
     setSide: (side, patch) => set({ [side]: { ...get()[side], ...patch, ...("colour" in patch ? { colourSet: true } : {}) } } as Partial<State>),
     setFields: (patch) => set(patch),
@@ -763,7 +759,7 @@ export const useStore = create<State>()((set, get) => {
       const roster = derive.roster(s);
       const event = derive.event(s);
       const sportLabel = s.rosterMode === "noTeams" ? s.eventName.trim() : derive.sportLabel(s);
-      const context = VisionPrompt.context({ sportLabel, roster, event, notes: s.notes });
+      const context = VisionPrompt.context({ sportLabel, roster, event, notes: s.notes, sport: s.selection.sportID });
       const client = new AnthropicClient({ apiKey: s.apiKey, model: s.settings.model, signal, onRetry: (attempt, wait, why) => set({ statusLine: `Waiting ${Math.round(wait)}s after ${why} (attempt ${attempt})…` }) });
       const altClient = new AnthropicClient({ apiKey: s.apiKey, model: "claude-haiku-4-5-20251001", maxTokens: AltTextRequest.maxTokens, signal });
       const manifestDir = s.folder;
@@ -919,7 +915,7 @@ export const useStore = create<State>()((set, get) => {
       try {
         const roster = derive.roster(s);
         const sportLabel = s.rosterMode === "noTeams" ? s.eventName.trim() : derive.sportLabel(s);
-        const context = VisionPrompt.context({ sportLabel, roster, event: derive.event(s), notes: s.notes, note });
+        const context = VisionPrompt.context({ sportLabel, roster, event: derive.event(s), notes: s.notes, note, sport: s.selection.sportID });
         const client = new AnthropicClient({ apiKey: s.apiKey, model: s.settings.model });
         const file = await f.photo.file();
         const exif = await readPhotoMetadata(file);
@@ -972,6 +968,17 @@ export const useStore = create<State>()((set, get) => {
       } catch (e) { get().notify((e as Error).message); }
     },
   };
+
+  /**
+   * Every change of level, sport or gender lands here. A meet has no teams and a dual has no
+   * numbers, so when the sport changes — chosen, or dropped by a level that does not offer it —
+   * the team situation follows it, unless the photographer had set one of their own.
+   */
+  function select(sel: GameSelection) {
+    const before = get().selection;
+    set({ selection: sel, rosterMode: GameSelection.rosterModeAfter(before.sportID, sel.sportID, get().rosterMode) });
+    refreshSuggestedURL(sel);
+  }
 
   function refreshSuggestedURL(sel: GameSelection) {
     const s = get();

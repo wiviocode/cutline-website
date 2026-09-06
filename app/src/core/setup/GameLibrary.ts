@@ -1,12 +1,14 @@
 /**
  * The vocabulary of a shoot: what level, what sport, who is playing.
  *
- * What this desk covers is deliberately narrow — Division I and Nebraska high-school games —
- * because a general-purpose sports tool pays for its breadth in setup friction, and this
- * narrowness is what makes a one-screen setup possible at all.
+ * Three levels — college, high school, professional — and the sports each one plays, drawn from
+ * the sport table. The level ids are the ones the first desk used and are kept as stored, so a
+ * remembered shoot still opens.
  */
 
-export type Level = "divisionI" | "nebraskaHS";
+import { Sports } from "./Sports";
+
+export type Level = "divisionI" | "nebraskaHS" | "professional";
 export type Gender = "mens" | "womens";
 /**
  * How much team information a shoot has. Three genuinely different situations: "no rosters"
@@ -17,17 +19,31 @@ export type Gender = "mens" | "womens";
 export type RosterMode = "rosters" | "noRosters" | "noTeams";
 
 export const Levels: { id: Level; label: string; shortLabel: string; captionQualifier: string }[] = [
-  { id: "divisionI",  label: "Division I",            shortLabel: "D-I",        captionQualifier: "college" },
-  { id: "nebraskaHS", label: "Nebraska High School",  shortLabel: "Nebraska HS", captionQualifier: "high school" },
+  { id: "divisionI",    label: "College",      shortLabel: "College", captionQualifier: "college" },
+  { id: "nebraskaHS",   label: "High School",  shortLabel: "HS",      captionQualifier: "high school" },
+  { id: "professional", label: "Professional", shortLabel: "Pro",     captionQualifier: "professional" },
 ];
 
-/** How a caption names this level: "a **college** football game". Every wire qualifies the game. */
-export function captionQualifier(level: Level): string {
-  return Levels.find((l) => l.id === level)?.captionQualifier ?? "college";
+/**
+ * How a caption qualifies the game: "a **college** football game", "a **high school** wrestling
+ * dual", "an **NFL** football game". A professional fixture takes its league where the sport has
+ * one; a race takes nothing, since "a professional race" says less than "a race".
+ */
+export function captionQualifier(level: Level, sport?: string, gender: Gender = "mens"): string {
+  if (level !== "professional") return Levels.find((l) => l.id === level)?.captionQualifier ?? "college";
+  if (sport && Sports.isGenderless(sport)) return "";
+  return (sport && Sports.league(sport, gender)) || "professional";
 }
 
-/** College and high school use different words for the same distinction. */
-export function genderLabel(gender: Gender, level: Level): string {
+/**
+ * College and high school use different words for the same distinction; a professional fixture
+ * is named by its league, and a race by nothing at all.
+ */
+export function genderLabel(gender: Gender, level: Level, sport?: string): string {
+  if (level === "professional") {
+    if (sport && Sports.isGenderless(sport)) return "";
+    return (sport && Sports.league(sport, gender)) || (gender === "mens" ? "Men's" : "Women's");
+  }
   if (level === "divisionI") return gender === "mens" ? "Men's" : "Women's";
   return gender === "mens" ? "Boys" : "Girls";
 }
@@ -45,36 +61,18 @@ export interface SportOption {
   genders: Gender[];
 }
 
-/** Nebraska's sponsored sports, intersected with the sports the composer knows. */
-const divisionI: SportOption[] = [
-  { sport: "football",      name: "Football",      genders: ["mens"] },
-  { sport: "basketball",    name: "Basketball",    genders: ["mens", "womens"] },
-  { sport: "volleyball",    name: "Volleyball",    genders: ["womens"] },
-  { sport: "soccer",        name: "Soccer",        genders: ["womens"] },
-  { sport: "baseball",      name: "Baseball",      genders: ["mens"] },
-  { sport: "softball",      name: "Softball",      genders: ["womens"] },
-  { sport: "tennis",        name: "Tennis",        genders: ["mens", "womens"] },
-  { sport: "golf",          name: "Golf",          genders: ["mens", "womens"] },
-  { sport: "trackAndField", name: "Track & Field", genders: ["mens", "womens"] },
-  { sport: "crossCountry",  name: "Cross Country", genders: ["mens", "womens"] },
-];
-
-/**
- * What this desk shoots at high-school level. Volleyball is girls-only: the NSAA sanctions girls
- * volleyball and not boys, and MaxPreps agrees.
- */
-const nebraskaHS: SportOption[] = [
-  { sport: "football",   name: "Football",   genders: ["mens"] },
-  { sport: "basketball", name: "Basketball", genders: ["mens", "womens"] },
-  { sport: "volleyball", name: "Volleyball", genders: ["womens"] },
-];
+/** The sports a level plays, from the sport table, in the table's order. */
+function optionsAt(level: Level): SportOption[] {
+  return Sports.all.filter((s) => (s.genders[level] ?? []).length > 0).map((s) => ({ sport: s.id, name: s.name, genders: s.genders[level]! }));
+}
 
 export const SportCatalogue = {
-  divisionI,
-  nebraskaHS,
-  options(level: Level): SportOption[] { return level === "divisionI" ? divisionI : nebraskaHS; },
+  get divisionI(): SportOption[] { return optionsAt("divisionI"); },
+  get nebraskaHS(): SportOption[] { return optionsAt("nebraskaHS"); },
+  get professional(): SportOption[] { return optionsAt("professional"); },
+  options: optionsAt,
   option(id: string, level: Level): SportOption | undefined {
-    return SportCatalogue.options(level).find((o) => o.sport === id);
+    return optionsAt(level).find((o) => o.sport === id);
   },
 };
 
@@ -88,12 +86,14 @@ export const RosterSuggestion = {
     const g = (m: string, w: string) => (gender === "mens" ? m : w);
     const slug: Record<string, string | undefined> = {
       football: "football", soccer: "soccer", volleyball: "volleyball",
-      baseball: "baseball", softball: "softball",
+      baseball: "baseball", softball: "softball", wrestling: "wrestling",
       basketball: g("mens-basketball", "womens-basketball"),
       tennis: g("mens-tennis", "womens-tennis"),
       golf: g("mens-golf", "womens-golf"),
       trackAndField: g("mens-track-and-field", "womens-track-and-field"),
       crossCountry: g("mens-cross-country", "womens-cross-country"),
+      swimming: g("mens-swimming-and-diving", "womens-swimming-and-diving"),
+      gymnastics: gender === "womens" ? "womens-gymnastics" : undefined,
     };
     const s = slug[sport];
     return s ? `https://huskers.com/sports/${s}/roster` : null;
@@ -102,7 +102,7 @@ export const RosterSuggestion = {
   /** Every URL the table can produce, so a field still holding a suggestion can be recognised. */
   get allHuskers(): Set<string> {
     const out = new Set<string>();
-    for (const o of divisionI) for (const gender of ["mens", "womens"] as Gender[]) {
+    for (const o of optionsAt("divisionI")) for (const gender of ["mens", "womens"] as Gender[]) {
       const u = RosterSuggestion.huskers(o.sport, gender);
       if (u) out.add(u);
     }
@@ -141,8 +141,21 @@ export const GameSelection = {
     return SportCatalogue.option(s.sportID, s.level)?.name ?? (s.sportID[0]?.toUpperCase() + s.sportID.slice(1));
   },
 
-  /** "Women's Soccer" / "Boys Basketball" — what the event is actually called. */
-  label(s: GameSelection): string { return `${genderLabel(s.gender, s.level)} ${GameSelection.sportName(s)}`; },
+  /** "Women's Soccer" / "Boys Basketball" / "NFL Football" / "Auto Racing" — what the event is actually called. */
+  label(s: GameSelection): string { return `${genderLabel(s.gender, s.level, s.sportID)} ${GameSelection.sportName(s)}`.trim(); },
+
+  /** The team situation a sport is usually shot in: rosters, two sides without them, or none. */
+  defaultRosterMode(s: GameSelection): RosterMode { return Sports.defaultRosterMode(s.sportID); },
+
+  /**
+   * The team situation after the sport changes — by choice, or because a new level did not offer
+   * the old one. It follows the sport unless the photographer had set one the old sport did not
+   * imply, which is theirs to keep.
+   */
+  rosterModeAfter(before: string, after: string, current: RosterMode): RosterMode {
+    if (before === after) return current;
+    return current === Sports.defaultRosterMode(before) ? Sports.defaultRosterMode(after) : current;
+  },
 
   /** The roster URL to propose, or null when there is nothing sensible to propose. */
   suggestedHomeURL(s: GameSelection): string | null {
@@ -209,7 +222,7 @@ export const RecentGame = {
   sportLabel(g: RecentGame): string {
     if (g.rosterMode === "noTeams") return "";
     const name = SportCatalogue.option(g.sport, g.level)?.name ?? (g.sport[0]?.toUpperCase() + g.sport.slice(1));
-    return `${genderLabel(g.gender, g.level)} ${name}`;
+    return `${genderLabel(g.gender, g.level, g.sport)} ${name}`.trim();
   },
 
   /**

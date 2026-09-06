@@ -35,7 +35,7 @@ export function GameScreen() {
             <div className="card">
               <div className="selects">
                 <Select<Level> value={s.selection.level} options={Levels.map((l) => ({ id: l.id, name: l.label }))} onChange={(v) => s.setLevel(v)} ariaLabel="Level" />
-                {!noTeams && <Select value={s.selection.sportID} options={SportCatalogue.options(s.selection.level).map((o) => ({ id: o.sport, name: o.name }))} onChange={(v) => s.setSport(v)} ariaLabel="Sport" />}
+                <Select value={s.selection.sportID} options={SportCatalogue.options(s.selection.level).map((o) => ({ id: o.sport, name: o.name }))} onChange={(v) => s.setSport(v)} ariaLabel="Sport" />
                 {!noTeams && <GenderSelect />}
                 <Select<RosterMode> value={s.rosterMode} options={RosterModes.map((m) => ({ id: m.id, name: m.label }))} onChange={(v) => s.setRosterMode(v)} ariaLabel="Team information" />
               </div>
@@ -100,7 +100,7 @@ function GenderSelect() {
   const sport = SportCatalogue.option(s.selection.sportID, s.selection.level);
   const genders = sport?.genders ?? ["mens", "womens"];
   if (genders.length < 2) return null;
-  return <Select<Gender> value={s.selection.gender} options={genders.map((g) => ({ id: g, name: genderLabel(g, s.selection.level) }))} onChange={(v) => s.setGender(v)} ariaLabel="Men's or women's" />;
+  return <Select<Gender> value={s.selection.gender} options={genders.map((g) => ({ id: g, name: genderLabel(g, s.selection.level, s.selection.sportID) }))} onChange={(v) => s.setGender(v)} ariaLabel="Men's or women's" />;
 }
 
 function Photographs() {

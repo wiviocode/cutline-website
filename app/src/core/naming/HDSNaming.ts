@@ -13,6 +13,7 @@
  */
 
 import type { Gender } from "../setup/GameLibrary";
+import { Sports } from "../setup/Sports";
 import { TeamName } from "../roster/TeamName";
 
 export interface Fixture {
@@ -66,24 +67,12 @@ const NORMALISED_CODES: Record<string, string> = Object.fromEntries(
 
 export const HDSNaming = {
   /**
-   * The document's own list, narrowed to the sports this app offers. Gendered sports take their
-   * gendered code; football, volleyball, baseball, softball, cross country and track have one.
+   * The convention's code for the sport, from the sport table: the document's own codes for the
+   * sports it listed, and codes in the same shape for the rest. Gendered sports take a gendered
+   * code; football, volleyball, baseball, softball, cross country and track have one.
    */
   sportCode(sport: string, gender: Gender): string | null {
-    const m = gender === "mens";
-    switch (sport) {
-      case "football":      return "FB";
-      case "volleyball":    return "VB";
-      case "baseball":      return "BB";
-      case "softball":      return "SB";
-      case "crossCountry":  return "CC";
-      case "trackAndField": return "TF";
-      case "soccer":        return m ? "MSOC" : "WSOC";
-      case "basketball":    return m ? "MBB" : "WBB";
-      case "golf":          return m ? "MGF" : "WGF";
-      case "tennis":        return m ? "MTEN" : "WTEN";
-      default:              return null;
-    }
+    return Sports.code(sport, gender);
   },
 
   /**

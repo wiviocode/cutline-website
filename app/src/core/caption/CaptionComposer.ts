@@ -12,13 +12,14 @@ import { Roster, Team, type Team as TeamT } from "../roster/Roster";
 import { RosterMatcher, type Match } from "../roster/RosterMatcher";
 import { TeamColorArbiter } from "../roster/TeamColorArbiter";
 import { isSceneFallback, type VisionPlayer, type VisionResult, type Interaction } from "../vision/VisionResult";
-import { EventDescription, type CompositionContext, type Sport } from "./CompositionContext";
+import { EventDescription, type CompositionContext } from "./CompositionContext";
 import { WireStyle, WireDate } from "./WireStyle";
 import { USState } from "./USState";
 import { SceneFallback } from "./SceneFallback";
 import { PlayerReference } from "./PlayerReference";
 import { Cleanup } from "./Cleanup";
 import { PrependComposer, type ComposerWarning } from "./PrependComposer";
+import { Sports } from "../setup/Sports";
 
 export interface ComposerOutput {
   caption: string;
@@ -229,7 +230,10 @@ function applyTail(body: string, context: CompositionContext, namedTeamIDs: Set<
 
   const t1 = context.roster.team1, t2 = context.roster.team2;
   const level = context.iptc.leagueLevel ? `${WireStyle.levelQualifier(context.style, context.iptc.leagueLevel)} ` : "";
-  const gameClause = `during ${article(level ? level : sportNoun(context.sport))}${level}${sportNoun(context.sport)} game`;
+  // "a college football game", "an NCAA college soccer match", "an NFL football game", "a high
+  // school wrestling dual", "a college swimming meet", "a race".
+  const phrase = Sports.eventPhrase(context.sport);
+  const gameClause = `during ${article(level ? level : phrase)}${level}${phrase}`;
 
   let teamClause = "";
   switch (namedTeamIDs.size) {
@@ -295,22 +299,16 @@ function appositiveTail(body: string, gameClause: string, teamClause: string, co
  * "a" or "an", by how the next word is *said*. Initialisms are the exception that matters: NCAA
  * is read "en-see-ay-ay", so it takes "an" despite starting with a consonant.
  */
+/**
+ * "a" or "an" for what follows. An initialism is said letter by letter, so the sound of its first
+ * letter decides: "an NFL game", "an MLB game", "an NCAA college game", but "a WNBA game" and "a
+ * PGA Tour event".
+ */
 function article(next: string): string {
-  const word = next.toLowerCase();
-  const f = word[0];
-  if (!f) return "a ";
-  if (["ncaa", "nfl", "nba", "nhl", "mls"].some((p) => word.startsWith(p))) return "an ";
-  return "aeiou".includes(f) ? "an " : "a ";
-}
-
-function sportNoun(s: Sport): string {
-  switch (s) {
-    case "trackAndField": return "track and field";
-    case "crossCountry":  return "cross country";
-    case "autoRacing":    return "auto racing";
-    case "horseRacing":   return "horse racing";
-    default:              return s;
-  }
+  const word = next.trim();
+  if (!word) return "a ";
+  if (/^[A-Z]{2,}(?![a-z])/.test(word)) return "AEFHILMNORSX".includes(word[0]) ? "an " : "a ";
+  return "aeiou".includes(word[0].toLowerCase()) ? "an " : "a ";
 }
 
 // ---- Helpers ----

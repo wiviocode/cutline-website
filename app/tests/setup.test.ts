@@ -4,7 +4,12 @@
 
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
-import { GameSelection, SportCatalogue, RosterSuggestion, RecentGame, genderLabel } from "../src/core/setup/GameLibrary";
+import { GameSelection, SportCatalogue, RosterSuggestion, RecentGame, Levels, genderLabel, captionQualifier } from "../src/core/setup/GameLibrary";
+import { Sports, SPORT_TABLE } from "../src/core/setup/Sports";
+import { SPORTS } from "../src/core/caption/CompositionContext";
+import { SportGuide } from "../src/core/vision/SportGuide";
+import { Positions } from "../src/core/roster/Positions";
+import { MAXPREPS_SPORT_SLUG, TeamPageURL } from "../src/core/roster/TeamPageURL";
 import { SupportedFormats } from "../src/core/images/SupportedFormats";
 import { RetryPolicy } from "../src/core/anthropic/RetryPolicy";
 import { ProcessedFilesManifest, CFTime } from "../src/core/records/ProcessedFilesManifest";
@@ -18,18 +23,21 @@ import { SCENE_TYPES } from "../src/core/vision/VisionResult";
 
 describe("Level, sport and gender stay legal", () => {
   it("drops a sport the level does not offer, and keeps one both do", () => {
-    let sel = GameSelection.make("divisionI", "baseball", "mens");
-    expect(sel.sportID).toBe("baseball");
+    let sel = GameSelection.make("divisionI", "cricket", "mens");
+    expect(sel.sportID).toBe("cricket");
     sel = GameSelection.setLevel(sel, "nebraskaHS");
-    expect(sel.sportID).not.toBe("baseball");
+    expect(sel.sportID).not.toBe("cricket");
     expect(SportCatalogue.options("nebraskaHS").some((o) => o.sport === sel.sportID)).toBe(true);
     const keeps = GameSelection.setLevel(GameSelection.make("divisionI", "volleyball", "womens"), "nebraskaHS");
     expect(keeps.sportID).toBe("volleyball");
-    expect(new Set(SportCatalogue.nebraskaHS.map((o) => o.sport))).toEqual(new Set(["football", "basketball", "volleyball"]));
+    const hs = new Set(SportCatalogue.nebraskaHS.map((o) => o.sport));
+    for (const s of ["football", "basketball", "volleyball", "wrestling", "hockey", "soccer", "swimming", "trackAndField"]) expect(hs.has(s), s).toBe(true);
+    for (const s of ["autoRacing", "horseRacing", "cricket"]) expect(hs.has(s), s).toBe(false);
     expect(SportCatalogue.option("volleyball", "nebraskaHS")?.genders).toEqual(["womens"]);
     expect(GameSelection.label(GameSelection.make("nebraskaHS", "volleyball", "womens"))).toBe("Girls Volleyball");
     expect(GameSelection.make("nebraskaHS", "volleyball", "mens").gender).toBe("womens");
-    expect(GameSelection.make("nebraskaHS", "baseball", "mens").sportID).not.toBe("baseball");
+    expect(GameSelection.make("nebraskaHS", "cricket", "mens").sportID).not.toBe("cricket");
+    expect(GameSelection.make("professional", "wrestling", "mens").sportID).not.toBe("wrestling");
   });
   it("switches gender to what the sport is played in", () => {
     let g = GameSelection.make("divisionI", "basketball", "mens");
@@ -38,7 +46,8 @@ describe("Level, sport and gender stay legal", () => {
     g = GameSelection.setSport(g, "football"); expect(g.gender).toBe("mens");
     g = GameSelection.setGender(g, "womens"); expect(g.gender).toBe("mens");
     expect(SportCatalogue.option("football", "divisionI")?.genders).toEqual(["mens"]);
-    expect(SportCatalogue.option("soccer", "divisionI")?.genders).toEqual(["womens"]);
+    expect(SportCatalogue.option("soccer", "divisionI")?.genders).toEqual(["mens", "womens"]);
+    expect(SportCatalogue.option("fieldHockey", "divisionI")?.genders).toEqual(["womens"]);
   });
   it("labels the event the way people say it", () => {
     expect(GameSelection.label(GameSelection.make("divisionI", "soccer", "womens"))).toBe("Women's Soccer");
@@ -288,5 +297,88 @@ describe("What the model is told, and what it says back", () => {
     const round = VisionResult.fromJSON(VisionResult.toJSON(v));
     expect(round.players[0].unit).toBe("defense");
     expect(round.players[1].unit).toBeNull();
+  });
+});
+
+describe("Twenty sports at three levels", () => {
+  it("keeps the table and the composer's list in step, one row each", () => {
+    expect(new Set(SPORT_TABLE.map((s) => s.id))).toEqual(new Set(SPORTS));
+    expect(SPORT_TABLE.length).toBe(20);
+    for (const s of SPORTS) expect(SportGuide.for(s), s).toBeTruthy();
+    expect(Levels.map((l) => l.id)).toEqual(["divisionI", "nebraskaHS", "professional"]);
+  });
+  it("offers the professional sports and names them by league", () => {
+    const pro = new Set(SportCatalogue.professional.map((o) => o.sport));
+    for (const s of ["football", "basketball", "baseball", "hockey", "soccer", "autoRacing", "horseRacing", "golf"]) expect(pro.has(s), s).toBe(true);
+    for (const s of ["wrestling", "fieldHockey", "crossCountry"]) expect(pro.has(s), s).toBe(false);
+    expect(GameSelection.label(GameSelection.make("professional", "football", "mens"))).toBe("NFL Football");
+    expect(GameSelection.label(GameSelection.make("professional", "basketball", "womens"))).toBe("WNBA Basketball");
+    expect(GameSelection.label(GameSelection.make("professional", "soccer", "womens"))).toBe("NWSL Soccer");
+    expect(GameSelection.label(GameSelection.make("professional", "autoRacing", "mens"))).toBe("Auto Racing");
+    expect(GameSelection.label(GameSelection.make("professional", "tennis", "womens"))).toBe("Women's Tennis");
+    expect(GameSelection.label(GameSelection.make("divisionI", "hockey", "mens"))).toBe("Men's Ice Hockey");
+    expect(genderLabel("mens", "professional", "hockey")).toBe("NHL");
+    expect(RecentGame.sportLabel(RecentGame.make({ level: "professional", sport: "baseball", gender: "mens" }))).toBe("MLB Baseball");
+  });
+  it("qualifies the game by level, league, or not at all", () => {
+    expect(captionQualifier("divisionI", "football", "mens")).toBe("college");
+    expect(captionQualifier("nebraskaHS", "wrestling", "mens")).toBe("high school");
+    expect(captionQualifier("professional", "football", "mens")).toBe("NFL");
+    expect(captionQualifier("professional", "basketball", "womens")).toBe("WNBA");
+    expect(captionQualifier("professional", "tennis", "mens")).toBe("professional");
+    expect(captionQualifier("professional", "autoRacing", "mens")).toBe("");
+  });
+  it("knows each sport's event word, team situation and MaxPreps path", () => {
+    expect(Sports.eventPhrase("football")).toBe("football game");
+    expect(Sports.eventPhrase("soccer")).toBe("soccer match");
+    expect(Sports.eventPhrase("wrestling")).toBe("wrestling dual");
+    expect(Sports.eventPhrase("swimming")).toBe("swimming meet");
+    expect(Sports.eventPhrase("golf")).toBe("golf tournament");
+    expect(Sports.eventPhrase("fieldHockey")).toBe("field hockey game");
+    expect(Sports.eventPhrase("horseRacing")).toBe("race");
+    expect(Sports.defaultRosterMode("football")).toBe("rosters");
+    expect(Sports.defaultRosterMode("wrestling")).toBe("noRosters");
+    expect(Sports.defaultRosterMode("tennis")).toBe("noRosters");
+    expect(Sports.defaultRosterMode("golf")).toBe("noTeams");
+    expect(Sports.defaultRosterMode("trackAndField")).toBe("noTeams");
+    expect(GameSelection.defaultRosterMode(GameSelection.make("professional", "autoRacing", "mens"))).toBe("noTeams");
+    // The team situation follows the sport, unless it was the photographer's own choice.
+    expect(GameSelection.rosterModeAfter("football", "wrestling", "rosters")).toBe("noRosters");
+    expect(GameSelection.rosterModeAfter("autoRacing", "football", "noTeams")).toBe("rosters");
+    expect(GameSelection.rosterModeAfter("football", "golf", "noRosters")).toBe("noRosters");
+    expect(GameSelection.rosterModeAfter("basketball", "basketball", "noTeams")).toBe("noTeams");
+    expect(GameSelection.rosterModeAfter("golf", "tennis", "noTeams")).toBe("noRosters");
+    // Paths checked against maxpreps.com; the sports it carries no roster pages for have none.
+    expect(MAXPREPS_SPORT_SLUG.hockey).toBe("ice-hockey");
+    expect(MAXPREPS_SPORT_SLUG.wrestling).toBe("wrestling");
+    expect(MAXPREPS_SPORT_SLUG.fieldHockey).toBe("field-hockey");
+    expect(MAXPREPS_SPORT_SLUG.waterPolo).toBe("water-polo");
+    expect(MAXPREPS_SPORT_SLUG.lacrosse).toBe("lacrosse");
+    expect(MAXPREPS_SPORT_SLUG.swimming).toBeUndefined();
+    expect(MAXPREPS_SPORT_SLUG.gymnastics).toBeUndefined();
+    const t = TeamPageURL.parse("https://www.maxpreps.com/mn/edina/edina-hornets/")!;
+    expect(TeamPageURL.rosterCandidates(t, "hockey", "mens")[0]).toBe("https://www.maxpreps.com/mn/edina/edina-hornets/ice-hockey/roster/");
+    expect(TeamPageURL.rosterCandidates(t, "swimming", "womens")).toEqual([]);
+  });
+  it("expands the new sports' positions, and wrestling's weight classes into nothing", () => {
+    expect(Positions.parse("GK", "fieldHockey")).toEqual({ position: "goalkeeper", side: "unknown", secondary: null });
+    expect(Positions.expand("2M", "waterPolo")).toBe("center");
+    expect(Positions.expand("D", "waterPolo")).toBe("driver");
+    expect(Positions.expand("LW", "hockey")).toBe("left wing");
+    expect(Positions.expand("A", "lacrosse")).toBe("attacker");
+    expect(Positions.parse("125", "wrestling")).toEqual({ position: "", side: "unknown", secondary: null });
+    expect(Positions.expand("157 lbs", "wrestling")).toBe("");
+  });
+  it("tells the model about the sport with every frame", () => {
+    const roster = Roster.make(Team.make("Edina", "green", "Hornets"), Team.make("Wayzata", "blue", "Trojans"));
+    const hockey = VisionPrompt.context({ sportLabel: "Boys Ice Hockey", roster, sport: "hockey" });
+    expect(hockey).toContain("About this sport:");
+    expect(hockey).toContain("puck");
+    expect(hockey).toContain("goaltender");
+    const horses = VisionPrompt.context({ sportLabel: "Horse Racing", roster, sport: "horseRacing", notes: "Race 5" });
+    expect(horses).toContain("saddlecloth");
+    expect(horses.indexOf("saddlecloth")).toBeLessThan(horses.indexOf("Race 5"));
+    expect(VisionPrompt.context({ sportLabel: "Football", roster })).not.toContain("About this sport");
+    expect(VisionPrompt.context({ sportLabel: "Curling", roster, sport: "curling" })).not.toContain("About this sport");
   });
 });

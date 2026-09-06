@@ -12,6 +12,7 @@
  */
 
 import type { Gender } from "../setup/GameLibrary";
+import { Sports } from "../setup/Sports";
 
 export type Site = "maxPreps" | "sidearm" | "unknown";
 
@@ -25,11 +26,8 @@ export interface TeamPageURL {
 }
 
 /** MaxPreps path segment for each sport this app offers. */
-export const MAXPREPS_SPORT_SLUG: Record<string, string> = {
-  football: "football", basketball: "basketball", volleyball: "volleyball", soccer: "soccer",
-  baseball: "baseball", softball: "softball", tennis: "tennis", golf: "golf",
-  trackAndField: "track-field", crossCountry: "cross-country",
-};
+/** MaxPreps' path segment per sport, from the sport table — only the sports it carries rosters for. */
+export const MAXPREPS_SPORT_SLUG: Record<string, string> = Sports.maxPrepsSlugs;
 
 export const TeamPageURL = {
   parse(input: string | URL): TeamPageURL | null {

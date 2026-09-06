@@ -11,7 +11,7 @@ import { TeamName } from "../src/core/roster/TeamName";
 import { VisionResult, VisionPlayer, type SceneType, SCENE_TYPES } from "../src/core/vision/VisionResult";
 import { CaptionResponseParser } from "../src/core/vision/CaptionResponseParser";
 import { CaptionComposer } from "../src/core/caption/CaptionComposer";
-import { CompositionContext, EventDescription, CAPTION_STYLES, type CaptionStyle } from "../src/core/caption/CompositionContext";
+import { CompositionContext, EventDescription, CAPTION_STYLES, asSport, type CaptionStyle } from "../src/core/caption/CompositionContext";
 import { WireDate, WireStyle } from "../src/core/caption/WireStyle";
 import { USState, APState } from "../src/core/caption/USState";
 import { TeamNoun } from "../src/core/caption/TeamNoun";
@@ -596,5 +596,33 @@ describe("Two-way players and the unit the play shows", () => {
     expect(catches.ok && catches.match.player.lastName).toBe("One");
     const breaks = m2.match("9", "white", "breaks up a pass");
     expect(breaks.ok && breaks.match.player.lastName).toBe("Two");
+  });
+});
+
+describe("Every sport names its event, and every league takes the right article", () => {
+  const clause = (sport: string, style: CaptionStyle, leagueLevel: string) => {
+    const team = Team.make("Nebraska", "red", "Cornhuskers"), other = Team.make("Iowa", "black", "Hawkeyes");
+    const roster = Roster.make(team, other, [RosterPlayer.make({ teamID: team.id, jerseyNumber: "7", firstName: "Ann", lastName: "Lee" })]);
+    const context = CompositionContext.make({ style, sport: asSport(sport), roster,
+      iptc: { dateText: "Sept. 14, 2024", city: "Lincoln", state: "Neb.", leagueLevel }, photographer: "Eli Larson", weekday: "Saturday", captureDate: localDate(2024, 9, 14) });
+    return CaptionComposer.compose(VisionResult.make({ sceneType: "players_action", players: [VisionPlayer.make("7", "red", "competes")] }), context).caption;
+  };
+  it("game, match, dual, meet, tournament, race", () => {
+    expect(clause("football", "apSports", "college")).toContain("during an NCAA college football game");
+    expect(clause("volleyball", "apSports", "college")).toContain("during an NCAA college volleyball match");
+    expect(clause("soccer", "hurrdatSports", "high school")).toContain("during a high school soccer match");
+    expect(clause("wrestling", "apSports", "high school")).toContain("during a high school wrestling dual");
+    expect(clause("swimming", "gettySports", "college")).toContain("during a college swimming meet");
+    expect(clause("golf", "apSports", "LPGA")).toContain("during an LPGA golf tournament");
+    expect(clause("fieldHockey", "apSports", "college")).toContain("during an NCAA college field hockey game");
+    expect(clause("autoRacing", "apSports", "")).toContain("during a race");
+  });
+  it("says an NFL, an MLB, an NHL, but a WNBA and a PLL", () => {
+    expect(clause("football", "apSports", "NFL")).toContain("during an NFL football game");
+    expect(clause("baseball", "apSports", "MLB")).toContain("during an MLB baseball game");
+    expect(clause("hockey", "hurrdatSports", "NHL")).toContain("during an NHL hockey game");
+    expect(clause("basketball", "apSports", "WNBA")).toContain("during a WNBA basketball game");
+    expect(clause("lacrosse", "apSports", "PLL")).toContain("during a PLL lacrosse game");
+    expect(clause("soccer", "gettySports", "MLS")).toContain("during an MLS soccer match");
   });
 });
