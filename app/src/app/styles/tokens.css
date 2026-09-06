@@ -43,7 +43,6 @@
 }
 :root {
   /* Families */
-  --font-display: 'Newsreader', Georgia, serif;      /* headlines + set captions; optical sizing on */
   --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
   --font-mono: 'Spline Sans Mono', 'SF Mono', ui-monospace, monospace; /* meta, labels, filenames */
 
