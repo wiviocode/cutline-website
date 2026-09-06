@@ -50,7 +50,9 @@ Two things follow from the split, and they are the reason for it:
 Rosters come from a team's own web page: paste any link. A MaxPreps page is read from the data
 it embeds, with no model and both of a two-way player's positions; any other page is reduced to
 text and read by Haiku. A small relay at `/api/fetch` does the fetching, because a browser cannot
-fetch another site for itself; when the relay is out of reach, paste the page's text instead. A
+fetch another site for itself. The relay answers only this app, reads only public addresses — the
+name is resolved and checked first, and so is every redirect — hands back only text or a sandboxed
+image, and allows sixty reads per caller per ten minutes; when it is out of reach, paste the page's text instead. A
 CSV works too. Teams are kept in a library so a squad is only ever read once a season, and both
 sides can be read at once.
 

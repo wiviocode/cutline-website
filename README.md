@@ -68,7 +68,7 @@ setup, or from a Photo Mechanic `.XMP` stationery pad, `{token:modifier}` variab
 |---|---|
 | `Cutline.dc.html`, `support.js`, `docs/` | The marketing page, at `/about`. A [Claude Design](https://claude.ai/design) document and its runtime. |
 | `app/` | The app at `/app`. Vite, React, TypeScript. Its own [README](app/README.md) covers the code. |
-| `api/fetch.ts` | The relay: reads a public web page for the roster importer. A Vercel function. |
+| `api/fetch.ts` | The relay: reads a public web page for the roster importer. Answers only the app, resolves a name before reading it and refuses anything private, follows a redirect only where it would have gone itself, returns only text or a sandboxed image, sixty reads per caller per ten minutes. A Vercel function. |
 | `scripts/build-site.mjs`, `vercel.json` | One build: the site copied to `dist/`, the app built to `dist/app`. |
 | `DESIGN.md`, `tokens/`, `components/`, `guidelines/`, `ui_kits/` | The brand and design system the site and app are drawn from. |
 

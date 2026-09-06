@@ -16,7 +16,11 @@ function relayInDev(): Plugin {
     configureServer(server) {
       server.middlewares.use("/api/fetch", async (req, res) => {
         try {
-          const response = await relay(new Request(`http://localhost/api/fetch${req.url ?? ""}`, { method: "GET" }));
+          // The function sees what the browser sent — the app's header, the address — as it
+          // would on the host, so the dev relay refuses exactly what the deployed one refuses.
+          const headers = new Headers();
+          for (const [k, v] of Object.entries(req.headers)) if (typeof v === "string") headers.set(k, v); else if (Array.isArray(v)) headers.set(k, v.join(", "));
+          const response = await relay(new Request(`http://${req.headers.host ?? "localhost"}/api/fetch${req.url ?? ""}`, { method: req.method ?? "GET", headers }));
           res.statusCode = response.status;
           response.headers.forEach((v, k) => res.setHeader(k, v));
           res.end(Buffer.from(await response.arrayBuffer()));
