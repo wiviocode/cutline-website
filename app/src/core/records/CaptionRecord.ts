@@ -16,6 +16,13 @@ export interface CaptionRecord {
   /** Numbers supplied by a human during review, keyed by the player's index in `vision.players`. */
   manualJerseyNumbers: Record<number, string>;
   caption: string;
+  /**
+   * Who wrote the caption: the composer from the observation, or a person by hand. A hand-written
+   * caption is kept when the shoot's captions are rebuilt — a kit colour changed, a roster
+   * corrected — and that has to survive closing and reopening the shoot, so it lives here.
+   * Absent from records written before it, which were all the composer's.
+   */
+  captionSource: "ai" | "manual";
   altText: string | null;
   capturedAt: string | null;
   generatedAt: string;
@@ -34,6 +41,7 @@ export const CaptionRecord = {
       vision: p.vision,
       manualJerseyNumbers: p.manualJerseyNumbers ?? {},
       caption: p.caption,
+      captionSource: p.captionSource ?? "ai",
       altText: p.altText ?? null,
       capturedAt: p.capturedAt ?? null,
       generatedAt: p.generatedAt ?? new Date().toISOString(),
@@ -62,6 +70,7 @@ export const CaptionRecord = {
       vision: VisionResult.fromJSON(r.vision),
       manualJerseyNumbers: manual,
       caption: r.caption,
+      captionSource: r.captionSource === "manual" ? "manual" : "ai",
       altText: typeof r.altText === "string" ? r.altText : null,
       capturedAt: typeof r.capturedAt === "string" ? r.capturedAt : null,
       generatedAt: typeof r.generatedAt === "string" ? r.generatedAt : new Date().toISOString(),
@@ -78,6 +87,7 @@ export const CaptionRecord = {
       vision: VisionResult.toJSON(rec.vision),
       manualJerseyNumbers: manual,
       caption: rec.caption,
+      captionSource: rec.captionSource,
       altText: rec.altText,
       capturedAt: rec.capturedAt,
       generatedAt: rec.generatedAt,

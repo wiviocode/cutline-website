@@ -459,7 +459,7 @@ export const useStore = create<State>()((set, get) => {
     if (!exif) { try { exif = await readPhotoMetadata(await f.photo.file()); patchFrame(id, { exif }); } catch { exif = null; } }
     const out = composeFor(get(), f.record, exif);
     if (out.caption === f.caption && !f.edited) { patchFrame(id, { needsNumber: CaptionRecord.needsReview(f.record) }); return "same"; }
-    const rec = { ...f.record, caption: out.caption };
+    const rec = { ...f.record, caption: out.caption, captionSource: "ai" as const };
     patchFrame(id, { record: rec, caption: out.caption, needsNumber: CaptionRecord.needsReview(rec), edited: false });
     await saveRecord(f, rec);
     await writeMetadata({ ...f, exif, record: rec, caption: out.caption, edited: false });
@@ -482,6 +482,9 @@ export const useStore = create<State>()((set, get) => {
           const rec = CaptionRecord.fromJSON(JSON.parse(text));
           f.record = rec; f.caption = rec.caption; f.altText = rec.altText; f.state = "done";
           f.needsNumber = CaptionRecord.needsReview(rec); f.approved = rec.approved;
+          // A caption typed by hand stays typed by hand across a reopen, or the rebuild on the
+          // way to review would put the composer's words back over it.
+          f.edited = rec.captionSource === "manual";
         } catch { /* a bad record is an uncaptioned frame */ }
       } else {
         const sig = ProcessedFilesManifest.signature(p);
@@ -845,7 +848,7 @@ export const useStore = create<State>()((set, get) => {
           const jpeg = await preparedForVision(file, longEdge);
           const { vision, reply } = await readVision(client, jpeg, context);
           if (generation !== runGeneration) return;
-          let rec = CaptionRecord.make({ filename: f.name, imagePath: f.name, vision, caption: "", capturedAt: PhotoMetadata.apStyleDate(exif) });
+          let rec = CaptionRecord.make({ filename: f.name, imagePath: f.name, vision, caption: "", capturedAt: exif ? PhotoMetadata.apStyleDate(exif) : null });
           const out = composeFor(get(), rec, exif);
           let alt: string | null = null, altIn = 0, altOut = 0;
           switch (s.settings.altTextMode) {
@@ -937,10 +940,16 @@ export const useStore = create<State>()((set, get) => {
       const f = frame(id);
       const trimmed = text.trim();
       if (!f || trimmed === f.caption) return;
-      const rec = f.record ? { ...f.record, caption: trimmed } : null;
-      patchFrame(id, { caption: trimmed, edited: true, writeError: null, record: rec });
-      if (rec) await saveRecord(f, rec);
-      await writeMetadata({ ...f, caption: trimmed, edited: true, record: rec });
+      // A frame never captioned, or known only from the manifest, has no record to keep the words
+      // in; without one the edit lived only in the file and was gone when the shoot reopened.
+      let exif = f.exif;
+      if (!f.record && !exif) { try { exif = await readPhotoMetadata(await f.photo.file()); } catch { exif = null; } }
+      const rec: CaptionRecord = f.record
+        ? { ...f.record, caption: trimmed, captionSource: "manual" }
+        : CaptionRecord.make({ filename: f.name, imagePath: f.name, vision: VisionResult.make({ sceneType: "other" }), caption: trimmed, captionSource: "manual", capturedAt: exif ? PhotoMetadata.apStyleDate(exif) : null });
+      patchFrame(id, { caption: trimmed, edited: true, writeError: null, record: rec, exif, state: "done", error: null });
+      await saveRecord(f, rec);
+      await writeMetadata({ ...f, caption: trimmed, edited: true, record: rec, exif });
     },
 
     async recompose(id) { await recomposeFrame(id, { force: true }); },
@@ -994,7 +1003,7 @@ export const useStore = create<State>()((set, get) => {
         const exif = await readPhotoMetadata(file);
         const jpeg = await preparedForVision(file, VisionModel.effectiveLongEdge(model, s.settings.longEdge));
         const { vision, reply } = await readVision(client, jpeg, context);
-        const rec: CaptionRecord = { ...(f.record ?? CaptionRecord.make({ filename: f.name, vision, caption: "", capturedAt: PhotoMetadata.apStyleDate(exif) })), vision, manualJerseyNumbers: {} };
+        const rec: CaptionRecord = { ...(f.record ?? CaptionRecord.make({ filename: f.name, vision, caption: "", capturedAt: exif ? PhotoMetadata.apStyleDate(exif) : null })), vision, manualJerseyNumbers: {} };
         patchFrame(id, { record: rec, exif, state: "done", edited: false });
         set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens, tokensOut: st.tokensOut + reply.usage.outputTokens,
           tokensCacheWrite: st.tokensCacheWrite + (reply.usage.cacheCreationInputTokens ?? 0), tokensCacheRead: st.tokensCacheRead + (reply.usage.cacheReadInputTokens ?? 0) }));

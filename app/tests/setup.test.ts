@@ -188,6 +188,12 @@ describe("Caption records", () => {
       "vision":{"scene_type":"players_action","players":[],"scene_description":"","primary_action":"","subject_team_color":"","nearby_player_colors":[],"overall_confidence":0.9}}`);
     const old = CaptionRecord.fromJSON(legacy);
     expect(old.caption).toBe("A caption."); expect(old.approved).toBe(false);
+    // Who wrote the caption survives the round trip; a record from before the field is the composer's.
+    expect(old.captionSource).toBe("ai");
+    expect(rec.captionSource).toBe("ai");
+    const typed = CaptionRecord.fromJSON(JSON.parse(JSON.stringify(CaptionRecord.toJSON({ ...rec, caption: "Typed by hand.", captionSource: "manual" }))));
+    expect(typed.captionSource).toBe("manual");
+    expect(typed.caption).toBe("Typed by hand.");
     const noNumber = CaptionRecord.make({ filename: "x.jpg", vision: VisionResult.make({ sceneType: "players_action", players: [VisionPlayer.make("", "white", "runs")] }), caption: "A caption." });
     expect(CaptionRecord.needsReview(noNumber)).toBe(true);
     const fixed = { ...noNumber, manualJerseyNumbers: { 0: "7" } };

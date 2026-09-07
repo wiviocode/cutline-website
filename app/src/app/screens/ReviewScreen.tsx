@@ -256,6 +256,18 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
     if (text) void updateCaption(frame.id, text);
     setEditing(false);
   };
+  // A click anywhere outside the editor commits the caption, whatever it lands on. The stage
+  // cancels a mousedown's default to keep the photograph from being dragged as an image, and
+  // that also keeps focus in the editor — so a click on the photograph never blurred it, and the
+  // edit was never saved. Watching the mousedown itself does not depend on focus moving.
+  const editorRef = useRef<HTMLDivElement>(null);
+  const saveRef = useRef(save); saveRef.current = save;
+  useEffect(() => {
+    if (!editing) return;
+    const onDown = (e: MouseEvent) => { if (editorRef.current && !editorRef.current.contains(e.target as Node)) saveRef.current(); };
+    document.addEventListener("mousedown", onDown, true);
+    return () => document.removeEventListener("mousedown", onDown, true);
+  }, [editing]);
   const applyPop = () => {
     if (!pop) return;
     const value = pop.value.trim();
@@ -277,7 +289,7 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
               {frame.caption ? spans.map((sp) => (sp.player ? <b key={sp.id} title={sp.team?.name ?? ""}>{sp.text}</b> : <span key={sp.id}>{sp.text}</span>)) : <span className="placeholder">{frame.state === "pending" ? "Not captioned yet." : working ? "Captioning…" : "—"}</span>}
             </div>
           ) : (
-            <div>
+            <div ref={editorRef}>
               <TextArea value={draft} autoFocus minHeight={110} onChange={(e) => setDraft(e.target.value)} onBlur={save} ariaLabel="Caption"
                 onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); } if (e.key === "Escape") { setDraft(frame.caption); setEditing(false); } }} />
               <div className="editor-hint"><span>⏎ save</span><span>esc cancel</span></div>
