@@ -25,10 +25,14 @@ Open the site in **Chrome, Edge, Brave or another Chromium browser** and drop a 
 photographs on it. Safari and Firefox can open a folder read-only — caption, review, correct —
 but cannot write into the files; the app says so when it detects one.
 
-You need an [Anthropic API key](https://console.anthropic.com/). The first-time setup asks for it and
-checks it before anything else, then your byline and house style, then the model and output. The key
-is kept in the browser's own storage and is sent only to `api.anthropic.com`. Unlike the Mac app's keychain,
-anything else running in that browser profile could read it — use a key you can revoke.
+You need a way to read photographs: an [Anthropic](https://console.anthropic.com/) or
+[OpenAI](https://platform.openai.com/api-keys) API key, or a vision model running on the Mac through
+Ollama or LM Studio, which costs nothing and sends nothing anywhere. The first-time setup asks for it
+and checks it before anything else, then your byline and house style, then the model and output. A key
+is kept in the browser's own storage and is sent only to that provider's API. Unlike the Mac app's
+keychain, anything else running in that browser profile could read it — use a key you can revoke.
+The model list in Settings prices each choice per thousand photographs at the detail in use; the
+three Anthropic models have been measured on real frames, the others are marked as not yet.
 
 Every file format the app writes is the Mac app's: `.caption-data/<frame>.json`,
 `.caption-manifest.json`, `.xmp` sidecars, and the embedded XMP and IPTC-IIM. A folder captioned
@@ -46,11 +50,13 @@ Two things follow from the split, and they are the reason for it:
   locally, with no second API call.
 * **Style is a function, not a prompt.** Seven house styles — AP, Getty, Getty (parenthetical),
   Imagn, Icon Sportswire, Hurrdat, and plain — each written the way that desk writes it.
-* **Twenty sports, three levels.** One table (`src/core/setup/Sports.ts`) says what each sport is
+* **Twenty sports, fifteen levels, and your own.** One table (`src/core/setup/Sports.ts`) says what each sport is
   called, whether its event is a game, a match, a meet, a dual, a tournament or a race, which
   levels and genders play it, its professional league, where MaxPreps keeps its rosters, and its
   file-name code; the model gets a few lines on the sport's numbers, colours and verbs with every
-  frame.
+  frame. Levels (`src/core/setup/Levels.ts`) run from the NCAA divisions, NAIA and junior college
+  through school, youth, club, professional, minor league, international and Olympic, each with the
+  phrase a caption uses for it; a desk adds its own from the level list.
 
 Rosters come from a team's own web page: paste any link. A MaxPreps page is read from the data
 it embeds, with no model and both of a two-way player's positions; any other page is reduced to

@@ -28,14 +28,16 @@ import { RosterImporter, ImportError, type ImportedPlayer } from "@core/roster/R
 import { CSVRosterImporter } from "@core/roster/CSVRosterImporter";
 import { VisionResult } from "@core/vision/VisionResult";
 import { VisionPrompt } from "@core/vision/VisionPrompt";
-import { CaptionResponseParser } from "@core/vision/CaptionResponseParser";
+import { CaptionResponseParser, ParseError } from "@core/vision/CaptionResponseParser";
 import { CaptionComposer } from "@core/caption/CaptionComposer";
 import { CompositionContext, EventDescription, asSport, type CaptionStyle } from "@core/caption/CompositionContext";
 import { UNIDENTIFIED_TOKEN } from "@core/caption/PlayerReference";
-import { AnthropicClient, ClientError, type KeyCheck } from "@core/anthropic/AnthropicClient";
+import { ClientError, type KeyCheck, type Reply } from "@core/anthropic/AnthropicClient";
+import { makeClient, makeUtilityClient, verifyKey as verifyProviderKey, probeLocal, Access, type ModelAccess, type VisionClient } from "@core/models/VisionClient";
+import { Providers, type KeyedProviderID, type ProviderID } from "@core/models/Providers";
 import { needsOnboarding } from "./onboarding";
 import { AltTextRequest, SimpleAltText } from "@core/anthropic/AltText";
-import { VisionModel, ImagePrep } from "@core/anthropic/VisionModel";
+import { VisionModel, ImagePrep, type VisionModel as VisionModelInfo } from "@core/models/VisionModel";
 import { CaptionRecord, type ReviewStatus } from "@core/records/CaptionRecord";
 import { ProcessedFilesManifest, type ProcessedFileRecord } from "@core/records/ProcessedFilesManifest";
 import { PhotoMetadata } from "@core/images/PhotoMetadata";
@@ -83,7 +85,8 @@ interface State {
   relay: boolean | null;
 
   settings: Settings;
-  apiKey: string;
+  /** One key per hosted provider; the model on this Mac needs none. */
+  keys: Record<KeyedProviderID, string>;
   library: SavedTeam[];
   logoURLs: Record<string, string>;
   recents: RecentGame[];
@@ -131,8 +134,12 @@ interface State {
 
   // settings and the first-time setup
   setSetting(patch: Partial<Settings>): void;
-  setApiKey(key: string): Promise<void>;
-  verifyKey(key: string): Promise<KeyCheck>;
+  setKey(provider: KeyedProviderID, key: string): Promise<void>;
+  verifyKey(provider: KeyedProviderID, key: string): Promise<KeyCheck>;
+  /** What a model server on this Mac offers, or why it could not be asked. */
+  probeLocal(baseURL: string): Promise<{ ok: true; models: string[] } | { ok: false; reason: string }>;
+  /** Pick a model on this Mac; the vision model follows if nothing else is set up. */
+  chooseLocalModel(model: string): void;
   finishOnboarding(): void;
   reopenSetup(): void;
   addTemplate(name: string, text: string): Promise<void>;
@@ -197,7 +204,19 @@ export const derive = {
   rosterless: (s: State) => s.rosterMode !== "rosters",
   noTeams: (s: State) => s.rosterMode === "noTeams",
   hasFolder: (s: State) => s.folder != null,
-  needsOnboarding: (s: State) => needsOnboarding(s.settings, s.apiKey),
+  needsOnboarding: (s: State) => needsOnboarding(s.settings, Access.anyReady(derive.access(s))),
+
+  /** What the desk has set up to reach a model: keys, and the server on this Mac. */
+  access: (s: State): ModelAccess => ({ keys: s.keys, localBaseURL: s.settings.localBaseURL, localModel: s.settings.localModel }),
+  model: (s: State): VisionModelInfo => VisionModel.byID(s.settings.model),
+  /** The chosen model, named as the screen should: the Mac entry carries the model pulled there. */
+  modelName: (s: State): string => {
+    const m = derive.model(s);
+    return m.provider === "local" && s.settings.localModel ? s.settings.localModel : m.name;
+  },
+  canCaption: (s: State) => Access.ready(derive.model(s), derive.access(s)),
+  /** Why the chosen model cannot run yet, or null. */
+  missingAccess: (s: State) => Access.missing(derive.model(s), derive.access(s)),
 
   /** Where a team's name divides. A scraped team already knows; a typed one is guessed at. */
   nameParts(s: State, side: Side): { school: string; nickname: string | null } {
@@ -287,7 +306,7 @@ export const derive = {
   pendingCount: (s: State) => s.frames.filter((f) => f.state === "pending").length,
   failedCount: (s: State) => s.frames.filter((f) => f.state === "failed").length,
   anyDone: (s: State) => s.frames.some((f) => f.state === "done"),
-  readyToRun: (s: State) => !!s.folder && !!s.apiKey && !s.isRunning && s.frames.length > 0,
+  readyToRun: (s: State) => !!s.folder && derive.canCaption(s) && !s.isRunning && s.frames.length > 0,
 
   /**
    * Colours that cost a player their name — counted from what the captions lost, not from what
@@ -319,10 +338,28 @@ export const derive = {
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 /** What went wrong, in words a person can act on. */
-function describeFailure(e: unknown): string {
-  if (e instanceof ClientError && e.status === 401) return "Anthropic rejected the API key (HTTP 401). It may have been revoked or rotated — check it in Settings.";
-  if (e instanceof ClientError && e.status === 429) return "Anthropic is rate-limiting this key right now. Wait a moment and try again.";
+function describeFailure(e: unknown, provider: ProviderID): string {
+  const who = Providers.name(provider);
+  if (e instanceof ClientError && e.status === 401) return `${who} rejected the API key (HTTP 401). It may have been revoked or rotated — check it in Settings.`;
+  if (e instanceof ClientError && e.status === 429) return `${who} is rate-limiting this key right now. Wait a moment and try again.`;
   return String((e as Error)?.message ?? e);
+}
+
+/**
+ * The model's reading of a frame, decoded. A reply that is not the JSON asked for is asked for
+ * once more before the frame is given up on — a small model wanders off the schema now and then,
+ * and one more request is cheaper than a failed frame.
+ */
+async function readVision(client: VisionClient, jpeg: Uint8Array, context: string): Promise<{ vision: VisionResult; reply: Reply }> {
+  let reply = await client.analyse(jpeg, VisionPrompt.system, context);
+  try {
+    return { vision: VisionResult.fromJSON(CaptionResponseParser.decodeJSON(reply.text)), reply };
+  } catch (e) {
+    if (!(e instanceof ParseError) && !/did not match the schema/.test(String((e as Error)?.message))) throw e;
+    const again = await client.analyse(jpeg, VisionPrompt.system, context);
+    reply = { ...again, usage: { ...again.usage, inputTokens: again.usage.inputTokens + reply.usage.inputTokens, outputTokens: again.usage.outputTokens + reply.usage.outputTokens } };
+    return { vision: VisionResult.fromJSON(CaptionResponseParser.decodeJSON(again.text)), reply };
+  }
 }
 
 /**
@@ -532,9 +569,16 @@ export const useStore = create<State>()((set, get) => {
     if (s.folder?.handle) await Storage.saveFolderHandle(game.id, s.folder.handle);
   };
 
+  /** A provider just set up becomes the one used, when the chosen model's own is not. */
+  const adoptProvider = (provider: ProviderID) => {
+    const s = get();
+    if (Access.ready(derive.model(s), derive.access(s))) return;
+    get().setSetting({ model: VisionModel.defaultFor(provider).id });
+  };
+
   return {
     ready: false, screen: "start", panel: null, writableFolders: typeof window !== "undefined" && "showDirectoryPicker" in window, relay: null,
-    settings: DEFAULT_SETTINGS, apiKey: "", library: [], logoURLs: {}, recents: [], templateNames: [],
+    settings: DEFAULT_SETTINGS, keys: { anthropic: "", openai: "" }, library: [], logoURLs: {}, recents: [], templateNames: [],
     selection: GameSelection.make(), rosterMode: "rosters",
     home: { name: "", colour: "white", rosterURL: "", team: null, colourSet: false },
     away: { name: "", colour: "navy", rosterURL: "", team: null, colourSet: false },
@@ -545,9 +589,10 @@ export const useStore = create<State>()((set, get) => {
     selectedID: null, filter: "all", bulkLabel: "",
 
     async init() {
-      const [settings, apiKey, library, recents, templateNames] = await Promise.all([Storage.settings(), Storage.apiKey(), Storage.teams(), Storage.recents(), Storage.templateNames()]);
+      const [settings, keys, library, recents, templateNames] = await Promise.all([Storage.settings(), Storage.keys(), Storage.teams(), Storage.recents(), Storage.templateNames()]);
       Levels.register(settings.customLevels ?? []);
-      set({ settings, apiKey, library: TeamLibrary.sorted(library), recents, templateNames, ready: true, screen: needsOnboarding(settings, apiKey) ? "welcome" : "start" });
+      const hasModel = Access.anyReady({ keys, localBaseURL: settings.localBaseURL, localModel: settings.localModel });
+      set({ settings, keys, library: TeamLibrary.sorted(library), recents, templateNames, ready: true, screen: needsOnboarding(settings, hasModel) ? "welcome" : "start" });
       const sel = GameSelection.make();
       set({ selection: sel, home: { ...get().home, rosterURL: GameSelection.suggestedHomeURL(sel) ?? "" } });
       await loadLogos(library);
@@ -574,8 +619,18 @@ export const useStore = create<State>()((set, get) => {
       // The selection reconciles itself against the levels that remain.
       if (get().selection.level === id) get().setLevel("divisionI");
     },
-    async setApiKey(key) { set({ apiKey: key.trim() }); await Storage.saveApiKey(key.trim()); },
-    verifyKey: (key) => AnthropicClient.verifyKey(key.trim()),
+    async setKey(provider, key) {
+      const k = key.trim();
+      set({ keys: { ...get().keys, [provider]: k } });
+      await Storage.saveKey(provider, k);
+      if (k) adoptProvider(provider);
+    },
+    verifyKey: (provider, key) => verifyProviderKey(provider, key),
+    probeLocal: (baseURL) => probeLocal(baseURL),
+    chooseLocalModel(model) {
+      get().setSetting({ localModel: model.trim() });
+      if (model.trim()) adoptProvider("local");
+    },
     finishOnboarding() { get().setSetting({ onboarded: true }); set({ screen: "start" }); },
     reopenSetup() { set({ panel: null, screen: "welcome" }); },
     async addTemplate(name, text) {
@@ -652,7 +707,7 @@ export const useStore = create<State>()((set, get) => {
     async importTeam(side) {
       const s = get();
       if (s.imports[side].busy) return;
-      if (!s.apiKey) { setImport(side, { error: "Add your Anthropic API key in Settings before importing a team." }); return; }
+      { const missing = derive.missingAccess(s); if (missing) { setImport(side, { error: missing.replace(" first.", " before importing a team.") }); return; } }
       const pasted = s[side].rosterURL.trim();
       if (!pasted) { setImport(side, { error: "Paste a link to the team's page first." }); return; }
       const parsed = TeamPageURL.parse(pasted);
@@ -686,7 +741,7 @@ export const useStore = create<State>()((set, get) => {
 
     async importTeamFromHTML(side, html, sourceURL) {
       const s = get();
-      if (!s.apiKey) { setImport(side, { error: "Add your Anthropic API key in Settings before importing a team." }); return; }
+      { const missing = derive.missingAccess(s); if (missing) { setImport(side, { error: missing.replace(" first.", " before importing a team.") }); return; } }
       setImport(side, { busy: true, error: null, warnings: [], status: "Reading the page…" });
       try {
         const identity = (sourceURL ? TeamPageParser.parse(html, sourceURL) : null) ?? TeamIdentity.make({ schoolName: s[side].name, sourceURL: sourceURL ?? null });
@@ -697,11 +752,10 @@ export const useStore = create<State>()((set, get) => {
 
         // The logo is fetched while the roster is read, not after it.
         const logoFetch = identity.logoURL ? fetchLogo(identity.logoURL).catch(() => null) : Promise.resolve(null);
-        // Extraction is a text job on a few thousand tokens, so it runs on the cheap model
-        // whatever the vision pass is set to. A MaxPreps page never reaches the model at all.
-        const client = new AnthropicClient({ apiKey: s.apiKey, model: "claude-haiku-4-5-20251001", maxTokens: 8000 });
+        // Extraction is a text job on a few thousand tokens, so it runs on the provider's cheap
+        // model whatever the vision pass is set to. A MaxPreps page never reaches a model at all.
+        const { client, model: reader } = makeUtilityClient(derive.model(s), derive.access(s), { maxTokens: 8000 });
         const { players, source, usage } = await RosterImporter.importRoster(html, client, () => setImport(side, { status: "Nothing in the page text — reading its data…" }), s.selection.sportID);
-        const reader = VisionModel.byID(client.model);
         const spent = VisionModel.cost(reader, usage.inputTokens, usage.outputTokens);
         const how = source === "structured" ? "read from the page's own data · no model, no cost"
           : `${reader.name} read ${source === "scriptPayload" ? "the page's data" : "the page"} · ${(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens · ${spent < 0.005 ? "under a cent" : "$" + spent.toFixed(2)}`;
@@ -719,7 +773,7 @@ export const useStore = create<State>()((set, get) => {
         const twoWay = stored.players.filter((p) => p.secondaryPosition).length;
         setImport(side, { busy: false, warnings, status: `${SavedTeam.fullName(stored)} — ${stored.players.length} players${twoWay ? `, ${twoWay} two-way` : ""} · ${how}` });
       } catch (e) {
-        setImport(side, { busy: false, status: "", warnings: [], error: e instanceof ImportError ? e.message : describeFailure(e) });
+        setImport(side, { busy: false, status: "", warnings: [], error: e instanceof ImportError ? e.message : describeFailure(e, derive.model(s).provider) });
       }
     },
 
@@ -760,7 +814,7 @@ export const useStore = create<State>()((set, get) => {
     async run(opts = {}) {
       const s = get();
       if (!s.folder) return;
-      if (!s.apiKey) { get().notify("Add your Anthropic API key in Settings first."); return; }
+      { const missing = derive.missingAccess(s); if (missing) { get().notify(missing); return; } }
       let todo = s.frames.filter((f) => opts.redo || f.state === "pending" || (opts.failed && f.state === "failed"));
       if (opts.limit) todo = todo.slice(0, opts.limit);
       if (!todo.length) { set({ statusLine: "Nothing to do." }); return; }
@@ -776,8 +830,10 @@ export const useStore = create<State>()((set, get) => {
       const event = derive.event(s);
       const sportLabel = s.rosterMode === "noTeams" ? s.eventName.trim() : derive.sportLabel(s);
       const context = VisionPrompt.context({ sportLabel, roster, event, notes: s.notes, sport: s.selection.sportID });
-      const client = new AnthropicClient({ apiKey: s.apiKey, model: s.settings.model, signal, onRetry: (attempt, wait, why) => set({ statusLine: `Waiting ${Math.round(wait)}s after ${why} (attempt ${attempt})…` }) });
-      const altClient = new AnthropicClient({ apiKey: s.apiKey, model: "claude-haiku-4-5-20251001", maxTokens: AltTextRequest.maxTokens, signal });
+      const model = derive.model(s), access = derive.access(s);
+      const client = makeClient(model, access, { signal, onRetry: (attempt, wait, why) => set({ statusLine: `Waiting ${Math.round(wait)}s after ${why} (attempt ${attempt})…` }) });
+      const { client: altClient } = makeUtilityClient(model, access, { maxTokens: AltTextRequest.maxTokens, signal });
+      const longEdge = VisionModel.effectiveLongEdge(model, s.settings.longEdge);
       const manifestDir = s.folder;
       let manifest: ProcessedFileRecord[] = ProcessedFilesManifest.parse((await manifestDir.readText(ProcessedFilesManifest.fileName)) ?? "");
 
@@ -786,10 +842,9 @@ export const useStore = create<State>()((set, get) => {
         try {
           const file = await f.photo.file();
           const exif = await readPhotoMetadata(file);
-          const jpeg = await preparedForVision(file, s.settings.longEdge);
-          const reply = await client.analyse(jpeg, VisionPrompt.system, context);
+          const jpeg = await preparedForVision(file, longEdge);
+          const { vision, reply } = await readVision(client, jpeg, context);
           if (generation !== runGeneration) return;
-          const vision = VisionResult.fromJSON(CaptionResponseParser.decodeJSON(reply.text));
           let rec = CaptionRecord.make({ filename: f.name, imagePath: f.name, vision, caption: "", capturedAt: PhotoMetadata.apStyleDate(exif) });
           const out = composeFor(get(), rec, exif);
           let alt: string | null = null, altIn = 0, altOut = 0;
@@ -823,11 +878,11 @@ export const useStore = create<State>()((set, get) => {
       // Run the first alone so it writes the prompt cache, then fan out — otherwise several
       // requests race to write the same prefix instead of reading it.
       await work(todo[0]);
-      // A key Anthropic rejects will reject every frame: stop here, and say so once.
+      // A key the provider rejects will reject every frame: stop here, and say so once.
       const first = frame(todo[0].id);
       if (generation === runGeneration && first?.state === "failed" && /\b401\b/.test(first.error ?? "")) {
         set((st) => ({ isRunning: false, statusLine: "Stopped — the API key was rejected.", frames: st.frames.map((f) => (f.state === "working" ? { ...f, state: "pending" as FrameState } : f)) }));
-        get().notify(describeFailure(new ClientError("http", first.error ?? "", 401)));
+        get().notify(describeFailure(new ClientError("http", first.error ?? "", 401), model.provider));
         return;
       }
       const rest = todo.slice(1);
@@ -925,19 +980,20 @@ export const useStore = create<State>()((set, get) => {
     async recaption(id, note) {
       const s = get();
       const f = frame(id);
-      if (!f || !s.apiKey) { if (!s.apiKey) get().notify("Add your Anthropic API key in Settings first."); return; }
+      if (!f) return;
+      { const missing = derive.missingAccess(s); if (missing) { get().notify(missing); return; } }
       patchFrame(id, { state: "working" });
       set({ statusLine: `Captioning ${f.name} again…` });
       try {
         const roster = derive.roster(s);
         const sportLabel = s.rosterMode === "noTeams" ? s.eventName.trim() : derive.sportLabel(s);
         const context = VisionPrompt.context({ sportLabel, roster, event: derive.event(s), notes: s.notes, note, sport: s.selection.sportID });
-        const client = new AnthropicClient({ apiKey: s.apiKey, model: s.settings.model });
+        const model = derive.model(s);
+        const client = makeClient(model, derive.access(s));
         const file = await f.photo.file();
         const exif = await readPhotoMetadata(file);
-        const jpeg = await preparedForVision(file, s.settings.longEdge);
-        const reply = await client.analyse(jpeg, VisionPrompt.system, context);
-        const vision = VisionResult.fromJSON(CaptionResponseParser.decodeJSON(reply.text));
+        const jpeg = await preparedForVision(file, VisionModel.effectiveLongEdge(model, s.settings.longEdge));
+        const { vision, reply } = await readVision(client, jpeg, context);
         const rec: CaptionRecord = { ...(f.record ?? CaptionRecord.make({ filename: f.name, vision, caption: "", capturedAt: PhotoMetadata.apStyleDate(exif) })), vision, manualJerseyNumbers: {} };
         patchFrame(id, { record: rec, exif, state: "done", edited: false });
         set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens, tokensOut: st.tokensOut + reply.usage.outputTokens,

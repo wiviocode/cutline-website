@@ -6,13 +6,14 @@
 import React from "react";
 import { useStore } from "../store";
 import { Button, Overline, Select, Sheet, Switch, TextInput } from "../components";
-import { KeyField } from "./KeyField";
+import { ProviderSetup } from "./ProviderSetup";
+import { ModelSelect, ModelNote } from "./ModelPicker";
 import { TemplatePicker } from "./TemplatePicker";
 import { NamingPicker } from "./NamingPicker";
 import { CAPTION_STYLES, type CaptionStyle } from "@core/caption/CompositionContext";
 import { WireStyle } from "@core/caption/WireStyle";
 import { SampleCaption } from "@core/caption/SampleCaption";
-import { VISION_MODELS, ALT_TEXT_MODES, ImagePrep, type AltTextMode } from "@core/anthropic/VisionModel";
+import { VisionModel, ALT_TEXT_MODES, ImagePrep, type AltTextMode } from "@core/models/VisionModel";
 import { Levels } from "@core/setup/GameLibrary";
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
@@ -28,8 +29,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   return (
     <Sheet title="Settings" onClose={onClose} footer={<><span className="spacer" /><Button onClick={onClose}>Done</Button></>}>
       <section className="section">
-        <div className="section-head"><Overline>Anthropic API key</Overline></div>
-        <div className="card"><KeyField /></div>
+        <div className="section-head"><Overline>Where the photographs are read</Overline></div>
+        <div className="card"><ProviderSetup /></div>
       </section>
 
       <section className="section">
@@ -56,12 +57,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         <div className="section-head"><Overline>Model</Overline></div>
         <div className="card rows">
           <div className="row">
-            <span className="k">Model<small>Reading a jersey number off a moving player is the hardest thing this asks of a model.</small></span>
-            <span className="c"><Select value={settings.model} options={VISION_MODELS.map((m) => ({ id: m.id, name: `${m.name} — ${m.relativeCost}` }))} onChange={(v) => set({ model: v })} ariaLabel="Model" /></span>
+            <span className="k">Model<small><ModelNote /></small></span>
+            <span className="c"><ModelSelect /></span>
           </div>
           <div className="row">
-            <span className="k">Detail sent to the model<small>Maximum reads numbers Balanced sometimes misses, at about two and a half times the image cost.</small></span>
-            <span className="c"><Select value={String(settings.longEdge)} options={ImagePrep.longEdges.map((e) => ({ id: String(e.id), name: e.name }))} onChange={(v) => set({ longEdge: Number(v) })} ariaLabel="Detail" /></span>
+            <span className="k">Detail sent to the model<small>Maximum reads numbers Balanced sometimes misses, at about two and a half times the image cost. Where a model reads a frame smaller than what is sent, the list says so.</small></span>
+            <span className="c"><Select value={String(settings.longEdge)} options={ImagePrep.choicesFor(VisionModel.byID(settings.model)).map((e) => ({ id: String(e.id), name: e.name }))} onChange={(v) => set({ longEdge: Number(v) })} ariaLabel="Detail" /></span>
           </div>
           <div className="row">
             <span className="k">Photographs at once<small>More is faster until the rate limit; the run waits and retries on its own.</small></span>
@@ -114,7 +115,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         <div className="section-head"><Overline>Setup</Overline></div>
         <div className="card rows">
           <div className="row">
-            <span className="k">First-time setup<small>Walk through the key, byline and house, model, output and file names again.</small></span>
+            <span className="k">First-time setup<small>Walk through the model, byline and house, output and file names again.</small></span>
             <span className="c"><Button variant="secondary" onClick={reopenSetup}>Run it again</Button></span>
           </div>
         </div>

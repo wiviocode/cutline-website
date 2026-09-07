@@ -2,25 +2,24 @@ import { describe, it, expect } from "vitest";
 import { needsOnboarding, firstStep, initialStage, nextStep, previousStep, keyProblem, WELCOME_STEPS, TUTORIAL_STEPS, NAMING_PRESETS, presetFor } from "../src/app/onboarding";
 import { NamingPattern } from "../src/core/naming/NamingPattern";
 import { DEFAULT_SETTINGS } from "../src/platform/storage";
-import { VisionModel } from "../src/core/anthropic/VisionModel";
+import { VisionModel } from "../src/core/models/VisionModel";
 
 describe("The first-time setup", () => {
-  it("runs until it has been finished once and there is a key", () => {
-    expect(needsOnboarding({ onboarded: false }, "")).toBe(true);
-    expect(needsOnboarding({ onboarded: false }, "sk-ant-x")).toBe(true);
-    expect(needsOnboarding({ onboarded: true }, "")).toBe(true);
-    expect(needsOnboarding({ onboarded: true }, "  ")).toBe(true);
-    expect(needsOnboarding({ onboarded: true }, "sk-ant-x")).toBe(false);
+  it("runs until it has been finished once and there is a way to read a photograph", () => {
+    expect(needsOnboarding({ onboarded: false }, false)).toBe(true);
+    expect(needsOnboarding({ onboarded: false }, true)).toBe(true);
+    expect(needsOnboarding({ onboarded: true }, false)).toBe(true);
+    expect(needsOnboarding({ onboarded: true }, true)).toBe(false);
   });
   it("opens on the first missing answer", () => {
-    expect(firstStep({ onboarded: false }, "")).toBe("key");
-    expect(firstStep({ onboarded: false }, "sk-ant-x")).toBe("byline");
+    expect(firstStep({ onboarded: false }, false)).toBe("key");
+    expect(firstStep({ onboarded: false }, true)).toBe("byline");
   });
   it("shows the welcome and tutorial to a brand-new desk, and skips it on a return", () => {
-    expect(initialStage({ onboarded: false }, "")).toBe("intro");
-    expect(initialStage({ onboarded: true }, "")).toBe("key");
-    expect(initialStage({ onboarded: true }, "sk-ant-x")).toBe("byline");
-    expect(initialStage({ onboarded: false }, "sk-ant-x")).toBe("byline");
+    expect(initialStage({ onboarded: false }, false)).toBe("intro");
+    expect(initialStage({ onboarded: true }, false)).toBe("key");
+    expect(initialStage({ onboarded: true }, true)).toBe("byline");
+    expect(initialStage({ onboarded: false }, true)).toBe("byline");
     expect(TUTORIAL_STEPS.length).toBe(4);
     expect(TUTORIAL_STEPS.every((t) => t.title && t.detail)).toBe(true);
   });
@@ -38,6 +37,13 @@ describe("The first-time setup", () => {
     expect(keyProblem("abc")).toMatch(/sk-ant-/);
     expect(keyProblem("sk-ant-short")).toMatch(/short/);
     expect(keyProblem("sk-ant-api03-" + "x".repeat(60))).toBeNull();
+    // OpenAI's keys start with sk-, and a shorter one is whole.
+    expect(keyProblem("sk-ant-api03-" + "x".repeat(60), "openai")).toBeNull();
+    expect(keyProblem("abc", "openai")).toMatch(/sk-/);
+    expect(keyProblem("sk-proj-" + "x".repeat(30), "openai")).toBeNull();
+    expect(keyProblem("sk-short", "openai")).toMatch(/short/);
+    // A model on this Mac takes no key at all.
+    expect(keyProblem("", "local")).toBeNull();
   });
   it("offers naming conventions that use only known tokens, and knows which one a pattern is", () => {
     for (const p of NAMING_PRESETS.filter((p) => p.pattern)) expect(NamingPattern.unknownTokens(p.pattern)).toEqual([]);
@@ -46,9 +52,11 @@ describe("The first-time setup", () => {
     expect(presetFor("{date}_{seq}")).toBe("custom");
     expect(NAMING_PRESETS[0].pattern).toBe(NamingPattern.hurrdat);
   });
-  it("starts a new desk on Sonnet 5", () => {
+  it("starts a new desk on Sonnet 5, with no model on the Mac chosen", () => {
     expect(DEFAULT_SETTINGS.model).toBe("claude-sonnet-5");
     expect(VisionModel.default.id).toBe("claude-sonnet-5");
     expect(VisionModel.byID("nonsense").id).toBe("claude-sonnet-5");
+    expect(DEFAULT_SETTINGS.localModel).toBe("");
+    expect(DEFAULT_SETTINGS.localBaseURL).toBe("http://localhost:11434/v1");
   });
 });

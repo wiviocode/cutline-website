@@ -17,7 +17,8 @@
  * Everything after the bytes arrive is here.
  */
 
-import type { AnthropicClient, Usage } from "../anthropic/AnthropicClient";
+import type { Usage } from "../anthropic/AnthropicClient";
+import type { VisionClient } from "../models/VisionClient";
 import { CaptionResponseParser } from "../vision/CaptionResponseParser";
 import { MaxPrepsRoster } from "./MaxPrepsRoster";
 import { Positions } from "./Positions";
@@ -133,12 +134,12 @@ export const RosterImporter = {
   },
 
   /** Extract players from already-fetched text. */
-  async extract(text: string, client: AnthropicClient, sport = ""): Promise<ImportedPlayer[]> {
+  async extract(text: string, client: VisionClient, sport = ""): Promise<ImportedPlayer[]> {
     return (await RosterImporter.extractWithUsage(text, client, sport)).players;
   },
 
   /** The same, with what the call cost in tokens, so the import can say so. */
-  async extractWithUsage(text: string, client: AnthropicClient, sport = ""): Promise<{ players: ImportedPlayer[]; usage: Usage }> {
+  async extractWithUsage(text: string, client: VisionClient, sport = ""): Promise<{ players: ImportedPlayer[]; usage: Usage }> {
     const clipped = text.slice(0, 120_000);
     const reply = await client.describeText(EXTRACTION_PROMPT, `Roster page text:\n\n${clipped}`, 8000);
     const players = RosterImporter.decode(reply.text, sport);
@@ -194,7 +195,7 @@ export const RosterImporter = {
    * for React/Next sites that embed their data less tidily. Each step costs more than the last,
    * so the cheapest sufficient one wins.
    */
-  async importRoster(html: string, client: AnthropicClient, onEscalate?: (source: ImportSource) => void, sport = ""):
+  async importRoster(html: string, client: VisionClient, onEscalate?: (source: ImportSource) => void, sport = ""):
     Promise<{ players: ImportedPlayer[]; source: ImportSource; usage: Usage }> {
     const none: Usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: null, cacheReadInputTokens: null };
     const structured = MaxPrepsRoster.parse(html, sport);

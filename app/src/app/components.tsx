@@ -239,12 +239,12 @@ export function Segmented<T extends string>({ options, value, onChange, ariaLabe
 
 /** A list of choices where each needs a sentence — house styles, models. */
 export function RadioCards<T extends string>({ options, value, onChange, name }:
-  { options: { id: T; title: ReactNode; detail?: ReactNode; aside?: ReactNode }[]; value: T; onChange: (v: T) => void; name: string }) {
+  { options: { id: T; title: ReactNode; detail?: ReactNode; aside?: ReactNode; disabled?: boolean }[]; value: T; onChange: (v: T) => void; name: string }) {
   return (
     <div className="rcards" role="radiogroup">
       {options.map((o) => (
-        <label key={o.id} className={"rcard" + (o.id === value ? " on" : "")}>
-          <input type="radio" name={name} value={o.id} checked={o.id === value} onChange={() => onChange(o.id)} />
+        <label key={o.id} className={"rcard" + (o.id === value ? " on" : "") + (o.disabled ? " off" : "")}>
+          <input type="radio" name={name} value={o.id} checked={o.id === value} disabled={o.disabled} onChange={() => onChange(o.id)} />
           <span className="rcard-dot" aria-hidden="true" />
           <span className="rcard-main">
             <span className="rcard-title">{o.title}{o.aside && <span className="rcard-aside">{o.aside}</span>}</span>

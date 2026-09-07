@@ -25,9 +25,11 @@ metadata back into the JPEGs in place.
 1. Open **[cutline.photo/app](https://cutline.photo/app)** in Chrome, Edge, Brave or another
    Chromium browser. Safari and Firefox can open a folder read-only — caption, review, correct —
    but cannot write into the files, and the app says so.
-2. Add an [Anthropic API key](https://console.anthropic.com/). The first-time setup asks for it,
-   checks it, and asks for your byline and house style. The key is kept in the browser's own
-   storage on this site and is sent to nothing but `api.anthropic.com`.
+2. Choose where the photographs are read: an [Anthropic](https://console.anthropic.com/) or
+   [OpenAI](https://platform.openai.com/api-keys) API key of your own, or a model running free on
+   your Mac through Ollama or LM Studio. The first-time setup asks for it, checks it, and asks
+   for your byline and house style. A key is kept in the browser's own storage on this site and
+   is sent to nothing but that provider's API; a Mac model sends nothing anywhere.
 3. Drop a folder. Pick the level, sport, and the two teams — a roster comes from any team page
    link, a pasted page, a CSV, or your library. Continue.
 4. **Caption photos**, then review: arrow keys move, Return approves, a click on a number corrects

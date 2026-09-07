@@ -19,7 +19,7 @@ import { RosterPlayer } from "@core/roster/Roster";
 import { RosterMatcher } from "@core/roster/RosterMatcher";
 import { asSport } from "@core/caption/CompositionContext";
 import { TeamColorArbiter } from "@core/roster/TeamColorArbiter";
-import { VisionModel } from "@core/anthropic/VisionModel";
+import { VisionModel } from "@core/models/VisionModel";
 
 function visible(frames: Frame[], filter: ReviewStatus): Frame[] {
   if (filter === "approved") return frames.filter((f) => f.approved);
@@ -205,14 +205,14 @@ function Stage({ frame, zoom, onToggleZoom }: { frame: Frame | null; zoom: boole
 function StartCard() {
   const v = useStore(useShallow((s) => ({
     pending: derive.pendingCount(s), ready: derive.readyToRun(s), touched: s.frames.some((f) => f.state !== "pending"), running: s.isRunning,
-    hasKey: !!s.apiKey, total: s.frames.length, model: VisionModel.byID(s.settings.model).name,
+    hasKey: derive.canCaption(s), missing: derive.missingAccess(s), total: s.frames.length, model: derive.modelName(s),
   })));
   const run = useStore((s) => s.run);
   if (v.running || v.touched || v.pending === 0) return null;
   return (
     <div className="stage-cta" role="group" aria-label="Start captioning">
       <b>{v.total} photograph{v.total === 1 ? "" : "s"} ready.</b>
-      <span>{v.hasKey ? `${v.model} reads each one, and the caption is written into the file as it comes back.` : "Add your Anthropic API key in Settings to begin."}</span>
+      <span>{v.hasKey ? `${v.model} reads each one, and the caption is written into the file as it comes back.` : v.missing}</span>
       <div className="stage-cta-actions">
         <Button size="lg" disabled={!v.ready} onClick={(e) => { e.currentTarget.blur(); void run(); }}>Caption them</Button>
         {v.pending > 10 && <Button variant="secondary" size="lg" disabled={!v.ready} onClick={(e) => { e.currentTarget.blur(); void run({ limit: 10 }); }} title="Caption ten, check them, then do the rest">Try 10 first</Button>}
@@ -395,7 +395,7 @@ const Thumb = memo(function Thumb({ frame, on }: { frame: Frame; on: boolean }) 
 
 function ActionBar() {
   const v = useStore(useShallow((s) => ({
-    running: s.isRunning, done: s.progressDone, total: s.progressTotal, status: s.statusLine, bulk: s.bulkLabel, hasKey: !!s.apiKey, tokens: s.tokensIn,
+    running: s.isRunning, done: s.progressDone, total: s.progressTotal, status: s.statusLine, bulk: s.bulkLabel, hasKey: derive.canCaption(s), missing: derive.missingAccess(s), tokens: s.tokensIn,
     pending: derive.pendingCount(s), failed: derive.failedCount(s), ready: derive.readyToRun(s), anyDone: derive.anyDone(s), count: s.frames.length, cost: derive.estimatedCost(s),
   })));
   const run = useStore((s) => s.run);
@@ -404,7 +404,7 @@ function ActionBar() {
   const go = (fn: () => void) => (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.blur(); fn(); };
   return (
     <nav className="bar run-bar" aria-label="Captioning">
-      <span className={"status " + (!v.hasKey ? "problem" : "dim")} role="status">{!v.hasKey ? "Add your Anthropic API key in Settings to caption." : v.status}{v.bulk ? ` · ${v.bulk}` : ""}</span>
+      <span className={"status " + (!v.hasKey ? "problem" : "dim")} role="status">{!v.hasKey ? v.missing : v.status}{v.bulk ? ` · ${v.bulk}` : ""}</span>
       {v.tokens > 0 && <span className="dim mono small" title="Estimated cost of this run so far, at the list price of the model that ran">${v.cost.toFixed(2)}</span>}
       {v.running ? (
         <>

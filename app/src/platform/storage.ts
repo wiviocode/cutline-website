@@ -1,5 +1,5 @@
 /**
- * What the app remembers between sessions: settings, the API key, the team library and its
+ * What the app remembers between sessions: settings, the API keys, the team library and its
  * logos, recent shoots, Photo Mechanic templates, and the folder handles that let a recent shoot
  * reopen without a picker.
  *
@@ -13,7 +13,9 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { SavedTeam } from "@core/roster/SavedTeam";
 import type { RecentGame } from "@core/setup/GameLibrary";
 import type { CaptionStyle } from "@core/caption/CompositionContext";
-import { DEFAULT_VISION_MODEL, type AltTextMode } from "@core/anthropic/VisionModel";
+import { DEFAULT_VISION_MODEL, type AltTextMode } from "@core/models/VisionModel";
+import { DEFAULT_LOCAL_BASE_URL } from "@core/models/VisionClient";
+import type { KeyedProviderID } from "@core/models/Providers";
 import { NamingPattern } from "@core/naming/NamingPattern";
 import type { CustomLevel } from "@core/setup/Levels";
 
@@ -25,7 +27,12 @@ export interface Settings {
   embedInFile: boolean;
   writeSidecars: boolean;
   altTextMode: AltTextMode;
+  /** A catalogue id from `VISION_MODELS`. */
   model: string;
+  /** ".../v1" of Ollama or LM Studio, for the model on this Mac. */
+  localBaseURL: string;
+  /** The model pulled there that the desk chose; empty until one is. */
+  localModel: string;
   longEdge: number;
   concurrency: number;
   namingPattern: string;
@@ -45,6 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
   writeSidecars: false,
   altTextMode: "simple",
   model: DEFAULT_VISION_MODEL,
+  localBaseURL: DEFAULT_LOCAL_BASE_URL,
+  localModel: "",
   longEdge: 1616,
   concurrency: 4,
   namingPattern: NamingPattern.hurrdat,
@@ -80,10 +89,16 @@ export const Storage = {
   },
   async saveSettings(s: Settings): Promise<void> { await (await db()).put("kv", s, "settings"); },
 
-  async apiKey(): Promise<string> { return ((await (await db()).get("kv", "apiKey")) as string | undefined) ?? ""; },
-  async saveApiKey(key: string): Promise<void> {
+  /** One key per hosted provider. Anthropic's keeps the slot it always had, so a saved key still opens. */
+  async keys(): Promise<Record<KeyedProviderID, string>> {
     const d = await db();
-    if (key) await d.put("kv", key, "apiKey"); else await d.delete("kv", "apiKey");
+    const read = async (slot: string) => ((await d.get("kv", slot)) as string | undefined) ?? "";
+    return { anthropic: await read("apiKey"), openai: await read("apiKey:openai") };
+  },
+  async saveKey(provider: KeyedProviderID, key: string): Promise<void> {
+    const d = await db();
+    const slot = provider === "anthropic" ? "apiKey" : `apiKey:${provider}`;
+    if (key) await d.put("kv", key, slot); else await d.delete("kv", slot);
   },
 
   async teams(): Promise<SavedTeam[]> { return (await (await db()).getAll("teams")) as SavedTeam[]; },

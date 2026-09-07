@@ -4,6 +4,7 @@
  */
 
 import { NamingPattern } from "@core/naming/NamingPattern";
+import { Providers, type ProviderID } from "@core/models/Providers";
 
 export type WelcomeStep = "key" | "byline" | "output" | "naming";
 /** The whole first-run flow: a welcome that a returning user does not see, then the numbered steps. */
@@ -18,7 +19,7 @@ export const TUTORIAL_STEPS: { title: string; detail: string }[] = [
 ];
 
 export const WELCOME_STEPS: { id: WelcomeStep; title: string; blurb: string }[] = [
-  { id: "key",    title: "Your key",         blurb: "Cutline reads photographs with a model you pay for directly." },
+  { id: "key",    title: "Your model",       blurb: "Cutline reads photographs with a model you pay for directly, or one running on this Mac." },
   { id: "byline", title: "Your byline",      blurb: "The name in the credit line, and the house style the captions follow." },
   { id: "output", title: "Model and output", blurb: "Which model reads the photographs, where the captions go, and your desk's template." },
   { id: "naming", title: "File names",       blurb: "How the renamer names photographs, when you ask it to." },
@@ -37,23 +38,26 @@ export function presetFor(pattern: string): string {
   return NAMING_PRESETS.find((p) => p.pattern && p.pattern === pattern.trim())?.id ?? "custom";
 }
 
-/** Setup runs until it has been finished once and there is a key to work with. */
-export function needsOnboarding(settings: { onboarded: boolean }, apiKey: string): boolean {
-  return !settings.onboarded || apiKey.trim() === "";
+/**
+ * Setup runs until it has been finished once and there is a way to read a photograph — a key
+ * for a hosted model, or a model chosen on this Mac.
+ */
+export function needsOnboarding(settings: { onboarded: boolean }, hasModel: boolean): boolean {
+  return !settings.onboarded || !hasModel;
 }
 
 /** The step to open on: the first one whose answer is missing. */
-export function firstStep(settings: { onboarded: boolean }, apiKey: string): WelcomeStep {
-  return apiKey.trim() ? "byline" : "key";
+export function firstStep(settings: { onboarded: boolean }, hasModel: boolean): WelcomeStep {
+  return hasModel ? "byline" : "key";
 }
 
 /**
- * Where the welcome screen opens. A brand-new desk — never set up, no key — gets the welcome and
- * its tutorial first; anyone reopening setup from Settings goes straight to the step they need.
+ * Where the welcome screen opens. A brand-new desk — never set up, no model — gets the welcome
+ * and its tutorial first; anyone reopening setup from Settings goes straight to the step they need.
  */
-export function initialStage(settings: { onboarded: boolean }, apiKey: string): WelcomeStage {
-  if (!settings.onboarded && !apiKey.trim()) return "intro";
-  return firstStep(settings, apiKey);
+export function initialStage(settings: { onboarded: boolean }, hasModel: boolean): WelcomeStage {
+  if (!settings.onboarded && !hasModel) return "intro";
+  return firstStep(settings, hasModel);
 }
 
 export function nextStep(step: WelcomeStep): WelcomeStep | null {
@@ -67,11 +71,6 @@ export function previousStep(step: WelcomeStep): WelcomeStep | null {
 }
 
 /** What is wrong with a key before it is sent anywhere, or null when it is worth checking. */
-export function keyProblem(raw: string): string | null {
-  const key = raw.trim();
-  if (!key) return "Paste the key first.";
-  if (/\s/.test(key)) return "The key has a space or line break in it — it was not copied whole.";
-  if (!key.startsWith("sk-ant-")) return "An Anthropic API key starts with sk-ant-.";
-  if (key.length < 40) return "That is too short to be a whole key.";
-  return null;
+export function keyProblem(raw: string, provider: ProviderID = "anthropic"): string | null {
+  return Providers.keyProblem(provider, raw);
 }

@@ -21,7 +21,7 @@ import { SampleCaption } from "../src/core/caption/SampleCaption";
 import { Article } from "../src/core/caption/Article";
 import { CaptionParts } from "../src/core/caption/CaptionParts";
 import { KitColourDiagnosis } from "../src/core/setup/KitColourDiagnosis";
-import { VISION_MODELS, VisionModel, ALT_TEXT_MODES, ImagePrep } from "../src/core/anthropic/VisionModel";
+import { VISION_MODELS, VisionModel, ALT_TEXT_MODES, ImagePrep } from "../src/core/models/VisionModel";
 import { localDate } from "../src/core/images/PhotoMetadata";
 
 const player = (n: string, c: string, a: string, conf = 0.9) => VisionPlayer.make(n, c, a, conf);
@@ -458,9 +458,9 @@ describe("Kit colour, model choice and cost", () => {
     expect(TeamColorArbiter.sameFamily("white", "blue")).toBe(false);
   });
   it("prices every model, cheaper ones cheaper, Haiku a fifth of Opus", () => {
-    expect(VisionModel.default.relativeCost).toBe("balanced");
+    expect(VisionModel.default.tier).toBe("balanced");
     expect(VisionModel.default.id).toBe("claude-sonnet-5");
-    for (const m of VISION_MODELS) { expect(m.inputPricePerMillion).toBeGreaterThan(0); expect(m.outputPricePerMillion).toBeGreaterThan(0); }
+    for (const m of VISION_MODELS.filter((m) => m.provider !== "local")) { expect(m.inputPricePerMillion).toBeGreaterThan(0); expect(m.outputPricePerMillion).toBeGreaterThan(0); }
     const opus = VisionModel.byID("claude-opus-5"), haiku = VisionModel.byID("claude-haiku-4-5-20251001");
     for (const m of VISION_MODELS) expect(Math.abs(VisionModel.cost(m, 1_000_000, 1_000_000) - (m.inputPricePerMillion + m.outputPricePerMillion))).toBeLessThan(1e-9);
     expect(Math.abs(VisionModel.cost(haiku, 400_000, 20_000) * 5 - VisionModel.cost(opus, 400_000, 20_000))).toBeLessThan(1e-9);

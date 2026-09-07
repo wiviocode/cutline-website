@@ -5,21 +5,23 @@
  */
 
 import React, { useState } from "react";
-import { useStore } from "../store";
+import { useStore, derive } from "../store";
 import { Button, Callout, Field, Mark, RadioCards, Select, Switch, TextInput } from "../components";
-import { KeyField } from "./KeyField";
+import { ProviderSetup } from "./ProviderSetup";
+import { ModelCards } from "./ModelPicker";
 import { TemplatePicker } from "./TemplatePicker";
 import { NamingPicker } from "./NamingPicker";
 import { WELCOME_STEPS, TUTORIAL_STEPS, initialStage, nextStep, previousStep, type WelcomeStage } from "../onboarding";
 import { CAPTION_STYLES, type CaptionStyle } from "@core/caption/CompositionContext";
 import { WireStyle } from "@core/caption/WireStyle";
 import { SampleCaption } from "@core/caption/SampleCaption";
-import { VISION_MODELS, ALT_TEXT_MODES, type AltTextMode } from "@core/anthropic/VisionModel";
+import { ALT_TEXT_MODES, type AltTextMode } from "@core/models/VisionModel";
+import { Access } from "@core/models/VisionClient";
 
 export function Welcome() {
   const settings = useStore((s) => s.settings);
-  const apiKey = useStore((s) => s.apiKey);
-  const [step, setStep] = useState<WelcomeStage>(() => initialStage(settings, apiKey));
+  const hasModel = useStore((s) => Access.anyReady(derive.access(s)));
+  const [step, setStep] = useState<WelcomeStage>(() => initialStage(settings, hasModel));
   const at = WELCOME_STEPS.findIndex((s) => s.id === step);
 
   if (step === "intro") {
@@ -74,20 +76,20 @@ function IntroStep({ onNext }: { onNext: () => void }) {
           </li>
         ))}
       </ol>
-      <p className="intro-need">Four short steps set it up. You will need an <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Anthropic API key</a>{writable ? "" : ", and Chrome, Edge or Brave to write captions into the files"}.</p>
+      <p className="intro-need">Four short steps set it up. You will need an API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Anthropic</a> or <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">OpenAI</a>, or a model running on this Mac{writable ? "" : ", and Chrome, Edge or Brave to write captions into the files"}.</p>
       <div className="wnav"><span className="spacer" /><Button size="lg" onClick={onNext}>Get started</Button></div>
     </section>
   );
 }
 
 function KeyStep({ onNext }: { onNext: () => void }) {
-  const saved = useStore((s) => !!s.apiKey);
+  const saved = useStore((s) => Access.anyReady(derive.access(s)));
   const writable = useStore((s) => s.writableFolders);
   return (
     <section className="wstep" aria-labelledby="w-key">
-      <h2 id="w-key">Your Anthropic API key</h2>
-      <p className="lede">Cutline reads photographs with a model you pay for directly, so it needs a key of yours. Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">console.anthropic.com</a>.</p>
-      <div className="card"><KeyField autoFocus /></div>
+      <h2 id="w-key">Where the photographs are read</h2>
+      <p className="lede">Cutline reads photographs with a model you pay for directly — Anthropic's or OpenAI's, with a key of yours — or with one running free on this Mac. Set up one now; the others can be added in Settings.</p>
+      <div className="card"><ProviderSetup autoFocus /></div>
       {!writable && (
         <Callout kind="warn">
           <b>This browser can read photographs but cannot write captions into them.</b> Chrome, Edge and Brave can. You can still caption and review here; nothing will be written to the files.
@@ -95,7 +97,7 @@ function KeyStep({ onNext }: { onNext: () => void }) {
       )}
       <div className="wnav">
         <span className="spacer" />
-        <Button size="lg" disabled={!saved} onClick={onNext} title={saved ? undefined : "Check the key first"}>Continue</Button>
+        <Button size="lg" disabled={!saved} onClick={onNext} title={saved ? undefined : "Set up a key or a model on this Mac first"}>Continue</Button>
       </div>
     </section>
   );
@@ -139,14 +141,8 @@ function OutputStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
   return (
     <section className="wstep" aria-labelledby="w-output">
       <h2 id="w-output">Model and output</h2>
-      <p className="lede">Reading a jersey number off a moving player is the hardest thing this asks of a model. Everything here can be changed later in Settings.</p>
-      <RadioCards name="model" value={settings.model} onChange={(v) => set({ model: v })}
-        options={VISION_MODELS.map((m) => ({
-          id: m.id, title: m.name, aside: `$${m.inputPricePerMillion} in · $${m.outputPricePerMillion} out, per million tokens`,
-          detail: m.relativeCost === "most capable" ? "Reads the most numbers right, at the highest price."
-            : m.relativeCost === "balanced" ? "Most of that accuracy at less than half the price. The default."
-            : "Cheapest and quickest; misses more numbers on busy frames.",
-        }))} />
+      <p className="lede">Reading a jersey number off a moving player is the hardest thing this asks of a model. Prices are for a thousand photographs at the detail in use; a model whose key is not set up is greyed until it is. Everything here can be changed later in Settings.</p>
+      <ModelCards />
       <div className="card rows">
         <div className="row">
           <span className="k">Write captions into the photographs<small>{writable ? "Only the metadata is replaced; the image itself is untouched. Raw files and PNGs get a sidecar." : "This browser cannot write to files on disk. Use Chrome, Edge or Brave for that."}</small></span>
