@@ -3,7 +3,8 @@
  * colour change is the stylesheet's job, so no component re-renders to show one.
  */
 
-import React, { useEffect, useRef, useState, type CSSProperties, type ReactNode, type MouseEventHandler, type KeyboardEventHandler, type ChangeEventHandler } from "react";
+import React, { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode, type MouseEventHandler, type KeyboardEventHandler, type ChangeEventHandler } from "react";
+import { createPortal } from "react-dom";
 
 type ButtonProps = {
   variant?: "primary" | "secondary" | "ghost" | "danger";
@@ -54,20 +55,167 @@ export function TextArea({ value, onChange, placeholder, minHeight = 96, autoFoc
   );
 }
 
-/** A native select. Options carrying a `group` are set under that heading, in order of first appearance. */
-export function Select<T extends string>({ value, options, onChange, style, disabled, ariaLabel }:
-  { value: T; options: { id: T; name: string; group?: string }[]; onChange: (v: T) => void; style?: CSSProperties; disabled?: boolean; ariaLabel?: string }) {
-  const grouped = options.some((o) => o.group);
-  const groups = grouped ? [...new Set(options.map((o) => o.group ?? ""))] : [];
+export interface SelectOption<T extends string> {
+  id: T;
+  name: string;
+  /** A heading the option sits under, in order of first appearance. */
+  group?: string;
+  /** Not a value but something to do — "Add a level…" — kept below the list, shown whatever the filter. */
+  action?: boolean;
+}
+
+/**
+ * The app's dropdown: a trigger in the style of an input, and a popover in the style of a menu
+ * with the options under their headings. A list longer than a handful gets a filter box that
+ * takes focus as it opens, so the way to pick "Junior college" from fifteen levels is to type
+ * "jun" and press Return. Arrows move, Return picks, Escape closes; typing on a short list jumps
+ * to the first option that starts with the letter, as a native select does.
+ *
+ * The popover is rendered at the document's root and placed by the trigger's position, so it is
+ * never clipped by a scrolling sheet, and it opens upward when there is more room above.
+ */
+export function Select<T extends string>({ value, options, onChange, style, disabled, ariaLabel, searchable, placeholder = "Choose…" }:
+  { value: T; options: SelectOption<T>[]; onChange: (v: T) => void; style?: CSSProperties; disabled?: boolean; ariaLabel?: string; searchable?: boolean; placeholder?: string }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const [place, setPlace] = useState<{ top: number; left: number; width: number; up: boolean } | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const search = useRef<HTMLInputElement>(null);
+  const listBox = useRef<HTMLDivElement>(null);
+  const id = useId();
+
+  const current = options.find((o) => o.id === value && !o.action);
+  const canSearch = searchable ?? options.filter((o) => !o.action).length > 6;
+  const q = query.trim().toLowerCase();
+  const matches = (o: SelectOption<T>) => !q || o.name.toLowerCase().includes(q) || (o.group ?? "").toLowerCase().includes(q);
+  const regular = options.filter((o) => !o.action && matches(o));
+  const actions = options.filter((o) => o.action);
+  const rows = [...regular, ...actions];
+  const groups = [...new Set(regular.map((o) => o.group ?? ""))];
+
+  const measure = () => {
+    const r = trigger.current?.getBoundingClientRect();
+    if (!r) return;
+    const below = window.innerHeight - r.bottom;
+    const up = below < 320 && r.top > below;
+    setPlace({ top: up ? r.top - 4 : r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - Math.max(r.width, 240) - 8)), width: Math.max(r.width, 240), up });
+  };
+  const show = (seed = "") => {
+    if (disabled) return;
+    measure();
+    setQuery(seed);
+    setActive(seed ? 0 : Math.max(0, options.filter((o) => !o.action).findIndex((o) => o.id === value)));
+    setOpen(true);
+  };
+  const hide = (refocus: boolean) => { setOpen(false); setQuery(""); if (refocus) trigger.current?.focus(); };
+  const choose = (o: SelectOption<T>) => { hide(true); if (o.action || o.id !== value) onChange(o.id); };
+
+  useEffect(() => {
+    if (!open) return;
+    (canSearch ? search.current : listBox.current)?.focus();
+    const onDown = (e: MouseEvent) => { const t = e.target as Node; if (pop.current?.contains(t) || trigger.current?.contains(t)) return; hide(false); };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => { document.removeEventListener("mousedown", onDown); window.removeEventListener("resize", measure); window.removeEventListener("scroll", measure, true); };
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!open) return;
+    pop.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [active, open]);
+
+  const move = (delta: number) => setActive((a) => Math.min(Math.max(a + delta, 0), Math.max(rows.length - 1, 0)));
+  const onKey = (e: React.KeyboardEvent) => {
+    switch (keyOf(e)) {
+      case "ArrowDown": e.preventDefault(); move(1); break;
+      case "ArrowUp": e.preventDefault(); move(-1); break;
+      case "Home": e.preventDefault(); setActive(0); break;
+      case "End": e.preventDefault(); setActive(Math.max(rows.length - 1, 0)); break;
+      case "PageDown": e.preventDefault(); move(8); break;
+      case "PageUp": e.preventDefault(); move(-8); break;
+      case "Enter": { e.preventDefault(); const o = rows[active]; if (o) choose(o); break; }
+      case "Escape": e.preventDefault(); e.stopPropagation(); hide(true); break;
+      case "Tab": hide(false); break;
+      default:
+        // A short list has no filter box: a letter jumps to the first option that starts with it.
+        if (!canSearch && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          const i = rows.findIndex((o) => !o.action && o.name.toLowerCase().startsWith(e.key.toLowerCase()));
+          if (i >= 0) setActive(i);
+        }
+    }
+  };
+  const onTriggerKey = (e: React.KeyboardEvent) => {
+    const key = keyOf(e);
+    if (key === "ArrowDown" || key === "ArrowUp" || key === "Enter" || key === " ") { e.preventDefault(); show(); }
+    else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); show(canSearch ? e.key : ""); if (!canSearch) { const i = options.filter((o) => !o.action).findIndex((o) => o.name.toLowerCase().startsWith(e.key.toLowerCase())); if (i >= 0) setActive(i); } }
+  };
+
+  let index = -1;
+  const row = (o: SelectOption<T>) => {
+    index += 1;
+    const i = index;
+    return (
+      <div key={o.id} id={`${id}-${i}`} data-index={i} role="option" aria-selected={o.id === value && !o.action}
+        className={"combo-opt" + (i === active ? " on" : "") + (o.id === value && !o.action ? " sel" : "") + (o.action ? " act" : "")}
+        onMouseMove={() => { if (active !== i) setActive(i); }} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(o)}>
+        {o.action && <span className="combo-plus" aria-hidden="true">+</span>}
+        <span className="combo-name">{emphasise(o.name, q)}</span>
+        {o.id === value && !o.action && <span className="combo-tick" aria-hidden="true">✓</span>}
+      </div>
+    );
+  };
+
   return (
-    <select className="input select" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as T)} style={style} aria-label={ariaLabel}>
-      {!grouped
-        ? options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)
-        : groups.map((g) => g
-          ? <optgroup key={g} label={g}>{options.filter((o) => (o.group ?? "") === g).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</optgroup>
-          : options.filter((o) => !o.group).map((o) => <option key={o.id} value={o.id}>{o.name}</option>))}
-    </select>
+    <>
+      <button ref={trigger} type="button" className="input select combo-trigger" style={style} disabled={disabled} aria-label={ariaLabel}
+        aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined}
+        onMouseDown={(e) => { e.preventDefault(); if (open) hide(true); else show(); }} onKeyDown={onTriggerKey}>
+        <span className={"combo-value" + (current ? "" : " placeholder")}>{current?.name ?? placeholder}</span>
+      </button>
+      {open && place && createPortal(
+        <div ref={pop} className={"combo-pop" + (place.up ? " up" : "")} onKeyDown={onKey}
+          style={place.up ? { bottom: window.innerHeight - place.top, left: place.left, width: place.width } : { top: place.top, left: place.left, width: place.width }}>
+          {canSearch && (
+            <input ref={search} className="combo-search" value={query} placeholder="Type to filter…" autoComplete="off" spellCheck={false}
+              role="combobox" aria-expanded aria-controls={`${id}-list`} aria-autocomplete="list" aria-label={`Filter ${ariaLabel ?? "the list"}`}
+              aria-activedescendant={rows[active] ? `${id}-${active}` : undefined}
+              onChange={(e) => { setQuery(e.target.value); setActive(0); }} />
+          )}
+          <div ref={listBox} id={`${id}-list`} className="combo-list" role="listbox" aria-label={ariaLabel} tabIndex={canSearch ? -1 : 0}
+            aria-activedescendant={!canSearch && rows[active] ? `${id}-${active}` : undefined}>
+            {groups.map((g) => (
+              <React.Fragment key={g || "\u0000"}>
+                {g && <div className="combo-group" role="presentation">{g}</div>}
+                {regular.filter((o) => (o.group ?? "") === g).map(row)}
+              </React.Fragment>
+            ))}
+            {regular.length === 0 && !actions.some(matches) && <div className="combo-empty">Nothing matches "{query.trim()}".</div>}
+            {actions.length > 0 && <div className="combo-actions" role="presentation">{actions.map(row)}</div>}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
+}
+
+/** The key by name, falling back to the physical code for input methods that send none. */
+function keyOf(e: React.KeyboardEvent): string {
+  if (e.key) return e.key === "NumpadEnter" ? "Enter" : e.key;
+  const code = e.code;
+  if (code === "NumpadEnter") return "Enter";
+  if (code === "Space") return " ";
+  return code;
+}
+
+/** The matched part of a name, marked, so the eye finds why a row is there. */
+function emphasise(name: string, q: string): ReactNode {
+  if (!q) return name;
+  const at = name.toLowerCase().indexOf(q);
+  if (at < 0) return name;
+  return <>{name.slice(0, at)}<mark>{name.slice(at, at + q.length)}</mark>{name.slice(at + q.length)}</>;
 }
 
 export function Switch({ on, onChange, disabled, ariaLabel }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean; ariaLabel?: string }) {

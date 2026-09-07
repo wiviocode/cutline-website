@@ -10,7 +10,7 @@ import { useEffect, useRef } from "react";
 
 export type ShortcutMap = Record<string, (e: KeyboardEvent) => void>;
 
-const EDITABLE = "input, textarea, select, button, a, [contenteditable=''], [contenteditable='true']";
+const EDITABLE = "input, textarea, select, button, a, [role='listbox'], [contenteditable=''], [contenteditable='true']";
 
 export function useShortcuts(map: ShortcutMap, enabled = true) {
   const latest = useRef(map);

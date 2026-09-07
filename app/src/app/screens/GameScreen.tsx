@@ -39,7 +39,7 @@ export function GameScreen() {
             <div className="card">
               <div className="selects">
                 <Select<Level> value={s.selection.level} ariaLabel="Level"
-                  options={[...Levels.all.map((l) => ({ id: l.id, name: l.label, group: l.group })), { id: ADD_LEVEL, name: "Add a level…" }]}
+                  options={[...Levels.all.map((l) => ({ id: l.id, name: l.label, group: l.group })), { id: ADD_LEVEL, name: "Add a level…", action: true }]}
                   onChange={(v) => { if (v === ADD_LEVEL) setAddingLevel(true); else s.setLevel(v); }} />
                 <Select value={s.selection.sportID} options={SportCatalogue.options(s.selection.level).map((o) => ({ id: o.sport, name: o.name }))} onChange={(v) => s.setSport(v)} ariaLabel="Sport" />
                 {!noTeams && <GenderSelect />}

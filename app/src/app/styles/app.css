@@ -50,6 +50,32 @@ a:hover { color: var(--gold-hover); }
 .input::placeholder { color: var(--text-5); }
 .textarea { resize: vertical; line-height: 1.5; border-radius: 8px; }
 .select { cursor: pointer; padding-right: 26px; appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-4) 50%), linear-gradient(135deg, var(--text-4) 50%, transparent 50%); background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%; background-size: 5px 5px; background-repeat: no-repeat; width: auto; max-width: 100%; }
+
+/* ---- the dropdown: an input-styled trigger, a menu-styled popover ---- */
+.combo-trigger { display: inline-flex; align-items: center; text-align: left; min-width: 0; max-width: 100%; min-height: 32px; }
+.combo-trigger[aria-expanded="true"] { border-color: var(--gold); }
+.combo-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-value.placeholder { color: var(--text-5); }
+.combo-pop { position: fixed; z-index: 70; background: var(--ink-2); border: 1px solid var(--border-control); border-radius: 9px; box-shadow: var(--shadow-popover); padding: 5px; display: flex; flex-direction: column; gap: 4px; animation: rise .15s var(--ease-brand); }
+.combo-search { background: var(--ink-3); color: var(--text-1); border: 1px solid var(--border-control); border-radius: 6px; padding: 6px 9px; font: 12.5px/1.3 var(--font-body); outline: none; width: 100%; }
+.combo-search:focus { border-color: var(--gold); }
+.combo-search::placeholder { color: var(--text-5); }
+.combo-list { max-height: 296px; overflow-y: auto; outline: none; display: flex; flex-direction: column; gap: 1px; }
+.combo-group { padding: 7px 10px 3px; font: 600 10.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-5); }
+.combo-group:not(:first-child) { margin-top: 3px; }
+.combo-opt { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 12.5px; line-height: 1.3; color: var(--text-1); cursor: pointer; user-select: none; }
+.combo-opt.on { background: var(--ink-3); }
+.combo-opt.sel { color: var(--gold); }
+.combo-opt mark { background: transparent; color: var(--gold); font-weight: 600; }
+.combo-opt.sel mark { text-decoration: underline; text-underline-offset: 2px; }
+.combo-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-tick { flex: none; font-size: 11px; color: var(--gold); }
+.combo-plus { flex: none; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--text-4); color: var(--text-4); font: 600 12px/14px var(--font-mono); text-align: center; }
+.combo-opt.act { color: var(--text-3); }
+.combo-opt.act.on { color: var(--text-1); }
+.combo-opt.act.on .combo-plus { border-color: var(--gold); color: var(--gold); }
+.combo-actions { border-top: 1px solid var(--border-control); margin-top: 4px; padding-top: 4px; }
+.combo-empty { padding: 8px 10px; font-size: 12px; color: var(--text-4); }
 input[type="date"] { color-scheme: dark; }
 input[type="range"] { appearance: none; width: 140px; background: none; }
 input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: #3a4048; }
