@@ -13,14 +13,23 @@ import { GameScreen } from "./screens/GameScreen";
 import { ReviewScreen } from "./screens/ReviewScreen";
 import { SettingsPanel } from "./screens/SettingsPanel";
 import { RenamePanel } from "./screens/RenamePanel";
+import { UnsupportedBrowser } from "./screens/UnsupportedBrowser";
+import { BrowserSupport, type SupportReport } from "@platform/browserSupport";
 
-export function App() {
+/**
+ * `support` is the browser check, made once at startup. An unsupported browser sees the stop
+ * screen and nothing else — the store is not even started, so no settings are read, no key is
+ * asked for, and nothing looks like it might work.
+ */
+export function App({ support = BrowserSupport.check() }: { support?: SupportReport }) {
   const ready = useStore((s) => s.ready);
   const screen = useStore((s) => s.screen);
   const panel = useStore((s) => s.panel);
   const init = useStore((s) => s.init);
   const setPanel = useStore((s) => s.setPanel);
-  useEffect(() => { void init(); }, [init]);
+  useEffect(() => { if (support.supported) void init(); }, [init, support.supported]);
+
+  if (!support.supported) return <div className="app"><UnsupportedBrowser report={support} /></div>;
 
   return (
     <ErrorBoundary>
