@@ -3,7 +3,7 @@
  * for anything that needs saying. Everything sits inside an error boundary.
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useStore, type Screen } from "./store";
 import { Button, Mark } from "./components";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -14,22 +14,28 @@ import { ReviewScreen } from "./screens/ReviewScreen";
 import { SettingsPanel } from "./screens/SettingsPanel";
 import { RenamePanel } from "./screens/RenamePanel";
 import { UnsupportedBrowser } from "./screens/UnsupportedBrowser";
-import { BrowserSupport, type SupportReport } from "@platform/browserSupport";
+import { BrowserSupport, ReadOnlyChoice, type SupportReport } from "@platform/browserSupport";
 
 /**
- * `support` is the browser check, made once at startup. An unsupported browser sees the stop
- * screen and nothing else — the store is not even started, so no settings are read, no key is
- * asked for, and nothing looks like it might work.
+ * `support` is the browser check, made once at startup. A browser that cannot run Cutline sees
+ * the door and nothing else — the store is not even started, so no settings are read, no key is
+ * asked for, and nothing looks like it might work. One that can run but cannot write is argued
+ * with first, and remembered if the photographer insists.
  */
 export function App({ support = BrowserSupport.check() }: { support?: SupportReport }) {
+  const [tookReadOnly, setTookReadOnly] = useState(() => ReadOnlyChoice.accepted());
   const ready = useStore((s) => s.ready);
   const screen = useStore((s) => s.screen);
   const panel = useStore((s) => s.panel);
   const init = useStore((s) => s.init);
   const setPanel = useStore((s) => s.setPanel);
-  useEffect(() => { if (support.supported) void init(); }, [init, support.supported]);
+  const atDoor = !support.canRun || (!support.canWrite && !tookReadOnly);
+  useEffect(() => { if (!atDoor) void init(); }, [init, atDoor]);
 
-  if (!support.supported) return <div className="app"><UnsupportedBrowser report={support} /></div>;
+  if (atDoor) {
+    const takeReadOnly = () => { ReadOnlyChoice.accept(); setTookReadOnly(true); };
+    return <div className="app"><UnsupportedBrowser report={support} onContinue={support.canRun ? takeReadOnly : undefined} /></div>;
+  }
 
   return (
     <ErrorBoundary>

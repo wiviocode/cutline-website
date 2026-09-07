@@ -410,3 +410,9 @@ button.chip:hover { border-color: #4c5462; }
 .linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .linkish:hover { color: var(--text-1); }
 .linkish:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 3px; }
+.unsupported-anyway { margin-top: 2px; padding-top: 16px; border-top: 1px solid var(--border-hairline); width: 100%; }
+.unsupported-anyway > .linkish { color: var(--text-5); font-size: 12.5px; }
+.unsupported-anyway > .linkish:hover { color: var(--text-3); }
+.unsupported-confirm { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.unsupported-confirm p { margin: 0; color: var(--text-3); font-size: 12.5px; line-height: 1.55; max-width: 46ch; }
+.unsupported-confirm-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
