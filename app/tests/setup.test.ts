@@ -311,7 +311,9 @@ describe("Twenty sports at three levels", () => {
     expect(new Set(SPORT_TABLE.map((s) => s.id))).toEqual(new Set(SPORTS));
     expect(SPORT_TABLE.length).toBe(20);
     for (const s of SPORTS) expect(SportGuide.for(s), s).toBeTruthy();
-    expect(Levels.map((l) => l.id)).toEqual(["divisionI", "nebraskaHS", "professional"]);
+    const ids = Levels.builtIn.map((l) => l.id);
+    for (const id of ["divisionI", "divisionII", "divisionIII", "naia", "juco", "nebraskaHS", "middleSchool", "youth", "club", "recreational", "professional", "minorLeague", "semiPro", "international", "olympic"]) expect(ids, id).toContain(id);
+    expect(new Set(Levels.builtIn.map((l) => l.group))).toEqual(new Set(["College", "School", "Youth and club", "Professional"]));
   });
   it("offers the professional sports and names them by league", () => {
     const pro = new Set(SportCatalogue.professional.map((o) => o.sport));
@@ -386,5 +388,60 @@ describe("Twenty sports at three levels", () => {
     expect(horses.indexOf("saddlecloth")).toBeLessThan(horses.indexOf("Race 5"));
     expect(VisionPrompt.context({ sportLabel: "Football", roster })).not.toContain("About this sport");
     expect(VisionPrompt.context({ sportLabel: "Curling", roster, sport: "curling" })).not.toContain("About this sport");
+  });
+});
+
+describe("Levels beyond three, and a desk's own", () => {
+  it("qualifies the game by the level's phrase, and by league only at the top professional level", () => {
+    expect(captionQualifier("divisionII", "football", "mens")).toBe("college");
+    expect(captionQualifier("naia", "football", "mens")).toBe("NAIA college");
+    expect(captionQualifier("juco", "baseball", "mens")).toBe("junior college");
+    expect(captionQualifier("middleSchool", "basketball", "womens")).toBe("middle school");
+    expect(captionQualifier("youth", "soccer", "mens")).toBe("youth");
+    expect(captionQualifier("minorLeague", "baseball", "mens")).toBe("minor league");
+    expect(captionQualifier("semiPro", "football", "mens")).toBe("semi-pro");
+    expect(captionQualifier("olympic", "swimming", "womens")).toBe("Olympic");
+    expect(captionQualifier("international", "soccer", "womens")).toBe("international");
+    expect(captionQualifier("professional", "football", "mens")).toBe("NFL");
+    expect(captionQualifier("olympic", "autoRacing", "mens")).toBe("");
+  });
+  it("names the sides by the level's kind", () => {
+    expect(genderLabel("womens", "middleSchool", "basketball")).toBe("Girls");
+    expect(genderLabel("mens", "club", "soccer")).toBe("Men's");
+    expect(genderLabel("mens", "minorLeague", "baseball")).toBe("Men's");
+    expect(GameSelection.label(GameSelection.make("juco", "basketball", "womens"))).toBe("Women's Basketball");
+    expect(GameSelection.label(GameSelection.make("juco", "football", "mens"))).toBe("Football");
+    expect(GameSelection.label(GameSelection.make("middleSchool", "football", "mens"))).toBe("Boys Football");
+    expect(GameSelection.label(GameSelection.make("olympic", "swimming", "womens"))).toBe("Women's Swimming & Diving");
+  });
+  it("offers each kind its sports, and the open kinds everything", () => {
+    expect(SportCatalogue.options("juco").map((o) => o.sport)).toEqual(SportCatalogue.options("divisionI").map((o) => o.sport));
+    expect(SportCatalogue.options("middleSchool").map((o) => o.sport)).toEqual(SportCatalogue.options("nebraskaHS").map((o) => o.sport));
+    expect(SportCatalogue.options("minorLeague").map((o) => o.sport)).toEqual(SportCatalogue.options("professional").map((o) => o.sport));
+    const club = SportCatalogue.options("club");
+    expect(club.length).toBe(SPORT_TABLE.length);
+    expect(club.find((o) => o.sport === "wrestling")?.genders).toEqual(["mens", "womens"]);
+    expect(club.find((o) => o.sport === "autoRacing")?.genders).toEqual(["mens"]);
+    expect(SportCatalogue.option("football", "youth")?.genders).toEqual(["mens", "womens"]);
+  });
+  it("takes a desk's own level, uses it, and falls back when it is gone", () => {
+    const prep = Levels.make("Prep School", "", "highSchool");
+    expect(prep.id).toMatch(/^custom-prep-school-/);
+    expect(prep.qualifier).toBe("prep school");
+    Levels.register([prep, Levels.make("Masters", "masters", "open")]);
+    try {
+      expect(Levels.info(prep.id)?.custom).toBe(true);
+      expect(Levels.all.length).toBe(Levels.builtIn.length + 2);
+      expect(captionQualifier(prep.id, "football", "mens")).toBe("prep school");
+      expect(GameSelection.label(GameSelection.make(prep.id, "football", "mens"))).toBe("Boys Football");
+      expect(GameSelection.make(prep.id, "football", "mens").level).toBe(prep.id);
+      expect(SportCatalogue.options(prep.id).map((o) => o.sport)).toEqual(SportCatalogue.options("nebraskaHS").map((o) => o.sport));
+      const masters = Levels.custom[1];
+      expect(SportCatalogue.options(masters.id).length).toBe(SPORT_TABLE.length);
+      expect(captionQualifier(masters.id, "swimming", "womens")).toBe("masters");
+    } finally { Levels.register([]); }
+    expect(Levels.exists(prep.id)).toBe(false);
+    expect(GameSelection.make(prep.id, "football", "mens").level).toBe("divisionI");
+    expect(GameSelection.reconcile({ level: prep.id, sportID: "football", gender: "mens" }).level).toBe("divisionI");
   });
 });

@@ -11,7 +11,8 @@
  */
 
 import type { Sport } from "../caption/CompositionContext";
-import type { Gender, Level, RosterMode } from "./GameLibrary";
+import type { Gender, RosterMode } from "./GameLibrary";
+import type { LevelKind } from "./Levels";
 
 /** The word after the sport: "a college football game", "a college soccer match", "a track meet". */
 export type EventWord = "game" | "match" | "meet" | "dual" | "tournament" | "race";
@@ -30,8 +31,11 @@ export interface SportInfo {
   rosterMode: RosterMode;
   /** True for the racing sports, where men's and women's is not a distinction anyone draws. */
   genderless?: boolean;
-  /** Which genders play it at each level. A level missing here does not offer the sport. */
-  genders: Partial<Record<Level, Gender[]>>;
+  /**
+   * Which genders play it at each kind of level. A kind missing here does not offer the sport;
+   * the open kind — youth, club, international — offers every sport to either side.
+   */
+  genders: Partial<Record<Exclude<LevelKind, "open">, Gender[]>>;
   /** Professional leagues by gender, for "an NFL football game". */
   leagues?: Partial<Record<Gender, string>>;
   /** MaxPreps' path segment, where MaxPreps carries the sport's rosters. Checked against the site. */
@@ -47,26 +51,26 @@ const byGender = (m: string, w: string) => (gender: Gender) => (gender === "mens
 const one = (c: string) => () => c;
 
 export const SPORT_TABLE: SportInfo[] = [
-  { id: "football",      name: "Football",          noun: "football",        event: "game",       rosterMode: "rosters",   genders: { divisionI: men,   nebraskaHS: men,   professional: men },   leagues: { mens: "NFL" },                       maxPreps: "football",      code: one("FB") },
-  { id: "basketball",    name: "Basketball",        noun: "basketball",      event: "game",       rosterMode: "rosters",   genders: { divisionI: both,  nebraskaHS: both,  professional: both },  leagues: { mens: "NBA", womens: "WNBA" },       maxPreps: "basketball",    code: byGender("MBB", "WBB") },
-  { id: "volleyball",    name: "Volleyball",        noun: "volleyball",      event: "match",      rosterMode: "rosters",   genders: { divisionI: women, nebraskaHS: women, professional: women },                                                 maxPreps: "volleyball",    code: one("VB") },
-  { id: "soccer",        name: "Soccer",            noun: "soccer",          event: "match",      rosterMode: "rosters",   genders: { divisionI: both,  nebraskaHS: both,  professional: both },  leagues: { mens: "MLS", womens: "NWSL" },       maxPreps: "soccer",        code: byGender("MSOC", "WSOC") },
-  { id: "baseball",      name: "Baseball",          noun: "baseball",        event: "game",       rosterMode: "rosters",   genders: { divisionI: men,   nebraskaHS: men,   professional: men },   leagues: { mens: "MLB" },                       maxPreps: "baseball",      code: one("BB") },
-  { id: "softball",      name: "Softball",          noun: "softball",        event: "game",       rosterMode: "rosters",   genders: { divisionI: women, nebraskaHS: women, professional: women },                                                 maxPreps: "softball",      code: one("SB") },
-  { id: "hockey",        name: "Ice Hockey",        noun: "hockey",          event: "game",       rosterMode: "rosters",   genders: { divisionI: both,  nebraskaHS: both,  professional: both },  leagues: { mens: "NHL", womens: "PWHL" },       maxPreps: "ice-hockey",    code: byGender("MHKY", "WHKY") },
-  { id: "lacrosse",      name: "Lacrosse",          noun: "lacrosse",        event: "game",       rosterMode: "rosters",   genders: { divisionI: both,  nebraskaHS: both,  professional: men },   leagues: { mens: "PLL" },                       maxPreps: "lacrosse",      code: byGender("MLAX", "WLAX") },
-  { id: "fieldHockey",   name: "Field Hockey",      noun: "field hockey",    event: "game",       rosterMode: "rosters",   genders: { divisionI: women, nebraskaHS: women },                                                                      maxPreps: "field-hockey",  code: one("FH") },
-  { id: "waterPolo",     name: "Water Polo",        noun: "water polo",      event: "match",      rosterMode: "rosters",   genders: { divisionI: both,  nebraskaHS: both },                                                                       maxPreps: "water-polo",    code: byGender("MWPO", "WWPO") },
-  { id: "wrestling",     name: "Wrestling",         noun: "wrestling",       event: "dual",       rosterMode: "noRosters", genders: { divisionI: both,  nebraskaHS: both },                                                                       maxPreps: "wrestling",     code: one("WRES") },
-  { id: "tennis",        name: "Tennis",            noun: "tennis",          event: "match",      rosterMode: "noRosters", genders: { divisionI: both,  nebraskaHS: both,  professional: both },                                                 maxPreps: "tennis",        code: byGender("MTEN", "WTEN") },
-  { id: "golf",          name: "Golf",              noun: "golf",            event: "tournament", rosterMode: "noTeams",   genders: { divisionI: both,  nebraskaHS: both,  professional: both },  leagues: { mens: "PGA Tour", womens: "LPGA" },  maxPreps: "golf",          code: byGender("MGF", "WGF") },
-  { id: "trackAndField", name: "Track & Field",     noun: "track and field", event: "meet",       rosterMode: "noTeams",   genders: { divisionI: both,  nebraskaHS: both,  professional: both },                                                 maxPreps: "track-field",   code: one("TF") },
-  { id: "crossCountry",  name: "Cross Country",     noun: "cross country",   event: "meet",       rosterMode: "noTeams",   genders: { divisionI: both,  nebraskaHS: both },                                                                       maxPreps: "cross-country", code: one("CC") },
-  { id: "swimming",      name: "Swimming & Diving", noun: "swimming",        event: "meet",       rosterMode: "noTeams",   genders: { divisionI: both,  nebraskaHS: both,  professional: both },                                                                            code: byGender("MSWIM", "WSWIM") },
-  { id: "gymnastics",    name: "Gymnastics",        noun: "gymnastics",      event: "meet",       rosterMode: "noTeams",   genders: { divisionI: both,  nebraskaHS: women, professional: both },                                                                            code: byGender("MGYM", "WGYM") },
+  { id: "football",      name: "Football",          noun: "football",        event: "game",       rosterMode: "rosters",   genders: { college: men,   highSchool: men,   professional: men },   leagues: { mens: "NFL" },                       maxPreps: "football",      code: one("FB") },
+  { id: "basketball",    name: "Basketball",        noun: "basketball",      event: "game",       rosterMode: "rosters",   genders: { college: both,  highSchool: both,  professional: both },  leagues: { mens: "NBA", womens: "WNBA" },       maxPreps: "basketball",    code: byGender("MBB", "WBB") },
+  { id: "volleyball",    name: "Volleyball",        noun: "volleyball",      event: "match",      rosterMode: "rosters",   genders: { college: women, highSchool: women, professional: women },                                                 maxPreps: "volleyball",    code: one("VB") },
+  { id: "soccer",        name: "Soccer",            noun: "soccer",          event: "match",      rosterMode: "rosters",   genders: { college: both,  highSchool: both,  professional: both },  leagues: { mens: "MLS", womens: "NWSL" },       maxPreps: "soccer",        code: byGender("MSOC", "WSOC") },
+  { id: "baseball",      name: "Baseball",          noun: "baseball",        event: "game",       rosterMode: "rosters",   genders: { college: men,   highSchool: men,   professional: men },   leagues: { mens: "MLB" },                       maxPreps: "baseball",      code: one("BB") },
+  { id: "softball",      name: "Softball",          noun: "softball",        event: "game",       rosterMode: "rosters",   genders: { college: women, highSchool: women, professional: women },                                                 maxPreps: "softball",      code: one("SB") },
+  { id: "hockey",        name: "Ice Hockey",        noun: "hockey",          event: "game",       rosterMode: "rosters",   genders: { college: both,  highSchool: both,  professional: both },  leagues: { mens: "NHL", womens: "PWHL" },       maxPreps: "ice-hockey",    code: byGender("MHKY", "WHKY") },
+  { id: "lacrosse",      name: "Lacrosse",          noun: "lacrosse",        event: "game",       rosterMode: "rosters",   genders: { college: both,  highSchool: both,  professional: men },   leagues: { mens: "PLL" },                       maxPreps: "lacrosse",      code: byGender("MLAX", "WLAX") },
+  { id: "fieldHockey",   name: "Field Hockey",      noun: "field hockey",    event: "game",       rosterMode: "rosters",   genders: { college: women, highSchool: women },                                                                      maxPreps: "field-hockey",  code: one("FH") },
+  { id: "waterPolo",     name: "Water Polo",        noun: "water polo",      event: "match",      rosterMode: "rosters",   genders: { college: both,  highSchool: both },                                                                       maxPreps: "water-polo",    code: byGender("MWPO", "WWPO") },
+  { id: "wrestling",     name: "Wrestling",         noun: "wrestling",       event: "dual",       rosterMode: "noRosters", genders: { college: both,  highSchool: both },                                                                       maxPreps: "wrestling",     code: one("WRES") },
+  { id: "tennis",        name: "Tennis",            noun: "tennis",          event: "match",      rosterMode: "noRosters", genders: { college: both,  highSchool: both,  professional: both },                                                 maxPreps: "tennis",        code: byGender("MTEN", "WTEN") },
+  { id: "golf",          name: "Golf",              noun: "golf",            event: "tournament", rosterMode: "noTeams",   genders: { college: both,  highSchool: both,  professional: both },  leagues: { mens: "PGA Tour", womens: "LPGA" },  maxPreps: "golf",          code: byGender("MGF", "WGF") },
+  { id: "trackAndField", name: "Track & Field",     noun: "track and field", event: "meet",       rosterMode: "noTeams",   genders: { college: both,  highSchool: both,  professional: both },                                                 maxPreps: "track-field",   code: one("TF") },
+  { id: "crossCountry",  name: "Cross Country",     noun: "cross country",   event: "meet",       rosterMode: "noTeams",   genders: { college: both,  highSchool: both },                                                                       maxPreps: "cross-country", code: one("CC") },
+  { id: "swimming",      name: "Swimming & Diving", noun: "swimming",        event: "meet",       rosterMode: "noTeams",   genders: { college: both,  highSchool: both,  professional: both },                                                                            code: byGender("MSWIM", "WSWIM") },
+  { id: "gymnastics",    name: "Gymnastics",        noun: "gymnastics",      event: "meet",       rosterMode: "noTeams",   genders: { college: both,  highSchool: women, professional: both },                                                                            code: byGender("MGYM", "WGYM") },
   { id: "autoRacing",    name: "Auto Racing",       noun: "",                event: "race",       rosterMode: "noTeams",   genderless: true, genders: { professional: men },                                                                                                  code: one("RACE") },
   { id: "horseRacing",   name: "Horse Racing",      noun: "",                event: "race",       rosterMode: "noTeams",   genderless: true, genders: { professional: men },                                                                                                  code: one("HORSE") },
-  { id: "cricket",       name: "Cricket",           noun: "cricket",         event: "match",      rosterMode: "rosters",   genders: { divisionI: men,   professional: both },  leagues: { mens: "MLC" },                                                                     code: one("CRK") },
+  { id: "cricket",       name: "Cricket",           noun: "cricket",         event: "match",      rosterMode: "rosters",   genders: { college: men,   professional: both },  leagues: { mens: "MLC" },                                                                     code: one("CRK") },
 ];
 
 const BY_ID = new Map(SPORT_TABLE.map((s) => [s.id as string, s]));
@@ -88,6 +92,14 @@ export const Sports = {
   defaultRosterMode(id: string): RosterMode { return BY_ID.get(id)?.rosterMode ?? "rosters"; },
 
   isGenderless(id: string): boolean { return !!BY_ID.get(id)?.genderless; },
+
+  /** The sides a sport has at a kind of level; none when the kind does not offer it. */
+  gendersAt(id: string, kind: LevelKind): Gender[] {
+    const s = BY_ID.get(id);
+    if (!s) return [];
+    if (kind === "open") return s.genderless ? ["mens"] : ["mens", "womens"];
+    return s.genders[kind] ?? [];
+  },
 
   /** Sports MaxPreps carries rosters for, by path segment. */
   get maxPrepsSlugs(): Record<string, string> {

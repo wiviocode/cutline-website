@@ -13,12 +13,14 @@ import { CAPTION_STYLES, type CaptionStyle } from "@core/caption/CompositionCont
 import { WireStyle } from "@core/caption/WireStyle";
 import { SampleCaption } from "@core/caption/SampleCaption";
 import { VISION_MODELS, ALT_TEXT_MODES, ImagePrep, type AltTextMode } from "@core/anthropic/VisionModel";
+import { Levels } from "@core/setup/GameLibrary";
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const settings = useStore((s) => s.settings);
   const set = useStore((s) => s.setSetting);
   const writable = useStore((s) => s.writableFolders);
   const reopenSetup = useStore((s) => s.reopenSetup);
+  const removeLevel = useStore((s) => s.removeLevel);
 
   const sample = SampleCaption.text(settings.style, settings.photographer.trim() || "Your Name", settings.house);
   const altCost: Partial<Record<AltTextMode, string>> = { brief: "A second look at a small copy of each photo, about $0.45 per 500 frames.", detailed: "A second look at each photo, about $1 per 500 frames." };
@@ -87,6 +89,19 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <span className="k">IPTC template<small>Your desk's standing credit, copyright and source — made here, or exported from Photo Mechanic as a .XMP stationery pad. The per-shoot fields are written over it; without one the caption, date, By-line, headline, place and codes are still written.</small></span>
             <span className="c"><TemplatePicker /></span>
           </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head"><Overline>Your levels</Overline><span className="hint">Added from the level list on the game screen.</span></div>
+        <div className="card rows">
+          {(settings.customLevels ?? []).length === 0 && <p className="note">None yet. The level list offers the NCAA divisions, NAIA, junior college, school, youth, club, professional and international; anything else — a prep-school league, a masters circuit — you can add there.</p>}
+          {(settings.customLevels ?? []).map((l) => (
+            <div key={l.id} className="row">
+              <span className="k">{l.label}<small>"during a {l.qualifier} … game" · {Levels.kinds.find((k) => k.id === l.kind)?.label ?? l.kind}</small></span>
+              <span className="c"><button type="button" className="linky" onClick={() => removeLevel(l.id)}>Remove</button></span>
+            </div>
+          ))}
         </div>
       </section>
 

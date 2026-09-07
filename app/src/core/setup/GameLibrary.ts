@@ -1,14 +1,17 @@
 /**
  * The vocabulary of a shoot: what level, what sport, who is playing.
  *
- * Three levels — college, high school, professional — and the sports each one plays, drawn from
- * the sport table. The level ids are the ones the first desk used and are kept as stored, so a
- * remembered shoot still opens.
+ * Levels come from the catalogue — fifteen built in, plus the desk's own — and the sports each
+ * one plays come from the sport table, by the level's kind.
  */
 
 import { Sports } from "./Sports";
+import { Levels } from "./Levels";
 
-export type Level = "divisionI" | "nebraskaHS" | "professional";
+export { Levels, LEVEL_KINDS, type LevelInfo, type LevelKind, type CustomLevel } from "./Levels";
+
+/** A level's id: one of the built-in ids, or a desk's own `custom-…`. */
+export type Level = string;
 export type Gender = "mens" | "womens";
 /**
  * How much team information a shoot has. Three genuinely different situations: "no rosters"
@@ -18,45 +21,48 @@ export type Gender = "mens" | "womens";
  */
 export type RosterMode = "rosters" | "noRosters" | "noTeams";
 
-export const Levels: { id: Level; label: string; shortLabel: string; captionQualifier: string }[] = [
-  { id: "divisionI",    label: "College",      shortLabel: "College", captionQualifier: "college" },
-  { id: "nebraskaHS",   label: "High School",  shortLabel: "HS",      captionQualifier: "high school" },
-  { id: "professional", label: "Professional", shortLabel: "Pro",     captionQualifier: "professional" },
-];
-
 /**
- * How a caption qualifies the game: "a **college** football game", "a **high school** wrestling
- * dual", "an **NFL** football game". A professional fixture takes its league where the sport has
- * one; a race takes nothing, since "a professional race" says less than "a race".
+ * How a caption qualifies the game: "a **college** football game", "a **junior college** baseball
+ * game", "a **high school** wrestling dual", "an **NFL** football game", "an **Olympic** swimming
+ * meet". At the top professional level the sport's league names the game where it has one; a
+ * race takes nothing, since "a professional race" says less than "a race".
  */
 export function captionQualifier(level: Level, sport?: string, gender: Gender = "mens"): string {
-  if (level !== "professional") return Levels.find((l) => l.id === level)?.captionQualifier ?? "college";
   if (sport && Sports.isGenderless(sport)) return "";
-  return (sport && Sports.league(sport, gender)) || "professional";
+  const info = Levels.info(level);
+  if (info?.leagues && sport) {
+    const league = Sports.league(sport, gender);
+    if (league) return league;
+  }
+  return info?.qualifier ?? "college";
+}
+
+/** The sport's league at this level, when the level is the one where leagues name the game. */
+function leagueAt(level: Level, sport: string | undefined, gender: Gender): string | null {
+  if (!sport || !Levels.info(level)?.leagues) return null;
+  return Sports.league(sport, gender);
 }
 
 /**
- * College and high school use different words for the same distinction; a professional fixture
- * is named by its league, and a race by nothing at all.
+ * School sport is Boys and Girls; everything else is Men's and Women's; the top professional
+ * level is named by its league, and a race by nothing at all.
  */
 export function genderLabel(gender: Gender, level: Level, sport?: string): string {
-  if (level === "professional") {
-    if (sport && Sports.isGenderless(sport)) return "";
-    return (sport && Sports.league(sport, gender)) || (gender === "mens" ? "Men's" : "Women's");
-  }
-  if (level === "divisionI") return gender === "mens" ? "Men's" : "Women's";
-  return gender === "mens" ? "Boys" : "Girls";
+  if (sport && Sports.isGenderless(sport)) return "";
+  const league = leagueAt(level, sport, gender);
+  if (league) return league;
+  if (Levels.kind(level) === "highSchool") return gender === "mens" ? "Boys" : "Girls";
+  return gender === "mens" ? "Men's" : "Women's";
 }
 
 /**
  * The event as a desk names it: "Nebraska Football", "Nebraska Volleyball", "Nebraska Women's
- * Basketball" — the gender word only where the college plays both. High school keeps "Boys" and
- * "Girls" throughout, which is how those sports are named; a professional fixture takes its league.
+ * Basketball" — the gender word only where the level plays both. School sport keeps "Boys" and
+ * "Girls" throughout, which is how those sports are named; the top professional level takes its league.
  */
 export function eventLabel(level: Level, sport: string, gender: Gender, name: string): string {
-  const genders = Sports.info(sport)?.genders[level] ?? [];
-  const single = genders.length === 1;
-  const word = level === "nebraskaHS" || !single || (level === "professional" && Sports.league(sport, gender)) ? genderLabel(gender, level, sport) : "";
+  const single = Sports.gendersAt(sport, Levels.kind(level)).length === 1;
+  const word = Levels.kind(level) === "highSchool" || !single || leagueAt(level, sport, gender) ? genderLabel(gender, level, sport) : "";
   return `${word} ${name}`.trim();
 }
 
@@ -73,9 +79,10 @@ export interface SportOption {
   genders: Gender[];
 }
 
-/** The sports a level plays, from the sport table, in the table's order. */
+/** The sports a level plays, from the sport table by the level's kind, in the table's order. */
 function optionsAt(level: Level): SportOption[] {
-  return Sports.all.filter((s) => (s.genders[level] ?? []).length > 0).map((s) => ({ sport: s.id, name: s.name, genders: s.genders[level]! }));
+  const kind = Levels.kind(level);
+  return Sports.all.map((s) => ({ sport: s.id, name: s.name, genders: Sports.gendersAt(s.id, kind) })).filter((o) => o.genders.length > 0);
 }
 
 export const SportCatalogue = {
@@ -135,9 +142,10 @@ export const GameSelection = {
     return GameSelection.reconcile({ level, sportID, gender });
   },
 
-  /** Drop to a legal sport for the level, then a legal gender for the sport. */
+  /** A level that is gone — a desk's own, since removed — falls back; then a legal sport, then a legal gender. */
   reconcile(s: GameSelection): GameSelection {
     let { level, sportID, gender } = s;
+    if (!Levels.exists(level)) level = "divisionI";
     const options = SportCatalogue.options(level);
     if (!options.some((o) => o.sport === sportID)) sportID = options[0]?.sport ?? sportID;
     const sport = SportCatalogue.option(sportID, level);

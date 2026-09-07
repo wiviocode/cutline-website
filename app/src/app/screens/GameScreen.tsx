@@ -9,18 +9,22 @@ import { useStore, derive, thumbnails, THUMB_EDGE, type Side } from "../store";
 import { Button, Callout, Crest, Field, Overline, Select, TextArea, TextInput, swatchColour } from "../components";
 import { Levels, RosterModes, SportCatalogue, genderLabel, type Gender, type Level, type RosterMode } from "@core/setup/GameLibrary";
 import { TeamEditor } from "./TeamEditor";
+import { LevelEditor } from "./LevelEditor";
+
+const ADD_LEVEL = "__add-level";
 import { useShortcuts } from "../shortcuts";
 
 export function GameScreen() {
   const s = useStore();
   const [editing, setEditing] = useState<Side | null>(null);
+  const [addingLevel, setAddingLevel] = useState(false);
   const blocking = derive.blockingReason(s);
   const noTeams = derive.noTeams(s);
 
   useShortcuts({
     "mod+Enter": () => { if (!blocking) void s.continueToReview(); },
     "mod+o": () => void s.chooseFolder(false),
-  }, !s.panel && !editing);
+  }, !s.panel && !editing && !addingLevel);
 
   const rosterNote = s.rosterMode === "rosters" ? "rosters loaded" : s.rosterMode === "noRosters" ? "no rosters" : "open event";
 
@@ -34,7 +38,9 @@ export function GameScreen() {
             <div className="section-head"><Overline><span id="g-played">What was played</span></Overline><span className="hint">{RosterModes.find((m) => m.id === s.rosterMode)?.explanation}</span></div>
             <div className="card">
               <div className="selects">
-                <Select<Level> value={s.selection.level} options={Levels.map((l) => ({ id: l.id, name: l.label }))} onChange={(v) => s.setLevel(v)} ariaLabel="Level" />
+                <Select<Level> value={s.selection.level} ariaLabel="Level"
+                  options={[...Levels.all.map((l) => ({ id: l.id, name: l.label, group: l.group })), { id: ADD_LEVEL, name: "Add a level…" }]}
+                  onChange={(v) => { if (v === ADD_LEVEL) setAddingLevel(true); else s.setLevel(v); }} />
                 <Select value={s.selection.sportID} options={SportCatalogue.options(s.selection.level).map((o) => ({ id: o.sport, name: o.name }))} onChange={(v) => s.setSport(v)} ariaLabel="Sport" />
                 {!noTeams && <GenderSelect />}
                 <Select<RosterMode> value={s.rosterMode} options={RosterModes.map((m) => ({ id: m.id, name: m.label }))} onChange={(v) => s.setRosterMode(v)} ariaLabel="Team information" />
@@ -91,6 +97,7 @@ export function GameScreen() {
         <Button disabled={!!blocking} onClick={() => void s.continueToReview()} title="⌘⏎">Continue</Button>
       </footer>
       {editing && <TeamEditor side={editing} onClose={() => setEditing(null)} />}
+      {addingLevel && <LevelEditor onClose={() => setAddingLevel(false)} />}
     </div>
   );
 }

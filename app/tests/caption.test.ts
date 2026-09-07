@@ -622,6 +622,11 @@ describe("Every sport names its event, and every league takes the right article"
     expect(clause("golf", "apSports", "LPGA")).toContain("during an LPGA golf tournament");
     expect(clause("fieldHockey", "apSports", "college")).toContain("during an NCAA college field hockey game");
     expect(clause("autoRacing", "apSports", "")).toContain("during a race");
+    expect(clause("football", "apSports", "NAIA college")).toContain("during an NAIA college football game");
+    expect(clause("baseball", "hurrdatSports", "junior college")).toContain("during a junior college baseball game");
+    expect(clause("baseball", "apSports", "minor league")).toContain("during a minor league baseball game");
+    expect(clause("swimming", "gettySports", "Olympic")).toContain("during an Olympic swimming meet");
+    expect(clause("soccer", "apSports", "youth")).toContain("during a youth soccer match");
   });
   it("says an NFL, an MLB, an NHL, but a WNBA and a PLL", () => {
     expect(clause("football", "apSports", "NFL")).toContain("during an NFL football game");

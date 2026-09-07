@@ -14,6 +14,7 @@ import { readPhotoMetadata } from "@platform/exif";
 import { fetchPage, fetchLogo, relayAvailable } from "@platform/fetchPage";
 
 import { GameSelection, RecentGame, SportCatalogue, captionQualifier, type Level, type Gender, type RosterMode } from "@core/setup/GameLibrary";
+import { Levels, type LevelKind } from "@core/setup/Levels";
 import { KitColourDiagnosis } from "@core/setup/KitColourDiagnosis";
 import { Roster, RosterPlayer, Team, type Roster as RosterT, type PlayerSide } from "@core/roster/Roster";
 import { Positions } from "@core/roster/Positions";
@@ -136,6 +137,9 @@ interface State {
   reopenSetup(): void;
   addTemplate(name: string, text: string): Promise<void>;
   removeTemplate(name: string): Promise<void>;
+  /** A level of the desk's own; it is chosen as soon as it is added. */
+  addLevel(label: string, qualifier: string, kind: LevelKind): void;
+  removeLevel(id: string): void;
 
   // setup. `fresh` means a new card: the fixture is cleared, the beat is kept.
   chooseFolder(fresh: boolean): Promise<void>;
@@ -542,6 +546,7 @@ export const useStore = create<State>()((set, get) => {
 
     async init() {
       const [settings, apiKey, library, recents, templateNames] = await Promise.all([Storage.settings(), Storage.apiKey(), Storage.teams(), Storage.recents(), Storage.templateNames()]);
+      Levels.register(settings.customLevels ?? []);
       set({ settings, apiKey, library: TeamLibrary.sorted(library), recents, templateNames, ready: true, screen: needsOnboarding(settings, apiKey) ? "welcome" : "start" });
       const sel = GameSelection.make();
       set({ selection: sel, home: { ...get().home, rosterURL: GameSelection.suggestedHomeURL(sel) ?? "" } });
@@ -555,8 +560,19 @@ export const useStore = create<State>()((set, get) => {
 
     setSetting(patch) {
       const settings = { ...get().settings, ...patch };
+      if ("customLevels" in patch) Levels.register(settings.customLevels ?? []);
       set({ settings });
       void Storage.saveSettings(settings);
+    },
+    addLevel(label, qualifier, kind) {
+      const level = Levels.make(label, qualifier, kind);
+      get().setSetting({ customLevels: [...(get().settings.customLevels ?? []), level] });
+      get().setLevel(level.id);
+    },
+    removeLevel(id) {
+      get().setSetting({ customLevels: (get().settings.customLevels ?? []).filter((l) => l.id !== id) });
+      // The selection reconciles itself against the levels that remain.
+      if (get().selection.level === id) get().setLevel("divisionI");
     },
     async setApiKey(key) { set({ apiKey: key.trim() }); await Storage.saveApiKey(key.trim()); },
     verifyKey: (key) => AnthropicClient.verifyKey(key.trim()),

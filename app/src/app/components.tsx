@@ -54,11 +54,18 @@ export function TextArea({ value, onChange, placeholder, minHeight = 96, autoFoc
   );
 }
 
+/** A native select. Options carrying a `group` are set under that heading, in order of first appearance. */
 export function Select<T extends string>({ value, options, onChange, style, disabled, ariaLabel }:
-  { value: T; options: { id: T; name: string }[]; onChange: (v: T) => void; style?: CSSProperties; disabled?: boolean; ariaLabel?: string }) {
+  { value: T; options: { id: T; name: string; group?: string }[]; onChange: (v: T) => void; style?: CSSProperties; disabled?: boolean; ariaLabel?: string }) {
+  const grouped = options.some((o) => o.group);
+  const groups = grouped ? [...new Set(options.map((o) => o.group ?? ""))] : [];
   return (
     <select className="input select" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as T)} style={style} aria-label={ariaLabel}>
-      {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+      {!grouped
+        ? options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)
+        : groups.map((g) => g
+          ? <optgroup key={g} label={g}>{options.filter((o) => (o.group ?? "") === g).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</optgroup>
+          : options.filter((o) => !o.group).map((o) => <option key={o.id} value={o.id}>{o.name}</option>))}
     </select>
   );
 }

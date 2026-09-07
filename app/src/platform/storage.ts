@@ -15,6 +15,7 @@ import type { RecentGame } from "@core/setup/GameLibrary";
 import type { CaptionStyle } from "@core/caption/CompositionContext";
 import { DEFAULT_VISION_MODEL, type AltTextMode } from "@core/anthropic/VisionModel";
 import { NamingPattern } from "@core/naming/NamingPattern";
+import type { CustomLevel } from "@core/setup/Levels";
 
 export interface Settings {
   style: CaptionStyle;
@@ -32,6 +33,8 @@ export interface Settings {
   templateName: string | null;
   /** The first-time setup has been completed once. */
   onboarded: boolean;
+  /** Levels the desk added itself — a prep-school league, a masters circuit. */
+  customLevels: CustomLevel[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -47,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
   namingPattern: NamingPattern.hurrdat,
   templateName: null,
   onboarded: false,
+  customLevels: [],
 };
 
 const DB_NAME = "cutline";
