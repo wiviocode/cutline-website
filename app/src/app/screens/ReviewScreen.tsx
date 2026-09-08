@@ -471,8 +471,8 @@ function ActionBar() {
         </>
       ) : (
         <>
-          {v.anyDone && <Button disabled={!v.ready} onClick={go(() => { if (window.confirm(`Caption all ${v.count} photographs again? Each one is a new request to the model.`)) void run({ redo: true }); })}>Redo every caption…</Button>}
-          {v.anyDone && <Button onClick={go(() => setPanel("rename"))}>Rename photographs…</Button>}
+          {v.anyDone && <Button variant="secondary" disabled={!v.ready} onClick={go(() => { if (window.confirm(`Caption all ${v.count} photographs again? Each one is a new request to the model.`)) void run({ redo: true }); })}>Redo every caption…</Button>}
+          {v.anyDone && <Button variant="secondary" onClick={go(() => setPanel("rename"))}>Rename photographs…</Button>}
           {v.pending > 10 && <Button variant="secondary" disabled={!v.ready} onClick={go(() => void run({ limit: 10 }))} title="Caption ten, check them, then do the rest">Try 10 first</Button>}
           {v.pending > 0 && <Button disabled={!v.ready} onClick={go(() => void run())}>Caption {v.pending} photograph{v.pending === 1 ? "" : "s"}</Button>}
           {v.pending === 0 && v.failed > 0 && <Button disabled={!v.ready} onClick={go(() => void run({ failed: true }))}>Retry {v.failed} failed</Button>}
