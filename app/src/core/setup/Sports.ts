@@ -38,6 +38,12 @@ export interface SportInfo {
   genders: Partial<Record<Exclude<LevelKind, "open">, Gender[]>>;
   /** Professional leagues by gender, for "an NFL football game". */
   leagues?: Partial<Record<Gender, string>>;
+  /**
+   * A number can be worn by two players who are never on the field together — football's
+   * offence and defence. Where this is true the unit decides which of them a photograph shows,
+   * and the review screen offers it as a correction; everywhere else a number is one player.
+   */
+  units?: boolean;
   /** MaxPreps' path segment, where MaxPreps carries the sport's rosters. Checked against the site. */
   maxPreps?: string;
   /** The file-naming convention's code. */
@@ -51,7 +57,7 @@ const byGender = (m: string, w: string) => (gender: Gender) => (gender === "mens
 const one = (c: string) => () => c;
 
 export const SPORT_TABLE: SportInfo[] = [
-  { id: "football",      name: "Football",          noun: "football",        event: "game",       rosterMode: "rosters",   genders: { college: men,   highSchool: men,   professional: men },   leagues: { mens: "NFL" },                       maxPreps: "football",      code: one("FB") },
+  { id: "football",      name: "Football",          noun: "football",        event: "game",       rosterMode: "rosters",   genders: { college: men,   highSchool: men,   professional: men },   leagues: { mens: "NFL" }, units: true,          maxPreps: "football",      code: one("FB") },
   { id: "basketball",    name: "Basketball",        noun: "basketball",      event: "game",       rosterMode: "rosters",   genders: { college: both,  highSchool: both,  professional: both },  leagues: { mens: "NBA", womens: "WNBA" },       maxPreps: "basketball",    code: byGender("MBB", "WBB") },
   { id: "volleyball",    name: "Volleyball",        noun: "volleyball",      event: "match",      rosterMode: "rosters",   genders: { college: women, highSchool: women, professional: women },                                                 maxPreps: "volleyball",    code: one("VB") },
   { id: "soccer",        name: "Soccer",            noun: "soccer",          event: "match",      rosterMode: "rosters",   genders: { college: both,  highSchool: both,  professional: both },  leagues: { mens: "MLS", womens: "NWSL" },       maxPreps: "soccer",        code: byGender("MSOC", "WSOC") },
@@ -90,6 +96,9 @@ export const Sports = {
   league(id: string, gender: Gender): string | null { return BY_ID.get(id)?.leagues?.[gender] ?? null; },
 
   defaultRosterMode(id: string): RosterMode { return BY_ID.get(id)?.rosterMode ?? "rosters"; },
+
+  /** True where two players may share a number because they play different units. */
+  hasUnits(id: string): boolean { return !!BY_ID.get(id)?.units; },
 
   isGenderless(id: string): boolean { return !!BY_ID.get(id)?.genderless; },
 

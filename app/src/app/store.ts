@@ -178,7 +178,8 @@ interface State {
   step(delta: number): void;
   nextNeedingNumber(): void;
   setFilter(f: ReviewStatus): void;
-  assignNumber(id: string, slot: number, number: string): Promise<void>;
+  /** A number read by hand, and on football a unit to go with it; `side` undefined leaves the unit as it was. */
+  assignNumber(id: string, slot: number, number: string, side?: PlayerSide | null): Promise<void>;
   updateCaption(id: string, text: string): Promise<void>;
   recompose(id: string): Promise<void>;
   recomposeAll(): Promise<void>;
@@ -926,13 +927,20 @@ export const useStore = create<State>()((set, get) => {
     },
     setFilter: (filter) => set({ filter }),
 
-    async assignNumber(id, slot, number) {
+    async assignNumber(id, slot, number, side) {
       const f = frame(id);
       if (!f?.record || slot >= f.record.vision.players.length) return;
       const manual = { ...f.record.manualJerseyNumbers };
       const trimmed = number.trim();
       if (trimmed) manual[slot] = trimmed; else delete manual[slot];
-      patchFrame(id, { record: { ...f.record, manualJerseyNumbers: manual } });
+      const sides = { ...(f.record.manualSides ?? {}) };
+      if (side === null) delete sides[slot]; else if (side) sides[slot] = side;
+      const rec = { ...f.record, manualJerseyNumbers: manual, manualSides: sides };
+      patchFrame(id, { record: rec });
+      // The correction is saved here rather than left to the rebuild: a unit that names the same
+      // player, or a number the caption did not print, leaves the words identical, and a rebuild
+      // that finds nothing to change writes nothing — which lost the correction on reopening.
+      await saveRecord(f, rec);
       await recomposeFrame(id, { force: true });
     },
 
@@ -1003,7 +1011,8 @@ export const useStore = create<State>()((set, get) => {
         const exif = await readPhotoMetadata(file);
         const jpeg = await preparedForVision(file, VisionModel.effectiveLongEdge(model, s.settings.longEdge));
         const { vision, reply } = await readVision(client, jpeg, context);
-        const rec: CaptionRecord = { ...(f.record ?? CaptionRecord.make({ filename: f.name, vision, caption: "", capturedAt: exif ? PhotoMetadata.apStyleDate(exif) : null })), vision, manualJerseyNumbers: {} };
+        // The model has looked again, so its reading replaces every correction made to the last one.
+        const rec: CaptionRecord = { ...(f.record ?? CaptionRecord.make({ filename: f.name, vision, caption: "", capturedAt: exif ? PhotoMetadata.apStyleDate(exif) : null })), vision, manualJerseyNumbers: {}, manualSides: {} };
         patchFrame(id, { record: rec, exif, state: "done", edited: false });
         set((st) => ({ tokensIn: st.tokensIn + reply.usage.inputTokens, tokensOut: st.tokensOut + reply.usage.outputTokens,
           tokensCacheWrite: st.tokensCacheWrite + (reply.usage.cacheCreationInputTokens ?? 0), tokensCacheRead: st.tokensCacheRead + (reply.usage.cacheReadInputTokens ?? 0) }));

@@ -6,6 +6,8 @@
 import { describe, it, expect } from "vitest";
 import { Roster, RosterPlayer, Team } from "../src/core/roster/Roster";
 import { RosterMatcher } from "../src/core/roster/RosterMatcher";
+import { Sports } from "../src/core/setup/Sports";
+import { CaptionRecord } from "../src/core/records/CaptionRecord";
 import { TeamColorArbiter } from "../src/core/roster/TeamColorArbiter";
 import { TeamName } from "../src/core/roster/TeamName";
 import { VisionResult, VisionPlayer, type SceneType, SCENE_TYPES } from "../src/core/vision/VisionResult";
@@ -602,6 +604,53 @@ describe("Two-way players and the unit the play shows", () => {
     expect(catches.ok && catches.match.player.lastName).toBe("One");
     const breaks = m2.match("9", "white", "breaks up a pass");
     expect(breaks.ok && breaks.match.player.lastName).toBe("Two");
+  });
+  it("names the only player wearing a number whatever unit the model thought it saw", () => {
+    // The question this answers: with no 25 on offence and one on defence, the 25 in the
+    // photograph must be the defender. One candidate is never put to the unit — it is matched,
+    // and named by the position they actually play.
+    const oneEach = Roster.make(team, other, [
+      RosterPlayer.make({ teamID: team.id, jerseyNumber: "25", firstName: "Andrew", lastName: "Marshall", position: "defensive back", side: "defense" }),
+    ]);
+    const m3 = new RosterMatcher(oneEach, "football");
+    for (const wrong of [["catches a pass", []], ["runs with the ball", ["ball_carrier"]]] as [string, string[]][]) {
+      const r = m3.match("25", "white", wrong[0], wrong[1], "offense");
+      expect(r.ok && RosterPlayer.fullName(r.match.player)).toBe("Andrew Marshall");
+      expect(r.ok && RosterPlayer.positionFor(r.match.player, r.match.impliedSide)).toBe("defensive back");
+      expect(r.ok && PlayerReference.render(r.match, "apSports", false)).toBe("Ashland-Greenwood Bluejays defensive back Andrew Marshall (25)");
+    }
+    // Two people wearing it is the case the unit decides, and where reading it wrong names the
+    // wrong player — which is what the unit chosen by hand in review is for.
+    const bothUnits = Roster.make(team, other, [
+      RosterPlayer.make({ teamID: team.id, jerseyNumber: "25", firstName: "Owen", lastName: "Back", position: "running back", side: "offense" }),
+      RosterPlayer.make({ teamID: team.id, jerseyNumber: "25", firstName: "Andrew", lastName: "Marshall", position: "defensive back", side: "defense" }),
+    ]);
+    const m4 = new RosterMatcher(bothUnits, "football");
+    const asRead = m4.match("25", "white", "catches a pass", [], "offense");
+    expect(asRead.ok && RosterPlayer.fullName(asRead.match.player)).toBe("Owen Back");
+    const corrected = m4.match("25", "white", "catches a pass", [], "defense");
+    expect(corrected.ok && RosterPlayer.fullName(corrected.match.player)).toBe("Andrew Marshall");
+  });
+  it("carries a unit chosen in review into the reading the caption is built from", () => {
+    const vision = VisionResult.make({ sceneType: "players_action", players: [VisionPlayer.make("25", "white", "catches a pass")] });
+    const rec = CaptionRecord.make({ filename: "f.jpg", vision, caption: "" });
+    expect(rec.manualSides).toEqual({});
+    expect(CaptionRecord.correctedVision(rec).players[0].unit).toBeNull();
+    const chosen = { ...rec, manualSides: { 0: "defense" as const } };
+    expect(CaptionRecord.correctedVision(chosen).players[0].unit).toBe("defense");
+    // It survives the round trip to disk, and an older record simply has none.
+    const back = CaptionRecord.fromJSON(JSON.parse(JSON.stringify(CaptionRecord.toJSON(chosen))));
+    expect(back.manualSides).toEqual({ 0: "defense" });
+    expect(CaptionRecord.fromJSON({ filename: "f.jpg", caption: "c", vision: { scene_type: "other" } }).manualSides).toEqual({});
+    // Nonsense in the file is ignored rather than trusted.
+    expect(CaptionRecord.fromJSON({ filename: "f.jpg", caption: "c", vision: { scene_type: "other" }, manualSides: { 0: "quarterback" } }).manualSides).toEqual({});
+  });
+  it("offers the unit only where a number can belong to two players", () => {
+    expect(Sports.hasUnits("football")).toBe(true);
+    for (const other of ["basketball", "soccer", "baseball", "volleyball", "hockey", "lacrosse", "wrestling", "trackAndField"]) {
+      expect(Sports.hasUnits(other)).toBe(false);
+    }
+    expect(Sports.hasUnits("nonsense")).toBe(false);
   });
 });
 

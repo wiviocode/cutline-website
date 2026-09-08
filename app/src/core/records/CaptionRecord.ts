@@ -7,6 +7,7 @@
  */
 
 import { VisionResult } from "../vision/VisionResult";
+import type { PlayerSide } from "../roster/Roster";
 
 export interface CaptionRecord {
   filename: string;
@@ -15,6 +16,11 @@ export interface CaptionRecord {
   vision: VisionResult;
   /** Numbers supplied by a human during review, keyed by the player's index in `vision.players`. */
   manualJerseyNumbers: Record<number, string>;
+  /**
+   * Units supplied by a human during review, keyed the same way. Football only: it decides
+   * between two players who share a number, and which position a two-way player is named by.
+   */
+  manualSides: Record<number, PlayerSide>;
   caption: string;
   /**
    * Who wrote the caption: the composer from the observation, or a person by hand. A hand-written
@@ -40,6 +46,7 @@ export const CaptionRecord = {
       imagePath: p.imagePath ?? p.filename,
       vision: p.vision,
       manualJerseyNumbers: p.manualJerseyNumbers ?? {},
+      manualSides: p.manualSides ?? {},
       caption: p.caption,
       captionSource: p.captionSource ?? "ai",
       altText: p.altText ?? null,
@@ -64,11 +71,18 @@ export const CaptionRecord = {
         if (typeof v === "string") manual[Number(k)] = v;
       }
     }
+    const sides: Record<number, PlayerSide> = {};
+    if (r.manualSides && typeof r.manualSides === "object") {
+      for (const [k, v] of Object.entries(r.manualSides as Record<string, unknown>)) {
+        if (v === "offense" || v === "defense" || v === "specialTeams") sides[Number(k)] = v;
+      }
+    }
     return {
       filename: r.filename,
       imagePath: typeof r.imagePath === "string" ? r.imagePath : r.filename,
       vision: VisionResult.fromJSON(r.vision),
       manualJerseyNumbers: manual,
+      manualSides: sides,
       caption: r.caption,
       captionSource: r.captionSource === "manual" ? "manual" : "ai",
       altText: typeof r.altText === "string" ? r.altText : null,
@@ -81,11 +95,14 @@ export const CaptionRecord = {
   toJSON(rec: CaptionRecord): Record<string, unknown> {
     const manual: Record<string, string> = {};
     for (const [k, v] of Object.entries(rec.manualJerseyNumbers)) manual[k] = v;
+    const sides: Record<string, string> = {};
+    for (const [k, v] of Object.entries(rec.manualSides ?? {})) sides[k] = v;
     return {
       filename: rec.filename,
       imagePath: rec.imagePath,
       vision: VisionResult.toJSON(rec.vision),
       manualJerseyNumbers: manual,
+      manualSides: sides,
       caption: rec.caption,
       captionSource: rec.captionSource,
       altText: rec.altText,
@@ -103,7 +120,8 @@ export const CaptionRecord = {
   /** The observation with any human corrections applied. */
   correctedVision(rec: CaptionRecord): VisionResult {
     const entries = Object.entries(rec.manualJerseyNumbers);
-    if (entries.length === 0) return rec.vision;
+    const sides = Object.entries(rec.manualSides ?? {});
+    if (entries.length === 0 && sides.length === 0) return rec.vision;
     const v: VisionResult = { ...rec.vision, players: rec.vision.players.map((p) => ({ ...p, flags: [...p.flags] })) };
     for (const [k, number] of entries) {
       const idx = Number(k);
@@ -111,6 +129,13 @@ export const CaptionRecord = {
         v.players[idx].jerseyNumber = number;
         v.players[idx].flags = v.players[idx].flags.filter((f) => f !== "unreadable_number");
       }
+    }
+    // A unit chosen by hand goes where the model's own would have gone, so everything that reads
+    // one — which of two players wearing the number, which position a two-way player is named
+    // by — sees the correction without knowing it was made by a person.
+    for (const [k, side] of sides) {
+      const idx = Number(k);
+      if (idx < v.players.length) v.players[idx].unit = side;
     }
     // A corrected pair can now form an interaction the composer could not build before.
     if (v.interaction) {

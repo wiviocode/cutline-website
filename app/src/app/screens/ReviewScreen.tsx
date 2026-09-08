@@ -17,6 +17,8 @@ import { CaptionParts } from "@core/caption/CaptionParts";
 import { CaptionRecord, type ReviewStatus } from "@core/records/CaptionRecord";
 import { RosterPlayer } from "@core/roster/Roster";
 import { RosterMatcher } from "@core/roster/RosterMatcher";
+import { Sports } from "@core/setup/Sports";
+import type { PlayerSide } from "@core/roster/Roster";
 import { asSport } from "@core/caption/CompositionContext";
 import { TeamColorArbiter } from "@core/roster/TeamColorArbiter";
 import { VisionModel } from "@core/models/VisionModel";
@@ -39,7 +41,7 @@ export function ReviewScreen() {
   const position = frame ? list.findIndex((f) => f.id === frame.id) + 1 : 0;
 
   const [editing, setEditing] = useState(false);
-  const [pop, setPop] = useState<{ slot: number; value: string } | null>(null);
+  const [pop, setPop] = useState<Correction | null>(null);
   const [zoom, setZoom] = useState(false);
   useEffect(() => { setEditing(false); setPop(null); setZoom(false); }, [frame?.id]);
 
@@ -54,7 +56,7 @@ export function ReviewScreen() {
       const players = CaptionRecord.correctedVision(frame.record).players;
       let slot = players.findIndex((p) => !p.jerseyNumber);
       if (slot < 0 && players.length) slot = 0;
-      if (slot >= 0) setPop({ slot, value: players[slot].jerseyNumber });
+      if (slot >= 0) { const p = players[slot]; setPop({ slot, value: p.jerseyNumber, side: RosterMatcher.impliedSide(p.action, p.flags, p.unit), sideChosen: false }); }
     },
   }, !panel && !editing && !pop);
 
@@ -221,6 +223,12 @@ function shownRect(el: HTMLImageElement): { left: number; top: number; width: nu
   return { left: r.left + (r.width - width) / 2, top: r.top + (r.height - height) / 2, width, height };
 }
 
+const UNITS: { id: string; label: string }[] = [
+  { id: "offense", label: "Offense" },
+  { id: "defense", label: "Defense" },
+  { id: "specialTeams", label: "Special teams" },
+];
+
 /** On a fresh shoot the one thing to do is start, so it sits where the eye is. */
 function StartCard() {
   const v = useStore(useShallow((s) => ({
@@ -241,7 +249,10 @@ function StartCard() {
   );
 }
 
-function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editing: boolean; setEditing: (b: boolean) => void; pop: { slot: number; value: string } | null; setPop: (p: { slot: number; value: string } | null) => void }) {
+/** What the review screen is correcting: a number, and on football the unit that goes with it. */
+export interface Correction { slot: number; value: string; side: PlayerSide | null; sideChosen: boolean }
+
+function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editing: boolean; setEditing: (b: boolean) => void; pop: Correction | null; setPop: (p: Correction | null) => void }) {
   const rosterMode = useStore((s) => s.rosterMode);
   const home = useStore((s) => s.home);
   const away = useStore((s) => s.away);
@@ -291,7 +302,7 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
   const applyPop = () => {
     if (!pop) return;
     const value = pop.value.trim();
-    if (value) void assignNumber(frame.id, pop.slot, value);
+    if (value || pop.sideChosen) void assignNumber(frame.id, pop.slot, value, pop.sideChosen ? pop.side : undefined);
     setPop(null);
   };
   const redo = (text: string) => { void recaption(frame.id, text.trim()); setNoteOpen(false); setNote(""); };
@@ -325,7 +336,7 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
               const name = m?.ok ? RosterPlayer.fullName(m.match.player) : null;
               return <KitChip key={slot} number={p.jerseyNumber || "?"} name={name} colour={swatchColour(p.jerseyColor)} flagged={!p.jerseyNumber}
                 title={m?.ok && m.match.wasFuzzy ? `Corrected from ${p.jerseyNumber}` : "Click to correct the number"}
-                onClick={() => setPop({ slot, value: p.jerseyNumber })} />;
+                onClick={() => setPop({ slot, value: p.jerseyNumber, side: RosterMatcher.impliedSide(p.action, p.flags, p.unit), sideChosen: false })} />;
             })}
           </div>
           {orphan && (
@@ -343,6 +354,14 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
               <b>Jersey number</b>
               <TextInput mono autoFocus value={pop.value} ariaLabel="Jersey number" onChange={(e) => setPop({ ...pop, value: e.target.value })}
                 onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") applyPop(); if (e.key === "Escape") setPop(null); }} />
+              {Sports.hasUnits(sportID) && (
+                <div className="pop-unit">
+                  <span className="pop-label">Unit</span>
+                  <Segmented<string> ariaLabel="Unit" value={pop.side ?? ""} options={UNITS}
+                    onChange={(v) => setPop({ ...pop, side: v as PlayerSide, sideChosen: true })} />
+                  <span className="field-hint">Two players can wear one number, one on each unit. This says which of them the photograph shows, and names a two-way player by the position they are playing here.</span>
+                </div>
+              )}
               <p className="note">The caption is rebuilt from the roster — no new request to the model.</p>
               <div className="pop-row"><Button variant="ghost" onClick={() => setPop(null)}>Cancel</Button><Button onClick={applyPop}>Set</Button></div>
             </div>
