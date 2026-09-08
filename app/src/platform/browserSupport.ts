@@ -102,9 +102,9 @@ export const REQUIREMENTS: Requirement[] = [
 
 /** What read-only costs, in the order the argument makes them. */
 export const READ_ONLY_LOSES = [
-  "the caption filed into the photograph, where wire systems read it",
-  "renaming the files to your convention",
-  "the record of which frames you have already done",
+  "the caption written into the photograph",
+  "renaming the files",
+  "a record of what you have done",
 ];
 
 /** The browsers that pass, in the order the message offers them. */
