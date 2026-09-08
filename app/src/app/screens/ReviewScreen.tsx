@@ -11,7 +11,7 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore, derive, thumbnails, previews, THUMB_EDGE, PREVIEW_EDGE, type Frame } from "../store";
-import { Button, Callout, Crest, KitChip, Menu, Overline, Segmented, TextArea, TextInput, swatchColour } from "../components";
+import { Button, Callout, Crest, KitChip, Overline, Segmented, TextArea, TextInput, swatchColour } from "../components";
 import { useShortcuts } from "../shortcuts";
 import { CaptionParts } from "@core/caption/CaptionParts";
 import { CaptionRecord, type ReviewStatus } from "@core/records/CaptionRecord";
@@ -471,10 +471,8 @@ function ActionBar() {
         </>
       ) : (
         <>
-          {v.anyDone && <Menu label="More" items={[
-            { label: "Redo every caption…", disabled: !v.ready, onSelect: () => { if (window.confirm(`Caption all ${v.count} photographs again? Each one is a new request to the model.`)) void run({ redo: true }); } },
-            { label: "Rename photographs…", onSelect: () => setPanel("rename") },
-          ]} />}
+          {v.anyDone && <Button disabled={!v.ready} onClick={go(() => { if (window.confirm(`Caption all ${v.count} photographs again? Each one is a new request to the model.`)) void run({ redo: true }); })}>Redo every caption…</Button>}
+          {v.anyDone && <Button onClick={go(() => setPanel("rename"))}>Rename photographs…</Button>}
           {v.pending > 10 && <Button variant="secondary" disabled={!v.ready} onClick={go(() => void run({ limit: 10 }))} title="Caption ten, check them, then do the rest">Try 10 first</Button>}
           {v.pending > 0 && <Button disabled={!v.ready} onClick={go(() => void run())}>Caption {v.pending} photograph{v.pending === 1 ? "" : "s"}</Button>}
           {v.pending === 0 && v.failed > 0 && <Button disabled={!v.ready} onClick={go(() => void run({ failed: true }))}>Retry {v.failed} failed</Button>}
