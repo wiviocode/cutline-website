@@ -268,7 +268,11 @@ button.chip:hover { border-color: #4c5462; }
 .stage.zoomed { cursor: grab; }
 .stage.zoomed.dragging { cursor: grabbing; }
 /* The picture fills the stage whatever its source — the strip's thumbnail is scaled up until the large decode lands. */
-.stage img { width: 100%; height: 100%; object-fit: contain; display: block; transition: transform var(--dur-control) var(--ease-brand); user-select: none; -webkit-user-drag: none; pointer-events: none; }
+/* The photograph is fitted to the stage, never cropped to it. The box is pinned to the stage
+   with explicit sizes rather than left to the grid: a grid row centred on its item sizes
+   itself to that item, so a percentage height cannot resolve and the image fell back to its
+   width — taller than the stage in a wide window, and clipped top and bottom. */
+.stage img { position: absolute; inset: 8px; width: calc(100% - 16px); height: calc(100% - 16px); object-fit: contain; display: block; transition: transform var(--dur-control) var(--ease-brand); user-select: none; -webkit-user-drag: none; pointer-events: none; }
 .stage-empty { color: var(--text-4); font-size: 12.5px; }
 .stage-name { position: absolute; left: 10px; bottom: 8px; font: 11px/1 var(--font-mono); color: var(--text-4); background: rgba(21,24,29,.7); padding: 4px 7px; border-radius: 5px; pointer-events: none; }
 .rail { width: 320px; flex: 0 0 320px; background: #20242a; border-left: 1px solid var(--border-control); display: flex; flex-direction: column; min-height: 0; }

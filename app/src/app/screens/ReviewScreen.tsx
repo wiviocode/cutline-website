@@ -167,9 +167,9 @@ function Stage({ frame, zoom, onToggleZoom }: { frame: Frame | null; zoom: boole
       d.moved = true;
       if (!zoomRef.current) return;
       // Keep some of the picture on the stage however far it is dragged.
-      const el = img.current;
-      const limitX = el ? (ZOOM - 1) * el.offsetWidth : Infinity;
-      const limitY = el ? (ZOOM - 1) * el.offsetHeight : Infinity;
+      const shown = img.current ? shownRect(img.current) : null;
+      const limitX = shown ? (ZOOM - 1) * shown.width : Infinity;
+      const limitY = shown ? (ZOOM - 1) * shown.height : Infinity;
       setDragging(true);
       setPan({ x: Math.max(-limitX, Math.min(limitX, d.px + dx)), y: Math.max(-limitY, Math.min(limitY, d.py + dy)) });
     };
@@ -179,8 +179,12 @@ function Stage({ frame, zoom, onToggleZoom }: { frame: Frame | null; zoom: boole
       setDragging(false);
       if (!d || (d.moved && zoomRef.current)) return; // a drag, not a click
       if (!zoomRef.current) {
+        // The origin is a share of the element, which spans the stage — so the click's position
+        // on the element is the point to grow from, and it is kept on the element when a drag
+        // that turned out to be a click ends beyond it.
         const r = img.current?.getBoundingClientRect();
-        if (r) setOrigin(`${Math.round(((e.clientX - r.left) / r.width) * 100)}% ${Math.round(((e.clientY - r.top) / r.height) * 100)}%`);
+        const pct = (v: number) => Math.max(0, Math.min(100, Math.round(v * 100)));
+        if (r?.width && r.height) setOrigin(`${pct((e.clientX - r.left) / r.width)}% ${pct((e.clientY - r.top) / r.height)}%`);
       }
       toggleRef.current();
     };
@@ -199,6 +203,22 @@ function Stage({ frame, zoom, onToggleZoom }: { frame: Frame | null; zoom: boole
       <div onMouseDown={stop} onMouseUp={stop} onClick={stop} style={{ display: "contents" }}><StartCard /></div>
     </div>
   );
+}
+
+/**
+ * How big the picture itself is, inside an element that spans the stage. `object-fit: contain`
+ * centres the photograph in the box and leaves the rest empty, so the box is larger than the
+ * photograph in one direction — and it is the photograph's own size that says how far a zoomed
+ * frame may be dragged before none of it is left on the stage.
+ */
+function shownRect(el: HTMLImageElement): { left: number; top: number; width: number; height: number } {
+  const r = el.getBoundingClientRect();
+  const natural = el.naturalWidth && el.naturalHeight ? el.naturalWidth / el.naturalHeight : 0;
+  if (!natural || !r.width || !r.height) return { left: r.left, top: r.top, width: r.width, height: r.height };
+  const wide = r.width / r.height > natural;
+  const width = wide ? r.height * natural : r.width;
+  const height = wide ? r.height : r.width / natural;
+  return { left: r.left + (r.width - width) / 2, top: r.top + (r.height - height) / 2, width, height };
 }
 
 /** On a fresh shoot the one thing to do is start, so it sits where the eye is. */
