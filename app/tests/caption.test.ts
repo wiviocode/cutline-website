@@ -654,6 +654,76 @@ describe("Two-way players and the unit the play shows", () => {
   });
 });
 
+describe("A scene the model read players in", () => {
+  const neb = Team.make("Nebraska", "red", "Cornhuskers");
+  const ohio = Team.make("Ohio", "white", "Bobcats");
+  const roster = Roster.make(neb, ohio, [
+    RosterPlayer.make({ teamID: neb.id, jerseyNumber: "25", firstName: "Jamal", lastName: "Rule", position: "running back", side: "offense" }),
+    RosterPlayer.make({ teamID: neb.id, jerseyNumber: "8", firstName: "Luke", lastName: "Lindenmeyer", position: "tight end", side: "offense" }),
+    RosterPlayer.make({ teamID: neb.id, jerseyNumber: "3", firstName: "Cam", lastName: "Lenhardt", position: "defensive end", side: "defense" }),
+    RosterPlayer.make({ teamID: neb.id, jerseyNumber: "7", firstName: "Dylan", lastName: "Raiola", position: "quarterback", side: "offense" }),
+    RosterPlayer.make({ teamID: ohio.id, jerseyNumber: "25", firstName: "Ohio", lastName: "Player", position: "linebacker", side: "defense" }),
+  ]);
+  const ctx = CompositionContext.make({ style: "apSports", fallback: "markUnidentified", sport: "football", roster });
+  const caption = (v: Parameters<typeof VisionResult.make>[0]) => CaptionComposer.compose(VisionResult.make(v), ctx).caption;
+
+  it("names the players it read instead of calling them a group", () => {
+    const two = caption({ sceneType: "celebration", sceneDescription: "celebrate", primaryAction: "celebrate",
+      players: [player("25", "red", "celebrates"), player("8", "red", "celebrates")] });
+    expect(two).toContain("Jamal Rule (25)");
+    expect(two).toContain("Luke Lindenmeyer (8)");
+    expect(two).not.toMatch(/^Players/);
+    // Several athletes take the scene's own phrase, which the model writes in the plural.
+    expect(two).toMatch(/celebrate during a football game/);
+  });
+  it("gives one athlete their own verb, which is written in the singular", () => {
+    const one = caption({ sceneType: "celebration", sceneDescription: "celebrate", primaryAction: "celebrate",
+      players: [player("25", "red", "celebrates a touchdown")] });
+    expect(one).toMatch(/^Nebraska Cornhuskers running back Jamal Rule \(25\) celebrates a touchdown during/);
+    const bench = caption({ sceneType: "bench", sceneDescription: "watch from the sideline",
+      players: [player("7", "red", "watches from the sideline")] });
+    expect(bench).toMatch(/^Nebraska Cornhuskers quarterback Dylan Raiola \(7\) watches from the sideline/);
+  });
+  it("still describes a group when it read no one the roster knows, and names the team from their jerseys", () => {
+    // The model left the subject colour out, as it does; the jerseys it did read say whose scene it is.
+    const unmatched = caption({ sceneType: "celebration", sceneDescription: "celebrate",
+      players: [player("99", "red", "celebrates"), player("98", "red", "celebrates")] });
+    // A plural nickname takes the definite article, as it does everywhere else in the app.
+    expect(unmatched).toMatch(/^Members of the Nebraska Cornhuskers celebrate during/);
+    // Both teams in shot says nothing about whose scene it is, so it stays a plain group.
+    const mixed = caption({ sceneType: "celebration", sceneDescription: "celebrate",
+      players: [player("99", "red", "celebrates"), player("98", "white", "celebrates")] });
+    expect(mixed).toMatch(/^Players celebrate during/);
+    // Nothing read at all is what it always was.
+    expect(caption({ sceneType: "celebration", sceneDescription: "celebrate" })).toMatch(/^Players celebrate during/);
+  });
+  it("will not read out a roster: past three names it describes the group again", () => {
+    const four = caption({ sceneType: "celebration", sceneDescription: "celebrate",
+      players: [player("25", "red", "celebrates"), player("8", "red", "celebrates"), player("3", "red", "celebrates"), player("7", "red", "celebrates")] });
+    expect(four).toMatch(/^Members of the Nebraska Cornhuskers celebrate during/);
+    const three = caption({ sceneType: "celebration", sceneDescription: "celebrate",
+      players: [player("25", "red", "celebrates"), player("8", "red", "celebrates"), player("3", "red", "celebrates")] });
+    expect(three).toContain("Cam Lenhardt (3)");
+  });
+  it("leaves the scenes with no numbered subject alone", () => {
+    const crowd = caption({ sceneType: "crowd", sceneDescription: "cheer from the stands", players: [player("25", "red", "cheers")] });
+    expect(crowd).toMatch(/^Fans cheer from the stands during/);
+    const band = caption({ sceneType: "band", sceneDescription: "performs at halftime", players: [player("25", "red", "plays")] });
+    expect(band).toContain("band performs at halftime");
+    const wide = caption({ sceneType: "wide_view", sceneDescription: "shows the stadium", players: [player("25", "red", "stands")] });
+    expect(wide).toMatch(/^A general view of the venue/);
+  });
+  it("counts what it named, so nothing is reported as dropped that was not", () => {
+    const named = CaptionComposer.compose(VisionResult.make({ sceneType: "celebration", sceneDescription: "celebrate",
+      players: [player("25", "red", "celebrates"), player("8", "red", "celebrates")] }), ctx);
+    expect(named.suppressedPlayerCount).toBe(0);
+    expect(named.warnings).not.toContain("filtered_non_participants");
+    const grouped = CaptionComposer.compose(VisionResult.make({ sceneType: "crowd", sceneDescription: "cheer",
+      players: [player("25", "red", "cheers")] }), ctx);
+    expect(grouped.suppressedPlayerCount).toBe(1);
+  });
+});
+
 describe("Every sport names its event, and every league takes the right article", () => {
   const clause = (sport: string, style: CaptionStyle, leagueLevel: string) => {
     const team = Team.make("Nebraska", "red", "Cornhuskers"), other = Team.make("Iowa", "black", "Hawkeyes");

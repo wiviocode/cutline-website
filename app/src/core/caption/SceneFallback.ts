@@ -36,6 +36,15 @@ export const SceneFallback = {
     }
   },
 
+  /**
+   * Scenes whose subjects are athletes in uniform. A number read on one of them and matched to
+   * the roster names them; the group sentence is for when nobody could be identified. The rest —
+   * the crowd, the band, the mascot, a coach, a wide view — have no numbered subject to name.
+   */
+  namesAthletes(scene: SceneType): boolean {
+    return scene === "celebration" || scene === "bench" || scene === "other";
+  },
+
   /** Default verb phrase when the model supplied no `scene_description`. */
   defaultPhrase(scene: SceneType): string | null {
     switch (scene) {

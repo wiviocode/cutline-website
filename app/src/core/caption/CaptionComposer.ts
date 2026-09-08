@@ -112,8 +112,11 @@ function composeSceneFallback(vision: VisionResult, context: CompositionContext,
                               namedTeamIDs: Set<string>, warnings: ComposerWarning[]): string {
   if (context.event) return composeEventScene(vision, context);
 
-  const { team, overridden } = TeamColorArbiter.subjectTeam(context.roster, vision.subjectTeamColor, vision.nearbyPlayerColors);
-  if (overridden) warnings.push("subject_team_color_overruled");
+  const arbitrated = TeamColorArbiter.subjectTeam(context.roster, vision.subjectTeamColor, vision.nearbyPlayerColors);
+  if (arbitrated.overridden) warnings.push("subject_team_color_overruled");
+  // The model sometimes leaves the subject colour out of a scene it has read players in. Their
+  // own jerseys say whose scene it is, and only when they agree — two teams in shot say nothing.
+  const team = arbitrated.team ?? teamOfPlayers(vision, context);
   if (team) namedTeamIDs.add(team.id);
 
   const phrase0 = vision.sceneDescription.trim();
@@ -122,6 +125,10 @@ function composeSceneFallback(vision: VisionResult, context: CompositionContext,
   if (vision.sceneType === "wide_view") {
     return SceneFallback.standaloneOpening("wide_view", context.iptc.venue) ?? fallbackActionSentence(vision);
   }
+
+  // Whoever the model read and the roster matched is the subject, in place of the group.
+  const named = namedSceneSubjects(vision, context, namedTeamIDs);
+  if (named) return `${named.text} ${named.verb}`;
 
   const subject = SceneFallback.subject(vision.sceneType, team, context.style, context.isProfessionalLeague);
 
@@ -135,6 +142,49 @@ function composeSceneFallback(vision: VisionResult, context: CompositionContext,
 
   const phrase = phrase0 || SceneFallback.defaultPhrase(vision.sceneType) || vision.primaryAction;
   return phrase ? `${subject.text} ${phrase}` : subject.text;
+}
+
+/**
+ * The most a scene caption will name before it is a roll call. The prompt already asks the model
+ * to describe the group rather than list it; this is the backstop for when it lists one anyway.
+ */
+const NAMED_SCENE_LIMIT = 3;
+
+/**
+ * The named subjects of a scene about uniformed athletes — a celebration, the bench, a moment
+ * the model could not place. Null when the scene has no numbered subject, when nothing the model
+ * read matched the roster, when it read more than a caption should name, or when there is no
+ * verb to give them.
+ */
+function namedSceneSubjects(vision: VisionResult, context: CompositionContext, namedTeamIDs: Set<string>):
+  { text: string; verb: string } | null {
+  if (!SceneFallback.namesAthletes(vision.sceneType)) return null;
+  const matcher = new RosterMatcher(context.roster, context.sport);
+  const matched: Resolved[] = [];
+  for (const observation of vision.players) {
+    const r = matcher.match(observation.jerseyNumber, observation.jerseyColor, observation.action, observation.flags, observation.unit);
+    if (r.ok) matched.push({ observation, match: r.match });
+  }
+  if (matched.length === 0 || matched.length > NAMED_SCENE_LIMIT) return null;
+  // One athlete takes their own verb, which is written in the singular; several take the scene's
+  // own phrase, which the model writes in the plural for exactly this shape of sentence.
+  const verb = matched.length === 1
+    ? matched[0].observation.action.trim() || vision.sceneDescription.trim()
+    : vision.sceneDescription.trim() || SceneFallback.defaultPhrase(vision.sceneType) || "";
+  if (!verb) return null;
+  return { text: list(matched.map((r) => render(r, context, namedTeamIDs))), verb };
+}
+
+/** The one team every player the model read belongs to, or null when they are not all of one. */
+function teamOfPlayers(vision: VisionResult, context: CompositionContext): Team | null {
+  let team: Team | null = null;
+  for (const p of vision.players) {
+    const t = TeamColorArbiter.team(context.roster, p.jerseyColor);
+    if (!t) continue;
+    if (team && team.id !== t.id) return null;
+    team = t;
+  }
+  return team;
 }
 
 function fallbackActionSentence(vision: VisionResult): string {
@@ -333,7 +383,12 @@ function renderText(r: Resolved, context: CompositionContext): string {
 }
 
 function countRendered(vision: VisionResult, context: CompositionContext): number {
-  if (isSceneFallback(vision.sceneType)) return 0;
+  if (isSceneFallback(vision.sceneType)) {
+    if (!SceneFallback.namesAthletes(vision.sceneType)) return 0;
+    const m = new RosterMatcher(context.roster, context.sport);
+    const matched = vision.players.filter((p) => m.match(p.jerseyNumber, p.jerseyColor, p.action, p.flags, p.unit).ok).length;
+    return matched > NAMED_SCENE_LIMIT ? 0 : matched;
+  }
   const matcher = new RosterMatcher(context.roster, context.sport);
   return vision.players.filter((p) => {
     if (matcher.match(p.jerseyNumber, p.jerseyColor, p.action, p.flags, p.unit).ok) return true;
