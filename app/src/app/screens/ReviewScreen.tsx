@@ -384,7 +384,14 @@ function Rail({ frame, editing, setEditing, pop, setPop }: { frame: Frame; editi
             ) : (
               <>
                 <TextArea value={note} autoFocus minHeight={62} rows={3} placeholder="No. 22 in white is the tackler, not the runner · they wore black tonight · this is the interception" ariaLabel="Note to the model" onChange={(e) => setNote(e.target.value)}
-                  onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") { setNoteOpen(false); setNote(""); } if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && note.trim()) redo(note); }} />
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Escape") { setNoteOpen(false); setNote(""); }
+                    // A note is a sentence, so Return sends it as it does in the caption box;
+                    // a note that wants a second line takes Shift and Return.
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (note.trim()) redo(note); }
+                  }} />
+                <div className="editor-hint"><span>⏎ send</span><span>⇧⏎ new line</span><span>esc cancel</span></div>
                 <div className="redo-row">
                   <Button disabled={!note.trim()} onClick={() => redo(note)}>Redo with this note</Button>
                   <button type="button" className="linky" onClick={() => { setNoteOpen(false); setNote(""); }}>cancel</button>
