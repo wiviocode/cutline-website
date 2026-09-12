@@ -16,6 +16,7 @@ import { EventDescription, type CompositionContext } from "./CompositionContext"
 import { WireStyle, WireDate } from "./WireStyle";
 import { USState } from "./USState";
 import { SceneFallback } from "./SceneFallback";
+import { Agreement } from "./Agreement";
 import { PlayerReference } from "./PlayerReference";
 import { Cleanup } from "./Cleanup";
 import { PrependComposer, type ComposerWarning } from "./PrependComposer";
@@ -83,16 +84,17 @@ function composePlayerCaption(vision: VisionResult, context: CompositionContext,
       warnings.push("group_action_dropped_mixed_teams");
     } else {
       const names = usable.map((r) => render(r, context, namedTeamIDs));
-      return `${list(names)} ${vision.groupAction.phrase}`;
+      return `${list(names)} ${Agreement.agree(vision.groupAction.phrase, true)}`;
     }
   }
 
   if (usable.length === 1) {
     const one = usable[0];
     const verb = one.observation.action || vision.primaryAction;
-    return `${render(one, context, namedTeamIDs)} ${verb}`;
+    return `${render(one, context, namedTeamIDs)} ${Agreement.agree(verb, false)}`;
   }
-  return list(usable.map((r) => `${render(r, context, namedTeamIDs)} ${r.observation.action}`));
+  // Each player is their own clause, so each verb is the singular one.
+  return list(usable.map((r) => `${render(r, context, namedTeamIDs)} ${Agreement.agree(r.observation.action, false)}`));
 }
 
 function composeInteraction(interaction: Interaction, resolved: Resolved[], context: CompositionContext,
@@ -130,18 +132,19 @@ function composeSceneFallback(vision: VisionResult, context: CompositionContext,
   const named = namedSceneSubjects(vision, context, namedTeamIDs);
   if (named) return `${named.text} ${named.verb}`;
 
-  const subject = SceneFallback.subject(vision.sceneType, team, context.style, context.isProfessionalLeague);
+  // How many the model's phrase describes decides how many an unplaceable scene's subject is.
+  const subject = SceneFallback.subject(vision.sceneType, team, context.style, context.isProfessionalLeague, Agreement.isPlural(phrase0));
 
   // Prefer "<subject> <phrase>" whenever both are available. The standalone opening is a
   // fallback for when the model supplied no phrase — using it alongside one produces a doubled
   // verb, e.g. "Players celebrate huddle together".
-  if (subject && phrase0) return `${subject.text} ${phrase0}`;
+  if (subject && phrase0) return `${subject.text} ${Agreement.agree(phrase0, subject.plural)}`;
   const standalone = SceneFallback.standaloneOpening(vision.sceneType, context.iptc.venue);
   if (standalone) return standalone;
   if (!subject) return fallbackActionSentence(vision);
 
   const phrase = phrase0 || SceneFallback.defaultPhrase(vision.sceneType) || vision.primaryAction;
-  return phrase ? `${subject.text} ${phrase}` : subject.text;
+  return phrase ? `${subject.text} ${Agreement.agree(phrase, subject.plural)}` : subject.text;
 }
 
 /**
@@ -172,7 +175,7 @@ function namedSceneSubjects(vision: VisionResult, context: CompositionContext, n
     ? matched[0].observation.action.trim() || vision.sceneDescription.trim()
     : vision.sceneDescription.trim() || SceneFallback.defaultPhrase(vision.sceneType) || "";
   if (!verb) return null;
-  return { text: list(matched.map((r) => render(r, context, namedTeamIDs))), verb };
+  return { text: list(matched.map((r) => render(r, context, namedTeamIDs))), verb: Agreement.agree(verb, matched.length > 1) };
 }
 
 /** The one team every player the model read belongs to, or null when they are not all of one. */
@@ -198,8 +201,8 @@ function composeEventScene(vision: VisionResult, context: CompositionContext): s
   if (vision.sceneType === "wide_view") {
     return SceneFallback.standaloneOpening("wide_view", context.iptc.venue) ?? (phrase || "The scene");
   }
-  const subject = SceneFallback.subject(vision.sceneType, null, context.style, context.isProfessionalLeague);
-  if (subject && phrase) return `${subject.text} ${phrase}`;
+  const subject = SceneFallback.subject(vision.sceneType, null, context.style, context.isProfessionalLeague, Agreement.isPlural(phrase));
+  if (subject && phrase) return `${subject.text} ${Agreement.agree(phrase, subject.plural)}`;
   const standalone = SceneFallback.standaloneOpening(vision.sceneType, context.iptc.venue);
   if (standalone) return standalone;
   if (!subject) {
@@ -208,7 +211,7 @@ function composeEventScene(vision: VisionResult, context: CompositionContext): s
     return `${noun[0].toUpperCase() + noun.slice(1)}s compete`;
   }
   const fallbackPhrase = SceneFallback.defaultPhrase(vision.sceneType) ?? "";
-  return fallbackPhrase ? `${subject.text} ${fallbackPhrase}` : subject.text;
+  return fallbackPhrase ? `${subject.text} ${Agreement.agree(fallbackPhrase, subject.plural)}` : subject.text;
 }
 
 // ---- The parts each desk writes its own way ----

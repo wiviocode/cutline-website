@@ -21,6 +21,7 @@ import { Cleanup } from "../src/core/caption/Cleanup";
 import { UNIDENTIFIED_TOKEN, PlayerReference } from "../src/core/caption/PlayerReference";
 import { SampleCaption } from "../src/core/caption/SampleCaption";
 import { Article } from "../src/core/caption/Article";
+import { Agreement } from "../src/core/caption/Agreement";
 import { CaptionParts } from "../src/core/caption/CaptionParts";
 import { KitColourDiagnosis } from "../src/core/setup/KitColourDiagnosis";
 import { VISION_MODELS, VisionModel, ALT_TEXT_MODES, ImagePrep } from "../src/core/models/VisionModel";
@@ -651,6 +652,71 @@ describe("Two-way players and the unit the play shows", () => {
       expect(Sports.hasUnits(other)).toBe(false);
     }
     expect(Sports.hasUnits("nonsense")).toBe(false);
+  });
+});
+
+describe("Subject and verb agree", () => {
+  const malcolm = Team.make("Malcolm", "red", "Clippers");
+  const bergan = Team.make("Bergan Catholic", "white", "Knights");
+  const roster = Roster.make(malcolm, bergan, [
+    RosterPlayer.make({ teamID: malcolm.id, jerseyNumber: "15", firstName: "Cole", lastName: "Ruth", position: "running back", side: "offense" }),
+    RosterPlayer.make({ teamID: malcolm.id, jerseyNumber: "22", firstName: "Wes", lastName: "Hahn", position: "wide receiver", side: "offense" }),
+  ]);
+  const ctx = CompositionContext.make({ style: "hurrdatSports", fallback: "markUnidentified", sport: "football", roster });
+  const caption = (v: Parameters<typeof VisionResult.make>[0]) => CaptionComposer.compose(VisionResult.make(v), ctx).caption;
+
+  it("makes an unplaceable scene as many players as the model described", () => {
+    // The reported case: the subject was built singular and the model's phrase was plural.
+    const many = caption({ sceneType: "other", sceneDescription: "stand together on the sideline", subjectTeamColor: "red" });
+    expect(many).toMatch(/^Malcolm Clippers players stand together on the sideline against/);
+    const one = caption({ sceneType: "other", sceneDescription: "poses for a portrait", subjectTeamColor: "red" });
+    expect(one).toMatch(/^A Malcolm Clippers player poses for a portrait against/);
+  });
+  it("puts the model's verb in the number of a subject whose own number is settled", () => {
+    expect(caption({ sceneType: "crowd", sceneDescription: "watches from the stands" })).toMatch(/^Fans watch from the stands between/);
+    expect(caption({ sceneType: "band", sceneDescription: "perform at halftime", subjectTeamColor: "red" })).toMatch(/^The Malcolm Clippers band performs at halftime against/);
+    expect(caption({ sceneType: "mascot", sceneDescription: "rally the crowd", subjectTeamColor: "red" })).toMatch(/^The Malcolm Clippers mascot rallies the crowd against/);
+    expect(caption({ sceneType: "coaches", sceneDescription: "watch from the sideline", subjectTeamColor: "red" })).toMatch(/^A Malcolm Clippers coach watches from the sideline against/);
+    expect(caption({ sceneType: "cheerleaders", sceneDescription: "performs during a timeout", subjectTeamColor: "red" })).toMatch(/^Malcolm Clippers cheerleaders perform during a timeout/);
+  });
+  it("agrees with however many athletes a scene ended up naming", () => {
+    const two = caption({ sceneType: "celebration", sceneDescription: "celebrates",
+      players: [VisionPlayer.make("15", "red", "celebrates"), VisionPlayer.make("22", "red", "celebrates")] });
+    expect(two).toMatch(/Cole Ruth \(15\) and Malcolm Clipper Wes Hahn \(22\) celebrate against/);
+    const one = caption({ sceneType: "celebration", sceneDescription: "celebrate", players: [VisionPlayer.make("15", "red", "")] });
+    expect(one).toMatch(/^Malcolm Clipper Cole Ruth \(15\) celebrates against/);
+  });
+  it("knows which form a verb is in, and writes the other", () => {
+    expect(Agreement.isPlural("stand together")).toBe(true);
+    expect(Agreement.isPlural("stands together")).toBe(false);
+    // A double s is the plain form — "pass", "press" — not a third person singular.
+    expect(Agreement.isPlural("pass the ball")).toBe(true);
+    expect(Agreement.isPlural("passes the ball")).toBe(false);
+    expect(Agreement.isPlural("")).toBeNull();
+    for (const [plural, singular] of [
+      ["stand together", "stands together"],
+      ["watch from the stands", "watches from the stands"],
+      ["carry the ball", "carries the ball"],
+      ["rush the passer", "rushes the passer"],
+      ["go to the huddle", "goes to the huddle"],
+      ["have the ball", "has the ball"],
+      ["are on the sideline", "is on the sideline"],
+      ["play catch", "plays catch"],
+      ["pose for a portrait", "poses for a portrait"],
+      ["fix a helmet strap", "fixes a helmet strap"],
+    ]) {
+      expect(Agreement.agree(plural, false)).toBe(singular);
+      expect(Agreement.agree(singular, true)).toBe(plural);
+      // Asking for the form it is already in changes nothing.
+      expect(Agreement.agree(plural, true)).toBe(plural);
+      expect(Agreement.agree(singular, false)).toBe(singular);
+    }
+  });
+  it("leaves the model's own words alone apart from the verb", () => {
+    expect(Agreement.agree("celebrates a touchdown with the crowd", true)).toBe("celebrate a touchdown with the crowd");
+    expect(Agreement.agree("  stands  ", false)).toBe("  stands  ");
+    expect(Agreement.agree("  stands  ", true)).toBe("  stand  ");
+    expect(Agreement.agree("Stands together", true)).toBe("Stand together");
   });
 });
 

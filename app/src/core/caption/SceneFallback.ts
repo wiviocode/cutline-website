@@ -17,8 +17,14 @@ export function indefiniteArticle(word: string): string {
 }
 
 export const SceneFallback = {
-  /** Subject noun phrase, and whether it takes a plural verb. */
-  subject(scene: SceneType, team: Team | null, _style: CaptionStyle, _professional: boolean): { text: string; plural: boolean } | null {
+  /**
+   * Subject noun phrase, and whether it takes a plural verb. `phrasePlural` is how many the
+   * model's own phrase describes, which is the only evidence of how many are in the frame: an
+   * unplaceable scene is one player or several depending on it, and every other scene has a
+   * subject whose number is already settled.
+   */
+  subject(scene: SceneType, team: Team | null, _style: CaptionStyle, _professional: boolean,
+          phrasePlural: boolean | null = null): { text: string; plural: boolean } | null {
     const name = team ? Team.fullName(team) : null;
     switch (scene) {
       case "crowd":        return { text: "Fans", plural: true };
@@ -31,7 +37,11 @@ export const SceneFallback = {
       // A scene the model could not place — a portrait, a warm-up, a moment on the sideline. With
       // a team's colour in frame the subject is one of its players; without one there is nothing
       // honest to say, and the caller falls back to the phrase alone.
-      case "other":        return team ? { text: `${indefiniteArticle(Team.fullName(team))} ${Team.fullName(team)} player`, plural: false } : null;
+      case "other":
+        if (!team) return null;
+        return phrasePlural === true
+          ? { text: `${Team.fullName(team)} players`, plural: true }
+          : { text: `${indefiniteArticle(Team.fullName(team))} ${Team.fullName(team)} player`, plural: false };
       default:             return null;
     }
   },

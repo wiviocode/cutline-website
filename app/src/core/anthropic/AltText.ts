@@ -3,6 +3,7 @@
  */
 
 import type { VisionResult } from "../vision/VisionResult";
+import { Agreement } from "../caption/Agreement";
 
 /**
  * The model-side request. One of three call types, distinguished only by its prompt.
@@ -74,9 +75,20 @@ export const SimpleAltText = {
     // the game" rather than "Players celebrate". A phrase that already places the moment in the
     // game does not get the setting appended to it.
     const phrase = vision.sceneDescription.trim().replace(/[.\s]+$/, "");
-    const noun: Partial<Record<VisionResult["sceneType"], string>> = { crowd: "Fans", cheerleaders: "Cheerleaders", band: "A marching band", mascot: "A team mascot", coaches: "A coach", bench: "Players", celebration: "Players" };
-    if (phrase && noun[vision.sceneType]) {
-      const sentence = `${noun[vision.sceneType]} ${phrase}`;
+    // The subject, and whether it takes a plural verb: the model's phrase is written for what it
+    // saw and has to be put in the number of the subject it is given here.
+    const noun: Partial<Record<VisionResult["sceneType"], { text: string; plural: boolean }>> = {
+      crowd: { text: "Fans", plural: true },
+      cheerleaders: { text: "Cheerleaders", plural: true },
+      band: { text: "A marching band", plural: false },
+      mascot: { text: "A team mascot", plural: false },
+      coaches: { text: "A coach", plural: false },
+      bench: { text: "Players", plural: true },
+      celebration: { text: "Players", plural: true },
+    };
+    const subjectNoun = noun[vision.sceneType];
+    if (phrase && subjectNoun) {
+      const sentence = `${subjectNoun.text} ${Agreement.agree(phrase, subjectNoun.plural)}`;
       return (/\b(game|match|meet|before|after|during|halftime|kickoff)\b/i.test(phrase) ? sentence : `${sentence} ${setting}`).trim() + ".";
     }
     let subject: string;
