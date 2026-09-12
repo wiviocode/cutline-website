@@ -712,6 +712,12 @@ describe("Subject and verb agree", () => {
       expect(Agreement.agree(singular, false)).toBe(singular);
     }
   });
+  it("keeps one player acting on another in the singular", () => {
+    const duelled = caption({ sceneType: "players_action",
+      players: [VisionPlayer.make("15", "red", "runs"), VisionPlayer.make("22", "red", "blocks")],
+      interaction: { subjectJerseyNumber: "15", subjectJerseyColor: "red", targetJerseyNumber: "22", targetJerseyColor: "red", phrase: "hand the ball to" } });
+    expect(duelled).toMatch(/Cole Ruth \(15\) hands the ball to Malcolm Clipper Wes Hahn \(22\)/);
+  });
   it("leaves the model's own words alone apart from the verb", () => {
     expect(Agreement.agree("celebrates a touchdown with the crowd", true)).toBe("celebrate a touchdown with the crowd");
     expect(Agreement.agree("  stands  ", false)).toBe("  stands  ");

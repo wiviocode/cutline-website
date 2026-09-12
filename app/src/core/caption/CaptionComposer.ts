@@ -105,7 +105,8 @@ function composeInteraction(interaction: Interaction, resolved: Resolved[], cont
   const subject = find(interaction.subjectJerseyNumber, interaction.subjectJerseyColor);
   const target = find(interaction.targetJerseyNumber, interaction.targetJerseyColor);
   if (!subject || !target || !interaction.phrase) return null;
-  return `${render(subject, context, namedTeamIDs)} ${interaction.phrase} ${render(target, context, namedTeamIDs)}`;
+  // One player doing something to another: the verb between them is the singular one.
+  return `${render(subject, context, namedTeamIDs)} ${Agreement.agree(interaction.phrase, false)} ${render(target, context, namedTeamIDs)}`;
 }
 
 // ---- Scene captions ----
