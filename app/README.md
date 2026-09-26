@@ -4,71 +4,78 @@
 
 <br>
 
-**Captions for sports photographs. In your browser.**
-
-Point it at a folder, tell it who was playing, and it reads every frame, identifies players by
-jersey number against a roster, writes the caption in your desk's house style, and files the
-metadata into the photograph where Photo Mechanic can read it — with no server of ours in the
-middle: the photographs go to the model you chose, and nowhere else.
+**Captions for college and high-school sports photographs. In your browser.**
 
 </div>
 
 ---
 
-This is the native macOS app, running as a web page. The photographs stay on your disk, the model
-is called directly from the page with your own key, and the metadata is written back into the
-JPEGs in place. Nothing about a shoot passes through a server of ours.
+Drop in a folder of photographs and add the two rosters. Cutline reads every frame, names the
+players by jersey number, writes the caption in your desk's house style and files it into the
+photograph where Photo Mechanic and every wire ingest can read it. The photographs go from your
+browser to Anthropic with your own key, and nowhere else.
 
-## Using it
+Built for the six team sports a college or high-school desk shoots most — football, basketball,
+volleyball, soccer, baseball and softball — plus track and field and cross country, which have no
+rosters and are captioned by meet, bib and school.
 
-Open the site in **Chrome, Edge, Brave or another Chromium browser** and drop a folder of
-photographs on it. Safari and Firefox can open a folder read-only — caption, review, correct —
-but cannot write into the files; the app says so when it detects one.
+## How a photograph is read
 
-You need a way to read photographs: an [Anthropic](https://console.anthropic.com/) or
-[OpenAI](https://platform.openai.com/api-keys) API key, or a vision model running on the Mac through
-Ollama or LM Studio, which costs nothing and sends nothing anywhere. The first-time setup asks for it
-and checks it before anything else, then your byline and house style, then the model and output. A key
-is kept in the browser's own storage and is sent only to that provider's API. Unlike the Mac app's
-keychain, anything else running in that browser profile could read it — use a key you can revoke.
-The model list in Settings prices each choice per thousand photographs at the detail in use; the
-three Anthropic models have been measured on real frames, the others are marked as not yet.
+1. **One look at the frame.** Claude gets the photograph, both rosters, and a line on what each
+   team is wearing today (read from a few of your frames before the run). It reports each subject
+   — team, the digits it can actually see and where it saw them, how clearly, any nameplate — and
+   one caption clause written with tokens: `{P1} catches a pass over {P2}`.
+2. **Identities are checked in code.** A name is believed only when the digits and the team agree
+   with the roster. A number football's two units share is settled by the nameplate, then the
+   play. A partly hidden number (`1?`) names a player only when one roster number fits.
+   Everything is sorted into *sure*, *check* and *unnamed*.
+3. **A close look where it pays.** A number left unsettled — or read "clearly" on a distant player
+   — is checked against a crop of the original at full resolution. About one frame in three.
+4. **The caption is composed locally** in AP, Hurrdat, Getty, Imagn, Icon or simple style. A
+   correction in review re-renders it instantly, with no second request.
 
-Every file format the app writes is the Mac app's: `.caption-data/<frame>.json`,
-`.caption-manifest.json`, `.xmp` sidecars, and the embedded XMP and IPTC-IIM. A folder captioned
-in one opens in the other.
+Optional, off by default: **face matching** against college roster headshots, entirely on the
+device. It never overrules a number that was read; it can name an athlete whose number is hidden
+(marked *check*) and settles a partial read it agrees with.
 
-## What it does
+## Accuracy and cost
 
-The model is asked for **observations, not prose**. It returns structured JSON — scene type,
-players, jersey numbers and colours, a one-line summary — and is forbidden from writing anything
-a reader would see. The caption is assembled here from that plus the roster and the fixture.
+Measured on 35 hand-checked frames from six real shoots (college and high-school football,
+volleyball and soccer), scoring the names that reach the caption:
 
-Two things follow from the split, and they are the reason for it:
+| Tier | Model | Precision | Recall | Wrong and unflagged | per 1,000 photos |
+|---|---|---|---|---|---|
+| Economy | Sonnet 5, standard resolution + close looks | 93% | 90% | 2 | about $7.40 |
+| **Balanced** (default) | Opus 5.5, 2400 visual tokens + close looks | **100%** | **93%** | **0** | about $20 |
+| Best | Opus 5.5, full resolution + close looks | 100% | 93% | 0 | about $30 |
 
-* **A correction is free.** A jersey number typed in during review re-composes the caption
-  locally, with no second API call.
-* **Style is a function, not a prompt.** Seven house styles — AP, Getty, Getty (parenthetical),
-  Imagn, Icon Sportswire, Hurrdat, and plain — each written the way that desk writes it.
-* **Twenty sports, fifteen levels, and your own.** One table (`src/core/setup/Sports.ts`) says what each sport is
-  called, whether its event is a game, a match, a meet, a dual, a tournament or a race, which
-  levels and genders play it, its professional league, where MaxPreps keeps its rosters, and its
-  file-name code; the model gets a few lines on the sport's numbers, colours and verbs with every
-  frame. Levels (`src/core/setup/Levels.ts`) run from the NCAA divisions, NAIA and junior college
-  through school, youth, club, professional, minor league, international and Olympic, each with the
-  phrase a caption uses for it; a desk adds its own from the level list.
+For comparison, Haiku 4.5 scored 60% precision and 64% recall on the same frames, with 16 wrong
+names marked sure — it is used here only for text (reading a roster page, naming a team). The
+frame is sized to exactly what the model reads, so pixel boxes map back onto the original and
+nothing is paid for that would be thrown away; the system prompt with both rosters is cached, so
+after the first frame each photograph pays a tenth for it.
 
-Rosters come from a team's own web page: paste any link. A MaxPreps page is read from the data
-it embeds, with no model and both of a two-way player's positions; any other page is reduced to
-text and read by Haiku. A small relay at `/api/fetch` does the fetching, because a browser cannot
-fetch another site for itself. The relay answers only this app, reads only public addresses — the
-name is resolved and checked first, and so is every redirect — hands back only text or a sandboxed
-image, and allows sixty reads per caller per ten minutes; when it is out of reach, paste the page's text instead. A
-CSV works too. Teams are kept in a library so a squad is only ever read once a season, and both
-sides can be read at once.
+## Rosters
 
-RAW files are shown through the JPEG preview the camera embedded, and their metadata goes to a
-sidecar beside them.
+Paste a team's athletics home page, its roster page, or a MaxPreps team page:
+
+- **MaxPreps** (high school), **Sidearm** (both generations — most of Division I) and **WMT**
+  (Nebraska and others) are read exactly from the data the page embeds: instant, free, with
+  headshots on the college platforms and both positions of a two-way player.
+- Any other page, pasted text, a screenshot or a PDF is read by Claude for about a cent.
+- A CSV works too. Teams are saved so a roster is read once a season.
+
+The small relay at `../api/fetch.ts` reads the page (a browser cannot read another site). It
+answers only this app, reads only public addresses, slims a page to its data, and returns only
+text or a sandboxed image.
+
+## What it writes
+
+The same on-disk formats as the first Cutline and the macOS app: an XMP packet and the legacy
+IPTC-IIM block embedded by JPEG segment surgery (EXIF, maker notes and scan data byte-identical),
+`.xmp` sidecars for RAW files, a `.caption-data/<frame>.json` record of each reading and every
+correction, and `.caption-manifest.json`. Reopening a folder restores every reading for free.
+Captions written by the first Cutline are kept and can be read again.
 
 ## Developing
 
@@ -76,29 +83,26 @@ sidecar beside them.
 cd app
 npm install
 npm run dev        # http://localhost:5173/app/
-npm test           # 159 checks, including a real JPEG written and read back
+npm test           # 141 checks, including a camera JPEG written and read back
 npm run build      # into ../dist/app
 ```
 
-Set `CUTLINE_RAW_SAMPLE=/path/to/a.ARW` to run the RAW walker's check against a real file.
-
 ```
-src/core/       pure TypeScript — every line has a test; no DOM, no network
-src/platform/   the browser: File System Access, IndexedDB, image decoding, EXIF, the relay client
-src/app/        React + zustand: the shell, the first-time setup, and the four screens (UI-PLAN.md)
-../api/fetch.ts the relay, a Vercel function — at the repository root, where the host looks for it
-tests/          the golden suite, ported check for check from the Mac app
+src/core/       pure TypeScript: sports, rosters, the reading, identities, captions, metadata
+src/platform/   the browser: folders, IndexedDB, image decoding, EXIF, the relay, face matching
+src/app/        React + zustand: welcome, setup, review, settings
+scripts/        the evaluation harness (eval.ts, score.ts)
+tests/          vitest
 ```
 
-`src/core` is the Swift app's metadata and caption layers moved language and nothing else. The
-13 golden captions match byte for byte, the 28 Photo Mechanic variable cases pass, and a camera
-JPEG round-trips with its scan data byte-identical — that last one on every test run, because
-embedding rewrites the user's originals in place.
+### Measuring accuracy
 
-## Deploying
+`scripts/eval.ts` runs the app's pipeline under Node over folders of photographs and scores the
+named players against a truth file (`"A13"` team and number, `"B0:Scoby"` a specific player,
+`"+A9"` visible and allowed, `"A?"` unreadable). It keeps a spend ledger beside the config and
+refuses a run that would pass `--budget`.
 
-The repository root's `vercel.json` builds this folder into `dist/app` and serves it at `/app`,
-and at `/`, the site's front door; the marketing page sits at `/about`. The relay is one serverless
-function. Any host that serves
-`dist/` works for everything except reading a team's page by link; without the relay the app
-offers paste instead.
+```bash
+ANTHROPIC_API_KEY=… npx tsx scripts/eval.ts --config eval.json --truth-only --tier balanced
+npx tsx scripts/score.ts truth.json runs/*.json
+```

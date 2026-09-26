@@ -45,10 +45,13 @@ export interface TierInfo {
  * volleyball and soccer), scored on the names that reach the caption:
  *
  *   Haiku 4.5, 1568 tokens           precision 60%  recall 64%   $4.51 / 1,000
- *   Sonnet 5, 1568 tokens + zoom     precision 92%  recall 83%   $7.43 / 1,000
+ *   Sonnet 5, 1568 tokens + zoom     precision 93%  recall 90%   $7.43 / 1,000
  *   Sonnet 5, 3000 tokens + zoom     precision 90%  recall 88%  $12.75 / 1,000
  *   Opus 5.5, 2400 tokens + zoom     precision 100% recall 93%  $20.57 / 1,000
  *   Opus 5.5, 4784 tokens + zoom     precision 100% recall 93%  $35.35 / 1,000
+ *
+ * (Test runs of 35 photographs pay six prompt-cache writes; a real shoot spreads them thin, so
+ * the steady-state figures above are what a shoot of a few hundred frames costs.)
  *
  * Haiku misread too many numbers with confidence to be offered for photographs at all; it still
  * does the text jobs (a roster page, a team's name). The zoom — a close crop of the original for
@@ -56,7 +59,7 @@ export interface TierInfo {
  */
 export const TIERS: Record<Tier, TierInfo> = {
   economy: { id: "economy", name: "Economy", model: "claude-sonnet-5", imageTokens: 1568, zoom: true,
-    blurb: "Sonnet at standard resolution with close-ups of unclear numbers. Names about 8 in 10 players; wrong about 1 in 12." },
+    blurb: "Sonnet at standard resolution with close-ups of unclear numbers. Named 9 in 10 players in testing; about 1 name in 14 was wrong, most of them flagged." },
   balanced: { id: "balanced", name: "Balanced", model: "claude-opus-5-5", imageTokens: 2400, zoom: true,
     blurb: "Opus with close-ups of unclear numbers. Named 9 in 10 players with no wrong names in testing. The default." },
   best: { id: "best", name: "Best", model: "claude-opus-5-5", imageTokens: 4784, zoom: true,
