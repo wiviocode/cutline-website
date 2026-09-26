@@ -30,6 +30,8 @@ import { FrameRecord } from "@core/records/FrameRecord";
 import { ProcessedFilesManifest } from "@core/records/ProcessedFilesManifest";
 import { PhotoMetadata } from "@core/images/PhotoMetadata";
 import { MetadataOutput } from "@core/metadata/MetadataOutput";
+import { XMPSidecar } from "@core/metadata/XMPSidecar";
+import { zipSync, strToU8 } from "fflate";
 import { IPTCTemplate } from "@core/metadata/IPTCTemplate";
 import { HurrdatFields } from "@core/metadata/HurrdatFields";
 
@@ -173,6 +175,8 @@ interface State {
   setApproved(frameID: string, approved: boolean): Promise<void>;
   approveAndNext(): Promise<void>;
   writeAllApproved(): Promise<void>;
+  /** For a folder this browser cannot write: every approved caption as an .xmp sidecar, in a zip. */
+  downloadSidecars(): Promise<void>;
 }
 
 // ------------------------------------------------------------------------------------------ derived
@@ -308,6 +312,18 @@ function altText(s: State, f: Frame): string | null {
   return `${body[0]?.toUpperCase() ?? ""}${body.slice(1)} in a ${Levels.info(s.setup.levelId).qualifier} ${sport.noun} ${sport.event}.`;
 }
 
+/** The XMP packet for a frame, exactly as it will be written into the file or beside it. */
+async function packetFor(s: State, f: Frame): Promise<string> {
+  const fields = derive.usesRosters(s) ? HurrdatFields.make({
+    descriptor: HurrdatFields.descriptor(s.slots.A.team?.school ?? "", Sports.label(s.setup.sport, s.setup.gender, Levels.info(s.setup.levelId).kind), s.slots.B.team?.school ?? "", HurrdatFields.datePlaceholder),
+    supplementalCategory: HurrdatFields.supplementalCategory(s.setup.sport, s.setup.gender),
+    city: s.setup.city, state: s.setup.state, sublocation: s.setup.venue,
+  }) : HurrdatFields.make({ descriptor: `${s.setup.eventName} - ${HurrdatFields.datePlaceholder}`, city: s.setup.city, state: s.setup.state, sublocation: s.setup.venue });
+  return MetadataOutput.packet(f.caption, altText(s, f), f.name, f.exif ?? {}, {
+    template: await template(s), city: s.setup.city, state: s.setup.state, fields, photographer: s.settings.photographer, house: s.settings.house,
+  }, f.captionEdited ? "manual" : "ai");
+}
+
 let matcher = new FaceMatcher();
 let matcherKey = "";
 
@@ -354,15 +370,7 @@ export const useStore = create<State>((set, get) => {
     if (!f || !folder?.writable || !f.caption) return;
     try {
       const file = await f.photo.file();
-      const exif = f.exif ?? {};
-      const fields = derive.usesRosters(s) ? HurrdatFields.make({
-        descriptor: HurrdatFields.descriptor(s.slots.A.team?.school ?? "", Sports.label(s.setup.sport, s.setup.gender, Levels.info(s.setup.levelId).kind), s.slots.B.team?.school ?? "", HurrdatFields.datePlaceholder),
-        supplementalCategory: HurrdatFields.supplementalCategory(s.setup.sport, s.setup.gender),
-        city: s.setup.city, state: s.setup.state, sublocation: s.setup.venue,
-      }) : HurrdatFields.make({ descriptor: `${s.setup.eventName} - ${HurrdatFields.datePlaceholder}`, city: s.setup.city, state: s.setup.state, sublocation: s.setup.venue });
-      const packet = MetadataOutput.packet(f.caption, altText(s, f), f.name, exif, {
-        template: await template(s), city: s.setup.city, state: s.setup.state, fields, photographer: s.settings.photographer, house: s.settings.house,
-      }, f.captionEdited ? "manual" : "ai");
+      const packet = await packetFor(s, f);
       const original = s.settings.embed ? new Uint8Array(await file.arrayBuffer()) : null;
       const plan = MetadataOutput.plan(f.name, packet, original);
       if (plan.kind === "embed") await folder.writeBytes(f.name, plan.bytes);
@@ -791,6 +799,22 @@ export const useStore = create<State>((set, get) => {
       if (!f || f.state !== "done" && !f.caption) return;
       get().step(1);
       await get().setApproved(id, true);
+    },
+
+    async downloadSidecars() {
+      const s = get();
+      const approved = s.frames.filter((f) => f.approved && f.caption);
+      if (!approved.length) { get().notify("Approve some captions first."); return; }
+      const files: Record<string, Uint8Array> = {};
+      for (const f of approved) files[XMPSidecar.sidecarName(f.name)] = strToU8(await packetFor(s, f));
+      const zip = zipSync(files, { level: 6 });
+      const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: "application/zip" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${s.folder?.name ?? "captions"} captions.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      get().notify(`${approved.length} sidecars downloaded. Put them beside the photographs; Photo Mechanic and Lightroom read them.`, "info");
     },
 
     async writeAllApproved() {

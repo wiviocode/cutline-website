@@ -51,6 +51,7 @@ export function Review() {
             <>
               {counts.pending + counts.failed ? <Button small onClick={() => s.startRun()}>Read {counts.pending + counts.failed} remaining</Button> : null}
               {s.frames.some((f) => f.approved && !f.written) && s.folder?.writable ? <Button small onClick={() => s.writeAllApproved()}>Write approved</Button> : null}
+              {s.folder && !s.folder.writable && s.frames.some((f) => f.approved) ? <Button small onClick={() => s.downloadSidecars()} title="This browser cannot write into the photographs; take the captions as .xmp sidecars instead">Download captions (.xmp)</Button> : null}
             </>
           )}
         </div>
