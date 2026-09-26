@@ -69,10 +69,21 @@ function renderClause(obs: Observation, ids: Identity[], ctx: CaptionContext, na
   if (!clause) clause = fallbackClause(obs);
   const pieces: string[] = [];
   let last = 0;
+  let prevTeam: TeamKey | null = null; // the team of the named player just before, if the last token was one
   for (const m of clause.matchAll(/\{(P\d+|A|B|A:players|B:players|venue)\}/g)) {
     let before = clause.slice(last, m.index);
     const token = m[1];
     let rendered = renderToken(token, obs, ids, ctx, named);
+    // "North Carolina outside hitter Safi Hampton (22) and middle blocker Jackie Taylor (21)":
+    // a teammate listed right after is not given the school again.
+    const team = namedPlayerTeam(token, ids);
+    if (team && team === prevTeam && ctx.matchup && /^\s*(,\s*)?(and\s+)?$/.test(before)) {
+      const t = Matchup.team(ctx.matchup, team);
+      for (const prefix of [`${teamName(t, ctx.style)} `, `${possessive(t.school)} `]) {
+        if (rendered.startsWith(prefix)) { rendered = rendered.slice(prefix.length); break; }
+      }
+    }
+    prevTeam = team;
     // "a {A} coach" → "an Indiana coach": the article agrees with what the token became.
     const art = /(^|\s)(a|an|A|An)\s+$/.exec(before);
     if (art && rendered) {
@@ -90,6 +101,11 @@ function renderClause(obs: Observation, ids: Identity[], ctx: CaptionContext, na
   }
   pieces.push(clause.slice(last));
   return pieces.join("").replace(/\s{2,}/g, " ").trim();
+}
+
+function namedPlayerTeam(token: string, ids: Identity[]): TeamKey | null {
+  const id = ids.find((i) => i.subjectId === token);
+  return id?.player && id.teamKey ? id.teamKey : null;
 }
 
 function renderToken(token: string, obs: Observation, ids: Identity[], ctx: CaptionContext, named: Set<TeamKey>): string {

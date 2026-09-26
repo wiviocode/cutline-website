@@ -43,6 +43,19 @@ describe("captions in the desk's own style", () => {
       "Nebraska middle blocker Andi Jackson (15) spikes the ball over North Carolina middle blocker Lauren Schutter (3) during an NCAA college volleyball match, Friday, Sept. 18, 2026, in Lincoln, Neb. (Nebraska Athletics/Eli Larson)");
   });
 
+  it("AP: teammates side by side share one school", () => {
+    const obs: Observation = { scene: "action", timing: "during", clause: "{P1} attacks as {P2} and {P3} go up for a block", subjects: [
+      subject({ id: "P1", team: "A", number: "3" }),
+      subject({ id: "P2", team: "B", number: "22" }),
+      subject({ id: "P3", team: "B", number: "21" }),
+    ] };
+    expect(compose(obs, apCtx(vb, "volleyball", sept18))).toBe(
+      "Nebraska opposite Virginia Adriano (3) attacks as North Carolina outside hitter Safi Hampton (22) and middle blocker Jackie Taylor (21) go up for a block during an NCAA college volleyball match, Friday, Sept. 18, 2026, in Lincoln, Neb. (Nebraska Athletics/Eli Larson)");
+    // Apart in the sentence, each keeps its school.
+    const apart: Observation = { ...obs, clause: "{P2} blocks {P1} as {P3} watches" };
+    expect(compose(apart, apCtx(vb, "volleyball", sept18))).toContain("as North Carolina middle blocker Jackie Taylor (21) watches");
+  });
+
   it("AP: one team named, the other becomes the opponent", () => {
     const obs: Observation = { scene: "celebration", timing: "during", clause: "{P1} celebrates", subjects: [subject({ id: "P1", team: "A", number: "11" })] };
     expect(compose(obs, apCtx(vb, "volleyball", sept18))).toBe(
