@@ -141,6 +141,31 @@ describe("captions in the desk's own style", () => {
   });
 });
 
+describe("meets, without rosters", () => {
+  const meet: CaptionContext = {
+    style: "apSports", sport: "crossCountry", gender: "womens", level: Levels.info("hs"), matchup: null, eventName: "Nebraska Class A state cross country championships",
+    venue: "Kearney Country Club", city: "Kearney", state: "Nebraska", captureDate: new Date(2026, 9, 23, 11), photographer: "Eli Larson", house: "Hurdatt", unnamed: "describe",
+  };
+  const entries = [{ bib: "1204", name: "Jane Doe", school: "Waverly" }];
+  const run = (obs: Observation, ctx = meet) => Compose.caption(obs, Identify.all(obs, { matchup: null, entries, unitSport: false }), ctx).caption;
+
+  it("names a runner from the entry list by bib", () => {
+    const obs: Observation = { scene: "action", timing: "during", clause: "{P1} leads the pack up a hill", subjects: [subject({ id: "P1", team: "none", number: "1204", uniformText: "WAVERLY" })] };
+    expect(run(obs)).toBe("Waverly's Jane Doe leads the pack up a hill during the Nebraska Class A state cross country championships, Friday, Oct. 23, 2026, in Kearney, Neb. (Hurdatt/Eli Larson)");
+  });
+
+  it("describes a runner by the school on the singlet when there is no entry", () => {
+    const obs: Observation = { scene: "action", timing: "during", clause: "{P1} kicks to the finish", subjects: [subject({ id: "P1", team: "none", number: "", clarity: "hidden", uniformText: "GRETNA" })] };
+    expect(run(obs)).toMatch(/^A Gretna runner kicks to the finish during the Nebraska Class A state cross country championships/);
+    expect(run(obs, { ...meet, unnamed: "placeholder" })).toMatch(/^Gretna XXXXX kicks to the finish/);
+  });
+
+  it("falls back to the level and sport when the meet has no name", () => {
+    const obs: Observation = { scene: "wide", timing: "before", clause: "Runners line up at the start", subjects: [] };
+    expect(run(obs, { ...meet, eventName: undefined, sport: "trackAndField" })).toMatch(/^Runners line up at the start before a high school track and field meet, Friday/);
+  });
+});
+
 describe("identification against the roster", () => {
   const ctx = { matchup: vb, unitSport: false };
   it("confirms a clear, unique number and flags a soft one", () => {

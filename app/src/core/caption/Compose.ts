@@ -128,9 +128,9 @@ function renderSubject(s: Subject, id: Identity | undefined, ctx: CaptionContext
   if (!ctx.matchup) {
     const e = id?.entry;
     if (e) {
-      const num = formatNumber(e.bib, ctx.style, true);
-      if (Styles.usesOfTheTeamForm(ctx.style)) return `${e.name} of ${e.school}`;
-      return e.school ? `${possessive(e.school)} ${e.name}${num}` : `${e.name}${num}`;
+      // A bib identifies the runner to the app; desks do not print it.
+      if (Styles.usesOfTheTeamForm(ctx.style)) return e.school ? `${e.name} of ${e.school}` : e.name;
+      return e.school ? `${possessive(e.school)} ${e.name}` : e.name;
     }
     const school = s.uniformText ? titleCase(s.uniformText) : "";
     const noun = athleteNoun(ctx.sport);

@@ -55,6 +55,8 @@ export function slimHTML(html: string): string {
 const TIMEOUT_MS = 15_000;
 const MAX_REDIRECTS = 5;
 const RATE_LIMIT = 60;
+/** Images — a roster's headshots, for on-device face matching — are counted apart: a football roster alone is over a hundred. */
+const IMAGE_RATE_LIMIT = 600;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 /** The header the app sends. Kept as a literal in the app too — it must never import this file. */
 export const CALLER_HEADER = "x-cutline-relay";
@@ -205,6 +207,7 @@ export interface RelayDeps {
   now: () => number;
   timeoutMs: number;
   limiter: RateLimiter;
+  imageLimiter: RateLimiter;
 }
 
 const isTextual = (kind: string) =>
@@ -235,6 +238,7 @@ export function createRelay(deps: Partial<RelayDeps> = {}): (request: Request) =
   const now = deps.now ?? Date.now;
   const timeoutMs = deps.timeoutMs ?? TIMEOUT_MS;
   const limiter = deps.limiter ?? new RateLimiter(RATE_LIMIT, RATE_WINDOW_MS, now);
+  const imageLimiter = deps.imageLimiter ?? new RateLimiter(IMAGE_RATE_LIMIT, RATE_WINDOW_MS, now);
 
   /** Null when every address behind the name is public; otherwise why not. */
   const resolvePublic = async (host: string): Promise<string | null> => {
@@ -251,7 +255,8 @@ export function createRelay(deps: Partial<RelayDeps> = {}): (request: Request) =
     if (!callerAllowed(request)) return json({ error: "this relay answers only Cutline" }, 403);
     const q = new URL(request.url).searchParams;
     if (q.get("ping")) return json({ ok: true });
-    if (!limiter.allow(clientKey(request))) return json({ error: "too many reads in a short time — wait a few minutes" }, 429);
+    const bucket = new URL(request.url).searchParams.get("raw") ? imageLimiter : limiter;
+    if (!bucket.allow(clientKey(request))) return json({ error: "too many reads in a short time — wait a few minutes" }, 429);
 
     const target = q.get("url");
     if (!target) return json({ error: "url is required" }, 400);
