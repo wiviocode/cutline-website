@@ -139,8 +139,9 @@ function renderSubject(s: Subject, id: Identity | undefined, ctx: CaptionContext
   if (team) named.add(teamKey!);
   if (id?.player && team) return playerReference(id.player, team, ctx.style, id.side);
 
-  // Visible but not named.
-  const number = s.clarity === "partial" ? s.number : "";
+  // Visible but not named. A partly read number helps the desk find the player — unless a digit
+  // of it is unknown, which would print as "(?1)".
+  const number = s.clarity === "partial" && !s.number.includes("?") ? s.number : "";
   if (ctx.unnamed === "describe") {
     if (!team) return "a player";
     const mod = teamModifier(team, ctx.style);

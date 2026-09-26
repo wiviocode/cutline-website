@@ -43,6 +43,9 @@ export interface ManualID {
   teamKey: TeamKey | null;
   /** A roster player's id, or null for "not on the roster / leave unnamed". */
   playerID: string | null;
+  /** The player's number and name when it was set, so it survives the roster being read again. */
+  number?: string;
+  name?: string;
 }
 
 export interface IdentifyContext {
@@ -75,7 +78,10 @@ export const Identify = {
 
     if (manual) {
       const team = manual.teamKey && ctx.matchup ? Matchup.team(ctx.matchup, manual.teamKey) : null;
-      const player = team && manual.playerID ? team.players.find((p) => p.id === manual.playerID) ?? null : null;
+      const player = team && manual.playerID
+        ? team.players.find((p) => p.id === manual.playerID)
+          ?? team.players.find((p) => p.number === manual.number && Player.fullName(p) === manual.name) ?? null
+        : null;
       return { ...base, teamKey: manual.teamKey, player, status: player ? "confirmed" : "unknown", source: "manual", reason: player ? "Set by hand" : "Left unnamed by hand", side };
     }
 

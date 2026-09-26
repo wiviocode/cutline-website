@@ -1,81 +1,92 @@
 /**
- * What the app remembers between sessions: settings, the API keys, the team library and its
- * logos, recent shoots, Photo Mechanic templates, and the folder handles that let a recent shoot
- * reopen without a picker.
+ * What the app remembers between sessions: settings, the API key, the team library, recent
+ * shoots and the folder handles that reopen them, and Photo Mechanic templates.
  *
- * IndexedDB rather than localStorage, because folder handles and logo blobs are not strings.
+ * IndexedDB rather than localStorage, because folder handles are not strings. The database and
+ * its stores are the first Cutline's, so a key and folders saved by it still open.
  *
- * On the key: the native app used the login keychain. A browser has nothing comparable — this
- * is readable by anything running in the same browser profile. Said plainly in Settings.
+ * On the key: a browser has no keychain. This is readable by anything running in the same
+ * browser profile — said plainly in Settings.
  */
 
 import { openDB, type IDBPDatabase } from "idb";
-import type { SavedTeam } from "@core/roster/SavedTeam";
-import type { RecentGame } from "@core/setup/GameLibrary";
-import type { CaptionStyle } from "@core/caption/CompositionContext";
-import { DEFAULT_VISION_MODEL, type AltTextMode } from "@core/models/VisionModel";
-import { DEFAULT_LOCAL_BASE_URL } from "@core/models/VisionClient";
-import type { KeyedProviderID } from "@core/models/Providers";
+import type { CaptionStyle } from "@core/caption/Styles";
+import type { UnnamedMode } from "@core/caption/Compose";
+import type { Tier } from "@core/ai/Models";
+import type { Team } from "@core/roster/Roster";
+import type { SportID, Gender, LevelKind } from "@core/sports/Sports";
 import { NamingPattern } from "@core/naming/NamingPattern";
-import type { CustomLevel } from "@core/setup/Levels";
 
 export interface Settings {
   style: CaptionStyle;
   photographer: string;
   /** The agency, desk or publication in the credit line; blank for the style's own. */
   house: string;
-  embedInFile: boolean;
-  writeSidecars: boolean;
-  altTextMode: AltTextMode;
-  /** A catalogue id from `VISION_MODELS`. */
-  model: string;
-  /** ".../v1" of Ollama or LM Studio, for the model on this Mac. */
-  localBaseURL: string;
-  /** The model pulled there that the desk chose; empty until one is. */
-  localModel: string;
-  longEdge: number;
+  tier: Tier;
+  /** How an athlete the app could not name is written: the desk's XXXXX, or "a Nebraska player". */
+  unnamed: UnnamedMode;
+  /** Write into the JPEG itself; off writes .xmp sidecars beside every photograph instead. */
+  embed: boolean;
   concurrency: number;
-  namingPattern: string;
-  /** Name of the chosen template in the `templates` store, or null for none. */
+  /** On-device face matching against roster headshots, offered for college rosters only. */
+  faces: boolean;
   templateName: string | null;
-  /** The first-time setup has been completed once. */
+  namingPattern: string;
   onboarded: boolean;
-  /** Levels the desk added itself — a prep-school league, a masters circuit. */
-  customLevels: CustomLevel[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   style: "apSports",
   photographer: "",
   house: "",
-  embedInFile: true,
-  writeSidecars: false,
-  altTextMode: "simple",
-  model: DEFAULT_VISION_MODEL,
-  localBaseURL: DEFAULT_LOCAL_BASE_URL,
-  localModel: "",
-  longEdge: 1616,
+  tier: "balanced",
+  unnamed: "placeholder",
+  embed: true,
   concurrency: 4,
-  namingPattern: NamingPattern.hurrdat,
+  faces: false,
   templateName: null,
+  namingPattern: NamingPattern.hurrdat,
   onboarded: false,
-  customLevels: [],
 };
 
+/** A team kept for next time, so a roster is read once a season. */
+export interface SavedTeam {
+  team: Team;
+  sport: SportID;
+  gender: Gender;
+  level: LevelKind;
+  savedAt: string;
+}
+
+export interface RecentShoot {
+  id: string;
+  folderName: string;
+  title: string;
+  photoCount: number;
+  lastOpened: string;
+  /** Everything the setup screen held, to restore it with the folder. */
+  setup: unknown;
+}
+
 const DB_NAME = "cutline";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 function db(): Promise<IDBPDatabase> {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(d) {
-        d.createObjectStore("kv");
-        d.createObjectStore("teams", { keyPath: "id" });
-        d.createObjectStore("logos");
+      upgrade(d, oldVersion) {
+        if (oldVersion < 1) {
+          d.createObjectStore("kv");
+          d.createObjectStore("logos");
+          d.createObjectStore("templates");
+          d.createObjectStore("folders");
+        }
+        // The first Cutline's team and recent-shoot records have another shape; start fresh.
+        if (d.objectStoreNames.contains("teams")) d.deleteObjectStore("teams");
+        if (d.objectStoreNames.contains("recents")) d.deleteObjectStore("recents");
+        d.createObjectStore("teams");
         d.createObjectStore("recents", { keyPath: "id" });
-        d.createObjectStore("templates");
-        d.createObjectStore("folders");
       },
     });
   }
@@ -84,46 +95,32 @@ function db(): Promise<IDBPDatabase> {
 
 export const Storage = {
   async settings(): Promise<Settings> {
-    const stored = (await (await db()).get("kv", "settings")) as Partial<Settings> | undefined;
+    const stored = (await (await db()).get("kv", "settings2")) as Partial<Settings> | undefined;
     return { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
   },
-  async saveSettings(s: Settings): Promise<void> { await (await db()).put("kv", s, "settings"); },
+  async saveSettings(s: Settings): Promise<void> { await (await db()).put("kv", s, "settings2"); },
 
-  /** One key per hosted provider. Anthropic's keeps the slot it always had, so a saved key still opens. */
-  async keys(): Promise<Record<KeyedProviderID, string>> {
+  async key(): Promise<string> { return ((await (await db()).get("kv", "apiKey")) as string | undefined) ?? ""; },
+  async saveKey(key: string): Promise<void> {
     const d = await db();
-    const read = async (slot: string) => ((await d.get("kv", slot)) as string | undefined) ?? "";
-    return { anthropic: await read("apiKey"), openai: await read("apiKey:openai") };
-  },
-  async saveKey(provider: KeyedProviderID, key: string): Promise<void> {
-    const d = await db();
-    const slot = provider === "anthropic" ? "apiKey" : `apiKey:${provider}`;
-    if (key) await d.put("kv", key, slot); else await d.delete("kv", slot);
+    if (key) await d.put("kv", key, "apiKey"); else await d.delete("kv", "apiKey");
   },
 
-  async teams(): Promise<SavedTeam[]> { return (await (await db()).getAll("teams")) as SavedTeam[]; },
-  async saveTeams(teams: SavedTeam[]): Promise<void> {
-    const d = await db();
-    const tx = d.transaction("teams", "readwrite");
-    await tx.store.clear();
-    for (const t of teams) await tx.store.put(t);
-    await tx.done;
+  async teams(): Promise<SavedTeam[]> {
+    const all = (await (await db()).getAll("teams")) as SavedTeam[];
+    return all.sort((a, b) => a.team.school.localeCompare(b.team.school));
   },
+  async saveTeam(t: SavedTeam): Promise<void> { await (await db()).put("teams", t, t.team.id); },
+  async deleteTeam(id: string): Promise<void> { await (await db()).delete("teams", id); },
 
-  async logo(key: string): Promise<Blob | null> { return ((await (await db()).get("logos", key)) as Blob | undefined) ?? null; },
-  async saveLogo(key: string, blob: Blob): Promise<void> { await (await db()).put("logos", blob, key); },
-  async deleteLogo(key: string): Promise<void> { await (await db()).delete("logos", key); },
-
-  async recents(): Promise<RecentGame[]> {
-    const all = (await (await db()).getAll("recents")) as RecentGame[];
-    return all.sort((a, b) => (a.lastOpened < b.lastOpened ? 1 : a.lastOpened > b.lastOpened ? -1 : 0));
+  async recents(): Promise<RecentShoot[]> {
+    const all = (await (await db()).getAll("recents")) as RecentShoot[];
+    return all.sort((a, b) => (a.lastOpened < b.lastOpened ? 1 : -1)).slice(0, 12);
   },
-  async saveRecents(list: RecentGame[]): Promise<void> {
-    const d = await db();
-    const tx = d.transaction("recents", "readwrite");
-    await tx.store.clear();
-    for (const g of list) await tx.store.put(g);
-    await tx.done;
+  async saveRecent(r: RecentShoot): Promise<void> { await (await db()).put("recents", r); },
+  async deleteRecent(id: string): Promise<void> {
+    await (await db()).delete("recents", id);
+    await Storage.deleteFolderHandle(id);
   },
 
   async templateNames(): Promise<string[]> { return ((await (await db()).getAllKeys("templates")) as string[]).sort(); },
@@ -131,10 +128,8 @@ export const Storage = {
   async saveTemplate(name: string, text: string): Promise<void> { await (await db()).put("templates", text, name); },
   async deleteTemplate(name: string): Promise<void> { await (await db()).delete("templates", name); },
 
-  /** Folder handles, keyed by the recent game's id. Chromium only; harmless elsewhere. */
   async folderHandle(id: string): Promise<FileSystemDirectoryHandle | null> {
-    try { return ((await (await db()).get("folders", id)) as FileSystemDirectoryHandle | undefined) ?? null; }
-    catch { return null; }
+    try { return ((await (await db()).get("folders", id)) as FileSystemDirectoryHandle | undefined) ?? null; } catch { return null; }
   },
   async saveFolderHandle(id: string, handle: FileSystemDirectoryHandle): Promise<void> {
     try { await (await db()).put("folders", handle, id); } catch { /* not storable in this browser */ }

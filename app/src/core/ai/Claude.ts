@@ -183,7 +183,7 @@ function imageBlock(img: SentImage): Anthropic.ImageBlockParam {
 /** The SDK's typed errors, in the words the app shows. */
 export function describe(e: unknown): ClaudeError {
   if (e instanceof ClaudeError) return e;
-  if (e instanceof Anthropic.AuthenticationError) return new ClaudeError("Anthropic rejected the API key. Check it in Settings.", "auth", false);
+  if (e instanceof Anthropic.AuthenticationError) return new ClaudeError("Anthropic rejected the API key.", "auth", false);
   if (e instanceof Anthropic.PermissionDeniedError) return new ClaudeError("This API key is not allowed to use that model.", "auth", false);
   if (e instanceof Anthropic.RateLimitError) return new ClaudeError("Rate limited by Anthropic — slowing down.", "rate", true);
   if (e instanceof Anthropic.BadRequestError) {

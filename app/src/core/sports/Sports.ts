@@ -27,6 +27,8 @@ export interface SportInfo {
   rosters: boolean;
   /** Which genders play it, at either level. */
   genders: Gender[];
+  /** The gender assumed when the sport is chosen: most volleyball shot is women's. */
+  defaultGender?: Gender;
   /** Two players can share a number because they never play the same unit (football). */
   units?: boolean;
   /** MaxPreps' path segment. */
@@ -44,7 +46,7 @@ export const SPORTS: SportInfo[] = [
     collegeSlugs: { mens: ["football"], womens: ["football"] }, code: () => "FB" },
   { id: "basketball", name: "Basketball", noun: "basketball", event: "game", rosters: true, genders: both, maxPreps: "basketball",
     collegeSlugs: { mens: ["mens-basketball", "basketball"], womens: ["womens-basketball", "basketball"] }, code: (g) => (g === "mens" ? "MBB" : "WBB") },
-  { id: "volleyball", name: "Volleyball", noun: "volleyball", event: "match", rosters: true, genders: both, maxPreps: "volleyball",
+  { id: "volleyball", name: "Volleyball", noun: "volleyball", event: "match", rosters: true, genders: both, defaultGender: "womens", maxPreps: "volleyball",
     collegeSlugs: { mens: ["mens-volleyball"], womens: ["volleyball", "womens-volleyball"] }, code: () => "VB" },
   { id: "soccer", name: "Soccer", noun: "soccer", event: "match", rosters: true, genders: both, maxPreps: "soccer",
     collegeSlugs: { mens: ["mens-soccer", "soccer"], womens: ["womens-soccer", "soccer"] }, code: (g) => (g === "mens" ? "MSOC" : "WSOC") },
@@ -77,10 +79,17 @@ export const Sports = {
   usesRosters(id: string): boolean { return BY_ID.get(id)?.rosters ?? true; },
   code(id: string, gender: Gender): string | null { return BY_ID.get(id)?.code(gender) ?? null; },
   /** "Women's Volleyball" style label for the setup screen and file headlines. */
-  label(id: string, gender: Gender): string {
+  /**
+   * "Women's Soccer", "Girls Volleyball", "Football": how a desk's headline names the sport.
+   * High school says boys and girls. A college sport played mostly by one gender (volleyball by
+   * women) goes without it, as desks write "Nebraska Volleyball".
+   */
+  label(id: string, gender: Gender, level: LevelKind = "college"): string {
     const s = BY_ID.get(id);
     if (!s) return id;
     if (s.genders.length === 1) return s.name;
+    if (level === "highSchool") return `${gender === "mens" ? "Boys" : "Girls"} ${s.name}`;
+    if (s.defaultGender === gender) return s.name;
     return `${gender === "mens" ? "Men's" : "Women's"} ${s.name}`;
   },
 };

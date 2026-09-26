@@ -30,8 +30,28 @@ import { lookup as dnsLookup } from "node:dns/promises";
 /** A slow athletics site is the common case; the platform's default ten seconds was not enough. */
 export const maxDuration = 20;
 
-const MAX_TEXT_BYTES = 2_000_000;
+/**
+ * A Division I roster page runs to three megabytes, most of it markup and scripts, with the
+ * roster's own data in a script near the end. The page is read up to READ_TEXT_BYTES, slimmed to
+ * its data scripts and visible markup, and what goes back is capped at MAX_TEXT_BYTES — under the
+ * host's response limit.
+ */
+const READ_TEXT_BYTES = 12_000_000;
+const MAX_TEXT_BYTES = 4_000_000;
 const MAX_RAW_BYTES = 4_000_000;
+
+/**
+ * Drop what no roster reader needs: styles, drawings, comments, executable scripts and styling
+ * attributes. Kept: the page's text and structure, its meta tags, and the scripts that carry
+ * data — Nuxt's and Next's payloads and JSON-LD — which is where the rosters are.
+ */
+export function slimHTML(html: string): string {
+  let h = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, "")
+    .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "").replace(/<!--[\s\S]*?-->/g, "");
+  h = h.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (m, attrs: string) => (/__NUXT_DATA__|__NEXT_DATA__|application\/(ld\+)?json/i.test(attrs) ? m : ""));
+  h = h.replace(/\s(class|style|data-v-[\w-]+|aria-[\w-]+|role|tabindex|data-bind)="[^"]*"/g, (m, a: string) => (a === "class" && /sidearm-roster/.test(m) ? m : ""));
+  return h.replace(/\s{2,}/g, " ");
+}
 const TIMEOUT_MS = 15_000;
 const MAX_REDIRECTS = 5;
 const RATE_LIMIT = 60;
@@ -273,7 +293,7 @@ export function createRelay(deps: Partial<RelayDeps> = {}): (request: Request) =
       if (raw && !kind.startsWith("image/")) { await upstream.body?.cancel().catch(() => {}); return json({ error: "that address is not an image" }, 415); }
       if (!raw && kind && !isTextual(kind)) { await upstream.body?.cancel().catch(() => {}); return json({ error: "that address is not a web page" }, 415); }
 
-      const bytes = await readCapped(upstream, raw ? MAX_RAW_BYTES : MAX_TEXT_BYTES);
+      const bytes = await readCapped(upstream, raw ? MAX_RAW_BYTES : READ_TEXT_BYTES);
       if (raw) {
         return new Response(bytes as unknown as BodyInit, { status: 200, headers: {
           "content-type": kind,
@@ -283,7 +303,9 @@ export function createRelay(deps: Partial<RelayDeps> = {}): (request: Request) =
           "x-content-type-options": "nosniff",
         } });
       }
-      const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      let text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      if (kind === "text/html" || kind === "application/xhtml+xml" || (!kind && /<html/i.test(text.slice(0, 2000)))) text = slimHTML(text);
+      if (text.length > MAX_TEXT_BYTES) text = text.slice(0, MAX_TEXT_BYTES);
       return json({ url: u.toString(), text, contentType });
     } catch (e) {
       const aborted = (e as Error).name === "AbortError";
