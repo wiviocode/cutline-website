@@ -12,8 +12,8 @@
  * it was: `v` when they hosted, `at` when they travelled. The sequence resets every event.
  */
 
-import type { Gender } from "../setup/GameLibrary";
-import { Sports } from "../setup/Sports";
+import type { Gender } from "../sports/Sports";
+import { Sports } from "../sports/Sports";
 import { TeamName } from "../roster/TeamName";
 
 export interface Fixture {

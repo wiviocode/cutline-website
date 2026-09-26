@@ -1,165 +1,129 @@
 /**
- * The two teams in a matchup, and their players.
+ * Teams and players.
  *
- * Fields mirror the original app's `RosterPlayer`, recovered from Swift reflection metadata and
- * confirmed on the wire. `Team` carries the school and the nickname apart, because the caption
- * styles need them apart: AP writes "Nebraska's Nathalie Lewis" from the school, while the event
- * line uses the full name.
+ * A team carries the school and the nickname apart because house styles need them apart — AP
+ * writes "Nebraska wide receiver …", Hurrdat "Waverly Viking …" — and it carries today's uniform
+ * in words, because the uniform, not the school colours, is what tells the two sides apart in a
+ * photograph.
  */
 
-export type RosterRole = "player" | "coach" | "referee" | "staff" | "other";
-/**
- * Which side of the ball a football player lines up on. Used to disambiguate a jersey number
- * that appears on both the offensive and defensive roster.
- */
+/** Which side of the ball a football player lines up on. */
 export type PlayerSide = "offense" | "defense" | "specialTeams" | "unknown";
+
+export interface Player {
+  id: string;
+  /** As printed; leading zeros matter ("0" and "00" are different players). Empty when unnumbered. */
+  number: string;
+  firstName: string;
+  lastName: string;
+  /** Lowercase caption word: "wide receiver", "outside hitter". */
+  position: string;
+  /** As the roster printed it: "WR", "OH", "RB, MLB". */
+  positionAbbr: string;
+  side: PlayerSide;
+  /** A two-way player's other position, on the other unit. */
+  secondary?: { position: string; side: PlayerSide } | null;
+  classYear?: string | null;
+  /** A roster headshot, when the page had one. Used only for on-device face matching. */
+  headshotURL?: string | null;
+}
 
 export interface Team {
   id: string;
-  /** Display name without mascot, e.g. `Kentucky`. */
-  name: string;
-  /** Mascot / nickname, e.g. `Wildcats`. Style rules decide whether it is included. */
-  nickname?: string | null;
-  /** Configured uniform colour, matched against the model's `jersey_color`. */
-  uniformColor: string;
-}
-
-export interface RosterPlayer {
-  id: string;
-  teamID: string;
-  jerseyNumber: string;
-  firstName: string;
-  lastName: string;
-  fullNameOverride?: string | null;
-  position: string;
-  role: RosterRole;
-  side: PlayerSide;
-  /**
-   * A two-way player's other position, on the other unit — "RB, MLB" on a high-school roster.
-   * The caption names whichever unit the photograph shows.
-   */
-  secondary?: { position: string; side: PlayerSide } | null;
-}
-
-export interface Roster {
-  team1: Team;
-  team2: Team;
-  players: RosterPlayer[];
+  /** How captions name the school: "Nebraska", "Bowling Green", "Waverly". */
+  school: string;
+  /** "Cornhuskers". Null when unknown — never guessed into a caption. */
+  nickname: string | null;
+  /** Published colours, as hex without '#'. */
+  colors: string[];
+  /** Today's uniform in words: "red jerseys with white numbers". The strongest team cue. */
+  uniform: string;
+  players: Player[];
+  sourceURL?: string | null;
+  logoURL?: string | null;
 }
 
 export function newID(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-  if (c?.randomUUID) return c.randomUUID().toUpperCase();
+  if (c?.randomUUID) return c.randomUUID();
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export const Team = {
-  make(name: string, uniformColor: string, nickname?: string | null, id = newID()): Team {
-    return { id, name, nickname: nickname ?? null, uniformColor };
-  },
-
-  fullName(t: Team): string {
-    const n = t.nickname?.trim();
-    return n ? `${t.name} ${n}` : t.name;
-  },
-
-  /**
-   * Whether "the" belongs in front of this team's name.
-   *
-   * A nickname is a plural collective and takes the article — "the Cornhuskers", "the Notre
-   * Dame Fighting Irish". A bare school name does not: "against Nebraska", never "against the
-   * Nebraska". This began to matter when ESPN was found to supply no mascot for some leagues,
-   * which put "the Nebraska" into three quarters of a real shoot's captions.
-   */
-  takesDefiniteArticle(t: Team): boolean {
-    return !!t.nickname && t.nickname.trim().length > 0;
-  },
-
-  /** "the Ohio State Buckeyes", or plain "Nebraska". */
-  withArticle(t: Team): string {
-    return Team.takesDefiniteArticle(t) ? `the ${Team.fullName(t)}` : Team.fullName(t);
-  },
-
-  /**
-   * A possessive-style qualifier for a group: "Members of the Cornhuskers" reads correctly,
-   * "Members of the Nebraska" does not — that becomes "Nebraska players".
-   */
-  groupLabel(t: Team, noun: string): string {
-    return Team.takesDefiniteArticle(t) ? `Members of ${Team.withArticle(t)}` : `${Team.fullName(t)} ${noun}`;
-  },
-};
-
-export const RosterPlayer = {
-  make(p: Partial<RosterPlayer> & { teamID: string; jerseyNumber: string }): RosterPlayer {
+export const Player = {
+  make(p: Partial<Player> & { number: string }): Player {
     return {
       id: p.id ?? newID(),
-      teamID: p.teamID,
-      jerseyNumber: p.jerseyNumber,
-      firstName: p.firstName ?? "",
-      lastName: p.lastName ?? "",
-      fullNameOverride: p.fullNameOverride ?? null,
+      number: p.number.trim(),
+      firstName: (p.firstName ?? "").trim(),
+      lastName: (p.lastName ?? "").trim(),
       position: p.position ?? "",
-      role: p.role ?? "player",
+      positionAbbr: p.positionAbbr ?? "",
       side: p.side ?? "unknown",
       secondary: p.secondary ?? null,
+      classYear: p.classYear ?? null,
+      headshotURL: p.headshotURL ?? null,
     };
   },
-
-  fullName(p: RosterPlayer): string {
-    const o = p.fullNameOverride?.trim();
-    if (o) return o;
-    return [p.firstName, p.lastName].filter((s) => s.length > 0).join(" ");
+  fullName(p: Player): string {
+    return [p.firstName, p.lastName].filter(Boolean).join(" ");
   },
-
-  /** True when the player lines up on `side`, in either of their positions. */
-  playsOn(p: RosterPlayer, side: PlayerSide): boolean {
+  playsOn(p: Player, side: PlayerSide): boolean {
     return p.side === side || p.secondary?.side === side;
   },
-
-  /**
-   * The position to print for a play on `side`: the secondary one when that is the unit shown,
-   * otherwise the primary. A photograph that shows no particular unit gets the primary.
-   */
-  positionFor(p: RosterPlayer, side: PlayerSide | null): string {
+  /** The position to print for a play on `side`: a two-way player's other position when that is the unit shown. */
+  positionFor(p: Player, side: PlayerSide | null): string {
     if (side && p.secondary && p.secondary.side === side && p.side !== side) return p.secondary.position;
     return p.position;
   },
+  /** Shirt-number order, unnumbered last. */
+  compare(a: Player, b: Player): number {
+    const x = parseInt(a.number, 10), y = parseInt(b.number, 10);
+    const xn = isNaN(x) ? 1e9 : x, yn = isNaN(y) ? 1e9 : y;
+    if (xn !== yn) return xn - yn;
+    if (a.number.length !== b.number.length) return a.number.length - b.number.length; // "0" before "00"
+    return a.lastName.localeCompare(b.lastName);
+  },
 };
 
-export const Roster = {
-  make(team1: Team, team2: Team, players: RosterPlayer[] = []): Roster {
-    return { team1, team2, players };
+export const Team = {
+  make(p: Partial<Team> & { school: string }): Team {
+    return {
+      id: p.id ?? newID(),
+      school: p.school.trim(),
+      nickname: p.nickname?.trim() || null,
+      colors: p.colors ?? [],
+      uniform: p.uniform ?? "",
+      players: p.players ?? [],
+      sourceURL: p.sourceURL ?? null,
+      logoURL: p.logoURL ?? null,
+    };
   },
+  /** "Nebraska Cornhuskers", or "Nebraska". */
+  fullName(t: Team): string {
+    return t.nickname ? `${t.school} ${t.nickname}` : t.school;
+  },
+  /** A nickname is a plural collective and takes "the": "the Gretna Dragons", but plain "Nebraska". */
+  withArticle(t: Team): string {
+    return t.nickname ? `the ${Team.fullName(t)}` : t.school;
+  },
+  byNumber(t: Team, number: string): Player[] {
+    const n = number.trim();
+    return n ? t.players.filter((p) => p.number === n) : [];
+  },
+  sortedPlayers(t: Team): Player[] {
+    return [...t.players].sort(Player.compare);
+  },
+};
 
-  /** A roster for an event with no sides. Both teams are blank and never consulted. */
-  noTeams(): Roster {
-    return { team1: Team.make("", ""), team2: Team.make("", ""), players: [] };
-  },
+/** The two sides of a game. A is conventionally the photographer's own team, B the opponent. */
+export interface Matchup {
+  a: Team;
+  b: Team;
+}
 
-  team(r: Roster, id: string): Team | null {
-    if (r.team1.id === id) return r.team1;
-    if (r.team2.id === id) return r.team2;
-    return null;
-  },
+export type TeamKey = "A" | "B";
 
-  players(r: Roster, teamID: string): RosterPlayer[] {
-    return r.players.filter((p) => p.teamID === teamID);
-  },
-
-  /** The team a player belongs to. */
-  teamOf(r: Roster, player: RosterPlayer): Team | null {
-    return Roster.team(r, player.teamID);
-  },
-
-  /** Everyone on the same team, for the swap menu, in shirt-number order. */
-  teammates(r: Roster, player: RosterPlayer): RosterPlayer[] {
-    return r.players
-      .filter((p) => p.teamID === player.teamID)
-      .sort((a, b) => {
-        const l = parseInt(a.jerseyNumber, 10), rr = parseInt(b.jerseyNumber, 10);
-        const ln = isNaN(l) ? Number.MAX_SAFE_INTEGER : l;
-        const rn = isNaN(rr) ? Number.MAX_SAFE_INTEGER : rr;
-        return ln !== rn ? ln - rn : a.lastName.localeCompare(b.lastName);
-      });
-  },
+export const Matchup = {
+  team(m: Matchup, key: TeamKey): Team { return key === "A" ? m.a : m.b; },
+  other(key: TeamKey): TeamKey { return key === "A" ? "B" : "A"; },
 };

@@ -8,7 +8,7 @@
  * are present; role defaults to `player`.
  */
 
-import type { RosterRole } from "./Roster";
+export type RosterRole = "player" | "coach" | "referee" | "staff" | "other";
 
 export interface CSVPlayer {
   jerseyNumber: string;

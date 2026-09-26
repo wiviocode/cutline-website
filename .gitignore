@@ -3,3 +3,7 @@ dist
 .vercel
 .DS_Store
 *.log
+# Local evaluation data: photographs, keys, run outputs
+eval-local/
+*.key
+claudeapikey.txt

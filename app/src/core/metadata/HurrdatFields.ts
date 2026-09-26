@@ -8,7 +8,7 @@
  * hand-edited. The app already knows all of it from the setup screen, so it fills them in.
  */
 
-import type { Gender } from "../setup/GameLibrary";
+import type { Gender } from "../sports/Sports";
 
 export interface HurrdatFields {
   /** One string, used in the Headline, Title and Event fields. */
