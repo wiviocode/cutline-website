@@ -16,16 +16,19 @@ export function PlayerPicker({ frame, subjectID, onClose }: { frame: Frame; subj
   const startTeam: TeamKey = identity?.teamKey ?? (subject.team === "B" ? "B" : "A");
   const [teamKey, setTeamKey] = useState<TeamKey>(startTeam);
   const [query, setQuery] = useState("");
+  const faceHints = frame.faceHints[subjectID] ?? [];
   const team = matchup ? (teamKey === "A" ? matchup.a : matchup.b) : null;
 
   const players = useMemo(() => {
     if (!team) return [];
     const q = query.trim().toLowerCase();
     const list = Team.sortedPlayers(team).filter((p) => !q || p.number === q || p.number.startsWith(q) || Player.fullName(p).toLowerCase().includes(q));
-    // What the reading suggests first.
-    const suggested = new Set((identity?.alternatives ?? []).map((p) => p.id).concat(identity?.player ? [identity.player.id] : []));
-    return [...list.filter((p) => suggested.has(p.id)), ...list.filter((p) => !suggested.has(p.id))];
-  }, [team, query, identity]);
+    // What the reading and the face suggest first.
+    const suggested = new Set((identity?.alternatives ?? []).map((p) => p.id).concat(identity?.player ? [identity.player.id] : []).concat(faceHints.map((h) => h.playerID)));
+    const faceRank = (id: string) => { const i = faceHints.findIndex((h) => h.playerID === id); return i < 0 ? 99 : i; };
+    const first = list.filter((p) => suggested.has(p.id)).sort((a, b) => faceRank(a.id) - faceRank(b.id));
+    return [...first, ...list.filter((p) => !suggested.has(p.id))];
+  }, [team, query, identity, faceHints]);
 
   const faces = !!team?.players.some((p) => p.headshotURL);
   const choose = (p: Player | null) => { void s.setManual(frame.id, subjectID, { teamKey, playerID: p?.id ?? null }); onClose(); };
@@ -50,7 +53,7 @@ export function PlayerPicker({ frame, subjectID, onClose }: { frame: Frame; subj
               {faces ? (p.headshotURL ? <img className="pick-face" src={p.headshotURL} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="pick-face pick-noface" />) : null}
               <span className="pick-num">{p.number || "–"}</span>
               <span className="pick-name">{Player.fullName(p)}</span>
-              <span className="pick-pos">{p.positionAbbr || p.position}</span>
+              <span className="pick-pos">{p.positionAbbr || p.position}{faceHints.find((h) => h.playerID === p.id) ? ` · looks like (${faceHints.find((h) => h.playerID === p.id)!.distance.toFixed(2)})` : ""}</span>
             </button>
           );
         })}

@@ -26,6 +26,8 @@ export interface FrameRecord {
   /** The caption was typed by hand and is kept over what the reading would compose. */
   captionEdited: boolean;
   approved: boolean;
+  /** On-device face matches, when face matching was on. */
+  faceHints?: Record<string, { playerID: string; distance: number }[]>;
   generatedAt: string;
 }
 
@@ -61,6 +63,7 @@ export const FrameRecord = {
         caption: str(raw.caption),
         captionEdited: !!raw.captionEdited,
         approved: !!raw.approved,
+        faceHints: (raw.faceHints as FrameRecord["faceHints"]) ?? {},
         generatedAt: str(raw.generatedAt),
       };
     }

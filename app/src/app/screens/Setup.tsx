@@ -40,6 +40,7 @@ export function Setup() {
               {s.slots.A.team && s.slots.B.team && s.frames.length ? (
                 <p className="muted small">Uniforms are read from a few of your photos before the run starts, so the two sides are told apart by what they wore today. {s.scouting ? <Spinner /> : <button type="button" className="link" onClick={() => s.scoutUniforms()}>Read them now</button>}</p>
               ) : null}
+              <FaceStatus />
             </>
           ) : (
             <MeetFields />
@@ -170,5 +171,20 @@ function RunBar() {
         <Button kind="primary" disabled={!!blocker || s.running || (!todo)} onClick={() => s.startRun()}>{s.running ? "Reading…" : !s.frames.length ? "Caption photos" : todo === s.frames.length ? `Caption ${todo} photos` : `Caption ${todo} more`}</Button>
       </div>
     </div>
+  );
+}
+
+function FaceStatus() {
+  const s = useStore();
+  if (!s.settings.faces) return null;
+  if (Levels.info(s.setup.levelId).kind !== "college") return <p className="muted small">Face matching is on, but it is used only for college rosters.</p>;
+  if (!derive.facesOn(s)) return <p className="muted small">Face matching is on; neither roster has headshots to match against.</p>;
+  const f = s.faces;
+  return (
+    <p className="muted small">
+      Face matching (on this device only):{" "}
+      {f.status === "ready" ? `${f.done} of ${f.total} roster photos ready.` : f.status === "preparing" ? <><Spinner /> reading roster photos {f.done}/{f.total}…</> : f.status === "unavailable" ? <span className="warn">{f.error}</span> : "prepared when the run starts."}
+      {f.status === "off" || f.status === "unavailable" ? <>{" "}<button type="button" className="link" onClick={() => s.prepareFaces()}>Prepare now</button></> : null}
+    </p>
   );
 }

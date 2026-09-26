@@ -8,7 +8,7 @@
 import { create } from "zustand";
 import { Storage, DEFAULT_SETTINGS, type Settings, type SavedTeam, type RecentShoot } from "@platform/storage";
 import { pickFolder, reopenFolder, FileListFolder, supportsWritableFolders, type PhotoFolder, type PhotoFile } from "@platform/fs";
-import { browserSource, ImageCache, THUMB_EDGE, PREVIEW_EDGE, resized, base64, orientedSize } from "@platform/images";
+import { browserSource, ImageCache, THUMB_EDGE, PREVIEW_EDGE, resized, base64, orientedSize, decodableBlob } from "@platform/images";
 import { readPhotoMetadata, readEmbeddedIPTC } from "@platform/exif";
 import { fetchPage, relayAvailable } from "@platform/relay";
 
@@ -18,6 +18,8 @@ import { readPhoto } from "@core/pipeline/ReadPhoto";
 import { Compose, type CaptionContext } from "@core/caption/Compose";
 import { Identify, type Identity, type ManualID } from "@core/vision/Identify";
 import { Prompt, type MeetEntry, type ShootContext } from "@core/vision/Prompt";
+import { applyFaceHints, type FaceHint } from "@core/vision/FaceEvidence";
+import { FaceMatcher, headCrops } from "@platform/faces";
 import type { Observation } from "@core/vision/Observation";
 import { resizedSize } from "@core/vision/ImageSize";
 import { Team, Player, type Matchup, type TeamKey } from "@core/roster/Roster";
@@ -65,6 +67,8 @@ export interface Frame {
   approved: boolean;
   written: boolean;
   writeError: string | null;
+  /** On-device face matches per subject, best first. */
+  faceHints: Record<string, FaceHint[]>;
 }
 
 export interface Setup {
@@ -100,6 +104,7 @@ interface State {
   setup: Setup;
   slots: Record<TeamKey, SlotState>;
   scouting: boolean;
+  faces: { status: "off" | "preparing" | "ready" | "unavailable"; done: number; total: number; error: string | null };
 
   folder: PhotoFolder | null;
   recentID: string | null;
@@ -149,6 +154,8 @@ interface State {
   saveTeamToLibrary(slot: TeamKey): Promise<void>;
   deleteSaved(id: string): Promise<void>;
   scoutUniforms(): Promise<void>;
+  prepareFaces(): Promise<boolean>;
+  matchFaces(ids?: string[]): Promise<void>;
 
   // run
   startRun(opts?: { ids?: string[]; redo?: boolean }): Promise<void>;
@@ -174,6 +181,12 @@ export const derive = {
   sport(s: Pick<State, "setup">) { return Sports.info(s.setup.sport); },
   level(s: Pick<State, "setup">) { return Levels.info(s.setup.levelId); },
   usesRosters(s: Pick<State, "setup">) { return Sports.usesRosters(s.setup.sport); },
+
+  /** Face matching runs only when it is turned on, for a college roster that has headshots. */
+  facesOn(s: Pick<State, "settings" | "setup" | "slots">): boolean {
+    return s.settings.faces && Levels.info(s.setup.levelId).kind === "college"
+      && [s.slots.A.team, s.slots.B.team].some((t) => t?.players.some((p) => p.headshotURL));
+  },
 
   matchup(s: Pick<State, "slots" | "setup">): Matchup | null {
     if (!Sports.usesRosters(s.setup.sport)) {
@@ -260,7 +273,8 @@ function importRequest(s: State): ImportRequest {
 function composed(s: State, f: Frame): Pick<Frame, "identities" | "caption"> {
   if (!f.observation) return { identities: [], caption: f.caption };
   const matchup = derive.matchup(s);
-  const identities = Identify.all(f.observation, { matchup: Sports.usesRosters(s.setup.sport) || matchup ? matchup : null, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport) }, f.manual);
+  const read = Identify.all(f.observation, { matchup: Sports.usesRosters(s.setup.sport) || matchup ? matchup : null, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport) }, f.manual);
+  const identities = derive.facesOn(s) ? applyFaceHints(read, f.observation, f.faceHints, matchup) : read;
   if (f.captionEdited) return { identities, caption: f.caption };
   const c = Compose.caption(f.observation, identities, derive.captionContext(s, f));
   return { identities, caption: c.caption };
@@ -269,7 +283,7 @@ function composed(s: State, f: Frame): Pick<Frame, "identities" | "caption"> {
 function record(f: Frame): FrameRecord {
   return {
     version: 2, filename: f.name, observation: f.observation, sent: f.sent, original: f.original, zooms: f.zooms, model: f.model, dollars: f.dollars,
-    manual: f.manual, note: f.note, caption: f.caption, captionEdited: f.captionEdited, approved: f.approved, generatedAt: new Date().toISOString(),
+    manual: f.manual, note: f.note, caption: f.caption, captionEdited: f.captionEdited, approved: f.approved, faceHints: f.faceHints, generatedAt: new Date().toISOString(),
   };
 }
 
@@ -293,6 +307,9 @@ function altText(s: State, f: Frame): string | null {
   const body = stripNumbers(c.body).replace(/XXXXX/g, "a player");
   return `${body[0]?.toUpperCase() ?? ""}${body.slice(1)} in a ${Levels.info(s.setup.levelId).qualifier} ${sport.noun} ${sport.event}.`;
 }
+
+let matcher = new FaceMatcher();
+let matcherKey = "";
 
 let templateCache: { name: string; template: IPTCTemplate } | null = null;
 async function template(s: State): Promise<IPTCTemplate | null> {
@@ -387,6 +404,7 @@ export const useStore = create<State>((set, get) => {
       const next: Frame = { ...frame(id)!, state: "done", observation: reading.observation, sent: reading.sent, original: reading.original, zooms: reading.zooms, model: reading.model, dollars, captionEdited: false, approved: false, written: false };
       const { identities, caption } = composed(get(), next);
       patchFrame(id, { ...next, identities, caption });
+      if (get().faces.status === "ready" && derive.facesOn(get())) await get().matchFaces([id]).catch(() => {});
       await saveRecord(get().folder, frame(id)!);
     } catch (e) {
       const err = describeError(e);
@@ -408,6 +426,7 @@ export const useStore = create<State>((set, get) => {
     setup: { levelId: "ncaa-d1", sport: "football", gender: "mens", venue: "", city: "", state: "", eventName: "", entriesText: "" },
     slots: { A: emptySlot(), B: emptySlot() },
     scouting: false,
+    faces: { status: "off", done: 0, total: 0, error: null },
     folder: null,
     recentID: null,
     frames: [],
@@ -637,6 +656,47 @@ export const useStore = create<State>((set, get) => {
       } finally { set({ scouting: false }); }
     },
 
+    async prepareFaces() {
+      const s = get();
+      if (!derive.facesOn(s)) return false;
+      const players = [...(s.slots.A.team?.players ?? []), ...(s.slots.B.team?.players ?? [])];
+      const key = players.map((p) => p.id + (p.headshotURL ?? "")).join(",");
+      if (key === matcherKey && matcher.size) return true;
+      set({ faces: { status: "preparing", done: 0, total: players.filter((p) => p.headshotURL).length, error: null } });
+      try {
+        matcher = new FaceMatcher();
+        const r = await matcher.prepare(players, (done, total) => set({ faces: { ...get().faces, done, total } }));
+        matcherKey = key;
+        set({ faces: { status: r.ready ? "ready" : "unavailable", done: r.ready, total: r.total, error: r.ready ? null : "No faces could be found in the roster photos." } });
+        return r.ready > 0;
+      } catch (e) {
+        set({ faces: { status: "unavailable", done: 0, total: 0, error: `Face matching could not start: ${(e as Error).message}` } });
+        return false;
+      }
+    },
+
+    async matchFaces(ids) {
+      if (!derive.facesOn(get()) || !matcher.size) return;
+      const list = get().frames.filter((f) => f.observation && f.sent && (!ids || ids.includes(f.id)));
+      for (const f of list) {
+        const targets = f.observation!.subjects.filter((x) => x.kind === "athlete" && x.box && f.identities.find((i) => i.subjectId === x.id)?.status !== "confirmed");
+        if (!targets.length) continue;
+        try {
+          const crops = await headCrops(await decodableBlob(await f.photo.file()), targets.map((t) => t.box!), f.sent!);
+          const hints: Record<string, FaceHint[]> = { ...f.faceHints };
+          const st = get();
+          for (let i = 0; i < targets.length; i++) {
+            const t = targets[i];
+            const teams = t.team === "A" || t.team === "B" ? [st.slots[t.team].team] : [st.slots.A.team, st.slots.B.team];
+            hints[t.id] = await matcher.match(crops[i], teams.flatMap((team) => team?.players.map((p) => p.id) ?? []));
+          }
+          patchFrame(f.id, { faceHints: hints });
+          recompose(f.id);
+          await saveRecord(get().folder, frame(f.id)!);
+        } catch { /* a frame whose faces cannot be read keeps what the reading said */ }
+      }
+    },
+
     // ---------------------------------------------------------------- run
 
     async startRun(opts = {}) {
@@ -646,6 +706,7 @@ export const useStore = create<State>((set, get) => {
       const c = claude(s)!;
       // Uniforms first: the strongest cue for telling the sides apart, read once per shoot.
       if (derive.usesRosters(s) && (!s.slots.A.team?.uniform || !s.slots.B.team?.uniform)) await get().scoutUniforms();
+      if (derive.facesOn(get())) await get().prepareFaces();
       const ids = (opts.ids ?? get().frames.filter((f) => opts.redo || f.state === "pending" || f.state === "failed").map((f) => f.id));
       if (!ids.length) { set({ screen: "review" }); return; }
       set({ running: true, cancelRequested: false, runDone: 0, runTotal: ids.length, screen: "review", selectedID: get().selectedID ?? ids[0] });
@@ -754,7 +815,7 @@ export const useStore = create<State>((set, get) => {
           state: rec?.observation ? "done" : rec?.caption ? "done" : "pending", error: null,
           observation: rec?.observation ?? null, sent: rec?.sent ?? null, original: rec?.original ?? null, zooms: rec?.zooms ?? [], model: rec?.model ?? null, dollars: rec?.dollars ?? 0,
           manual: rec?.manual ?? {}, note: rec?.note ?? "", identities: [], caption: rec?.caption ?? "", captionEdited: rec?.captionEdited ?? false,
-          approved: rec?.approved ?? false, written: rec?.approved ?? false, writeError: null,
+          approved: rec?.approved ?? false, written: rec?.approved ?? false, writeError: null, faceHints: rec?.faceHints ?? {},
         });
       }
       const id = recent?.id ?? `${folder.name}:${photos.length}:${photos[0].name}`;
