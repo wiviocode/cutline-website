@@ -113,6 +113,12 @@ export const Cost = {
     return dollars;
   },
 
+  /** A tier's price per 1,000 photographs, as a person would say it: "$7.40", "$20". */
+  perThousand(tier: Tier): string {
+    const x = Cost.perPhoto(tier) * 1000;
+    return x >= 10 ? `$${Math.round(x)}` : `$${(Math.round(x * 10) / 10).toFixed(2)}`;
+  },
+
   /** "$9.80", "$0.45", "4¢". */
   dollars(n: number): string {
     if (n > 0 && n < 0.1) return `${Math.max(1, Math.round(n * 100))}¢`;

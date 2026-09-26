@@ -1,7 +1,7 @@
 :root {
   /* Ink scale — the dark ground, deepest to lightest (from make-brand.swift + the app) */
   --ink-0: #15181d;   /* page ground; the mark's tile ("ink") */
-  --ink-1: #1b1e23;   /* raised panel ("page") */
+  --ink-1: #1a1d22;   /* raised panel ("page") */
   --ink-2: #24282f;   /* window chrome, bars */
   --ink-3: #2a2f37;   /* controls, wells */
   --ink-4: #31363f;   /* hairlines on chrome, control borders */
@@ -38,13 +38,31 @@
   --text-body: var(--text-2);
   --text-heading: var(--text-1);
   --accent: var(--gold);
-  --gold-wash: rgba(232, 176, 10, 0.16);
-  --gold-wash-border: rgba(232, 176, 10, 0.5);
+  --gold-wash: rgba(232, 176, 10, 0.12);
+  --gold-wash-border: rgba(232, 176, 10, 0.45);
+  --gold-text: #f0bd2a;  /* gold as text and links */
+
+  /* The app's surfaces: ground, panel, a raised control, a sunken well, the photograph's backdrop */
+  --surface-raise: #252930;
+  --surface-well: #111317;
+  --surface-stage: #0f1114;
+  --line: #23272e;       /* hairlines between regions */
+  --line-strong: #323741; /* control borders */
+  --lift: 0 1px 0 rgba(0, 0, 0, 0.35);
+
+  /* Status — how sure a name is, and where a frame stands */
+  --ok: #5ccf8a;
+  --ok-text: #7fdca2;
+  --check: #f2a93b;
+  --check-text: #f5b95c;
+  --check-wash: rgba(242, 169, 59, 0.09);
+  --unnamed: #ff6b6b;
+  --read: #7d8794;
 }
 :root {
-  /* Families */
-  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
-  --font-mono: 'Spline Sans Mono', 'SF Mono', ui-monospace, monospace; /* meta, labels, filenames */
+  /* Families — both served with the app */
+  --font-body: 'Geist Variable', 'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Spline Sans Mono', 'SF Mono', ui-monospace, Consolas, monospace; /* numbers, file names, camera settings */
 
   /* Display (marketing) */
   --type-hero-size: clamp(48px, 7vw, 96px);

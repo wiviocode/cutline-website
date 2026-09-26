@@ -7,8 +7,27 @@ import { thumbnails, previews, type Frame } from "./store";
 
 type ButtonKind = "primary" | "secondary" | "ghost" | "danger";
 
-export function Button({ kind = "secondary", small, children, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { kind?: ButtonKind; small?: boolean }) {
-  return <button type="button" className={`btn btn-${kind}${small ? " btn-small" : ""}${className ? ` ${className}` : ""}`} {...rest}>{children}</button>;
+export function Button({ kind = "secondary", small, large, block, children, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { kind?: ButtonKind; small?: boolean; large?: boolean; block?: boolean }) {
+  return <button type="button" className={`btn btn-${kind}${small ? " btn-small" : ""}${large ? " btn-large" : ""}${block ? " btn-block" : ""}${className ? ` ${className}` : ""}`} {...rest}>{children}</button>;
+}
+
+/** A player's roster headshot, or their number on a plain tile when the roster had none. */
+export function Headshot({ url, fallback, size = "md" }: { url?: string | null; fallback?: string; size?: "sm" | "md" | "round" }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className={`hs hs-${size}`}>
+      {url && !failed ? <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : <span className="hs-fallback">{fallback ?? ""}</span>}
+    </span>
+  );
+}
+
+/** An on/off switch with its label. */
+export function Switch({ on, onChange, children }: { on: boolean; onChange: (on: boolean) => void; children: ReactNode }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} className={`switch${on ? " switch-on" : ""}`} onClick={() => onChange(!on)}>
+      <i />{children}
+    </button>
+  );
 }
 
 export function Overline({ children }: { children: ReactNode }) {
@@ -37,9 +56,9 @@ export function Select<T extends string>({ value, onChange, options, ariaLabel }
   );
 }
 
-export function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string; title?: string }[] }) {
+export function Segmented<T extends string>({ value, onChange, options, small, block }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode; title?: string }[]; small?: boolean; block?: boolean }) {
   return (
-    <div className="segmented" role="radiogroup">
+    <div className={`segmented${small ? " segmented-small" : ""}${block ? " segmented-block" : ""}`} role="radiogroup">
       {options.map((o) => (
         <button key={o.value} type="button" role="radio" aria-checked={o.value === value} title={o.title}
           className={`segment${o.value === value ? " segment-on" : ""}`} onClick={() => onChange(o.value)}>{o.label}</button>

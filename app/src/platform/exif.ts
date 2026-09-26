@@ -11,7 +11,7 @@ export async function readPhotoMetadata(file: File): Promise<PhotoMetadata> {
   const m: PhotoMetadata = {};
   try {
     const tags = (await exifr.parse(file, {
-      pick: ["DateTimeOriginal", "CreateDate", "SubSecTimeOriginal", "Make", "Model", "BodySerialNumber", "ImageWidth", "ImageHeight", "ExifImageWidth", "ExifImageHeight"],
+      pick: ["DateTimeOriginal", "CreateDate", "SubSecTimeOriginal", "Make", "Model", "BodySerialNumber", "ImageWidth", "ImageHeight", "ExifImageWidth", "ExifImageHeight", "FocalLength", "ExposureTime", "FNumber", "ISO"],
       translateValues: true,
     })) as Record<string, unknown> | undefined;
     if (!tags) return m;
@@ -26,6 +26,11 @@ export async function readPhotoMetadata(file: File): Promise<PhotoMetadata> {
     const w = tags.ExifImageWidth ?? tags.ImageWidth, h = tags.ExifImageHeight ?? tags.ImageHeight;
     if (typeof w === "number") m.pixelWidth = w;
     if (typeof h === "number") m.pixelHeight = h;
+    const n = (v: unknown) => (typeof v === "number" && isFinite(v) && v > 0 ? v : undefined);
+    m.focalLength = n(tags.FocalLength);
+    m.exposureTime = n(tags.ExposureTime);
+    m.fNumber = n(tags.FNumber);
+    m.iso = n(Array.isArray(tags.ISO) ? tags.ISO[0] : tags.ISO);
   } catch {
     // A file with no EXIF is a file with no capture date, not an error.
   }

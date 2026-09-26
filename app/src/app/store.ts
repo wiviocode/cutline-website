@@ -37,6 +37,14 @@ import { XMPSidecar } from "@core/metadata/XMPSidecar";
 import { zipSync, strToU8 } from "fflate";
 import { IPTCTemplate } from "@core/metadata/IPTCTemplate";
 import { HurrdatFields } from "@core/metadata/HurrdatFields";
+import { USState } from "@core/text/USState";
+
+/** "Fri., Sept. 18" — AP's abbreviations, for the top bar. */
+function apShortDate(d: Date): string {
+  const days = ["Sun.", "Mon.", "Tues.", "Wed.", "Thurs.", "Fri.", "Sat."];
+  const months = ["Jan.", "Feb.", "March", "April", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."];
+  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+}
 
 export type Screen = "loading" | "welcome" | "setup" | "review";
 export type FrameState = "pending" | "working" | "done" | "failed";
@@ -120,6 +128,10 @@ interface State {
   recentID: string | null;
   frames: Frame[];
   loadingFolder: boolean;
+  /** The event headline a desk ingest wrote into the photographs, when there is one. */
+  photoHeadline: string | null;
+  /** The reading drawn over the photograph on the review screen. */
+  showBoxes: boolean;
 
   running: boolean;
   cancelRequested: boolean;
@@ -262,6 +274,18 @@ export const derive = {
       case "unapproved": return s.frames.filter((f) => !f.approved);
       default: return s.frames;
     }
+  },
+
+  /** The top bar's heading: "Nebraska v North Carolina" over "Women's volleyball · Fri., Sept. 18 · Lincoln, Neb.". */
+  shootHeading(s: Pick<State, "slots" | "setup" | "frames" | "folder">): { title: string; line: string } {
+    const sport = Sports.label(s.setup.sport, s.setup.gender, Levels.info(s.setup.levelId).kind);
+    const a = s.slots.A.team?.school, b = s.slots.B.team?.school;
+    const title = !Sports.usesRosters(s.setup.sport) ? (s.setup.eventName || sport) : a && b ? `${a} v ${b}` : s.folder?.name ?? sport;
+    let first: Date | null = null;
+    for (const f of s.frames) { const d = f.exif?.captureDate; if (d && (!first || d < first)) first = d; }
+    const place = [s.setup.city, s.setup.state ? USState.written(s.setup.state, "apAbbreviation") : ""].filter(Boolean).join(", ");
+    const line = [title === sport ? `${s.frames.length} photos` : sport, first ? apShortDate(first) : "", place].filter(Boolean).join(" · ");
+    return { title, line };
   },
 
   /** The nearest earlier photograph, in the folder's order, that has a caption to copy. */
@@ -468,6 +492,8 @@ export const useStore = create<State>((set, get) => {
     recentID: null,
     frames: [],
     loadingFolder: false,
+    photoHeadline: null,
+    showBoxes: true,
     running: false,
     cancelRequested: false,
     runDone: 0,
@@ -537,7 +563,7 @@ export const useStore = create<State>((set, get) => {
 
     closeShoot() {
       thumbnails.clear(); previews.clear();
-      set({ folder: null, frames: [], selectedID: null, recentID: null, screen: "setup", spent: 0, slots: { A: emptySlot(), B: emptySlot() } });
+      set({ folder: null, frames: [], selectedID: null, recentID: null, screen: "setup", spent: 0, slots: { A: emptySlot(), B: emptySlot() }, photoHeadline: null });
     },
 
     // ---------------------------------------------------------------- setup
@@ -925,15 +951,15 @@ export const useStore = create<State>((set, get) => {
       }
       const id = recent?.id ?? `${folder.name}:${photos.length}:${photos[0].name}`;
       set({ folder, frames, recentID: id, selectedID: frames[0].id, spent: 0, filter: "all" });
+      // What the photographs already say: location, and often the sport and both teams.
+      const iptc = await readEmbeddedIPTC(await photos[0].file());
+      set({ photoHeadline: iptc.headline || null });
 
       if (recent?.setup) {
         const saved = recent.setup as { setup: Partial<Setup>; a: Team | null; b: Team | null };
         const withStaff = (t: Team | null) => (t ? { ...t, staff: t.staff ?? [] } : null);
         set((s) => ({ setup: { ...s.setup, style: null, house: null, ...saved.setup }, slots: { A: { ...emptySlot(), team: withStaff(saved.a) }, B: { ...emptySlot(), team: withStaff(saved.b) } } }));
       } else {
-        // What the photographs already say: location, and often the sport and both teams.
-        const first = await photos[0].file();
-        const iptc = await readEmbeddedIPTC(first);
         const guess = iptc.headline ? parseHeadline(iptc.headline) : null;
         const patch: Partial<Setup> = {};
         if (iptc.city) patch.city = iptc.city;

@@ -14,6 +14,11 @@ export interface PhotoMetadata {
   bodySerialNumber?: string;
   pixelWidth?: number;
   pixelHeight?: number;
+  /** Exposure, for the review screen: millimetres, seconds, f-number, ISO. */
+  focalLength?: number;
+  exposureTime?: number;
+  fNumber?: number;
+  iso?: number;
 }
 
 const AP_MONTHS = ["Jan.", "Feb.", "March", "April", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."];
@@ -21,6 +26,17 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 
 export const PhotoMetadata = {
   empty(): PhotoMetadata { return {}; },
+
+  /** "181 mm · 1/1250 · f/2.8 · ISO 3200", from whatever the camera recorded. */
+  exposure(m: PhotoMetadata | null | undefined): string {
+    if (!m) return "";
+    const parts: string[] = [];
+    if (m.focalLength) parts.push(`${Math.round(m.focalLength)} mm`);
+    if (m.exposureTime) parts.push(m.exposureTime >= 1 ? `${Math.round(m.exposureTime * 10) / 10} s` : `1/${Math.round(1 / m.exposureTime)}`);
+    if (m.fNumber) parts.push(`f/${Math.round(m.fNumber * 10) / 10}`);
+    if (m.iso) parts.push(`ISO ${m.iso}`);
+    return parts.join(" · ");
+  },
 
   /** `2026-08-21` — the form Photo Mechanic writes into `photoshop:DateCreated`. */
   iptcDateCreated(m: PhotoMetadata): string | null {

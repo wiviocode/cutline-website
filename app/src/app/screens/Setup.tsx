@@ -1,6 +1,6 @@
 import { useRef, useState, type DragEvent } from "react";
 import { useStore, derive } from "../store";
-import { Button, Field, Overline, Segmented, Select, TextInput, Thumb, Spinner } from "../components";
+import { Button, Field, Segmented, Select, TextInput, Thumb, Spinner } from "../components";
 import { TeamCard } from "./TeamCard";
 import { Sports, Levels, type SportID } from "@core/sports/Sports";
 import { TIERS, Cost, type Tier } from "@core/ai/Models";
@@ -8,63 +8,77 @@ import { CAPTION_STYLES, Styles, type CaptionStyle } from "@core/caption/Styles"
 import { supportsWritableFolders, HandleFolder } from "@platform/fs";
 import { SupportedFormats } from "@core/images/SupportedFormats";
 
+/**
+ * Setting up a shoot: the photographs, the game and how it is filed on the left; the two teams
+ * on the right; the reading and the button that starts it along the bottom.
+ */
 export function Setup() {
   const s = useStore();
   const usesRosters = derive.usesRosters(s);
+  const kind = Levels.info(s.setup.levelId).kind;
   return (
     <div className="setup">
-      <div className="setup-cols">
-        <PhotosCard />
-        <section className="card game-card" aria-label="The game">
-          <Overline>The game</Overline>
-          <div className="grid-3">
-            <Field label="Level">
-              <Select value={s.setup.levelId} onChange={(v) => s.setSetup({ levelId: v })} options={Levels.all.map((l) => ({ value: l.id, label: l.name }))} />
-            </Field>
-            <Field label="Sport">
-              <Select<SportID> value={s.setup.sport} onChange={(v) => s.setSetup({ sport: v })} options={Sports.all.map((x) => ({ value: x.id, label: x.name }))} />
-            </Field>
-            {derive.sport(s).genders.length > 1 ? (
-              <Field label="Gender">
-                <Segmented value={s.setup.gender} onChange={(v) => s.setSetup({ gender: v })} options={[{ value: "womens", label: Levels.info(s.setup.levelId).kind === "highSchool" ? "Girls" : "Women" }, { value: "mens", label: Levels.info(s.setup.levelId).kind === "highSchool" ? "Boys" : "Men" }]} />
+      <div className="setup-body">
+        <div className="setup-col setup-left">
+          <PhotosCard />
+          <section className="card" aria-label="The game">
+            <div className="card-head"><b>Game</b>{s.photoHeadline ? <span className="faint">Filled in from the headline</span> : null}</div>
+            <div className="grid-3">
+              <Field label="Level">
+                <Select value={s.setup.levelId} onChange={(v) => s.setSetup({ levelId: v })} options={Levels.all.map((l) => ({ value: l.id, label: l.name }))} />
               </Field>
-            ) : <div />}
-          </div>
+              <Field label="Sport">
+                <Select<SportID> value={s.setup.sport} onChange={(v) => s.setSetup({ sport: v })} options={Sports.all.map((x) => ({ value: x.id, label: x.name }))} />
+              </Field>
+              {derive.sport(s).genders.length > 1 ? (
+                <Field label="Gender">
+                  <Segmented block value={s.setup.gender} onChange={(v) => s.setSetup({ gender: v })} options={[{ value: "womens", label: kind === "highSchool" ? "Girls" : "Women" }, { value: "mens", label: kind === "highSchool" ? "Boys" : "Men" }]} />
+                </Field>
+              ) : <div />}
+            </div>
+            <Field label="Venue"><TextInput placeholder="Memorial Stadium" value={s.setup.venue} onChange={(e) => s.setSetup({ venue: e.target.value })} /></Field>
+            <div className="grid-city">
+              <Field label="City"><TextInput placeholder="Lincoln" value={s.setup.city} onChange={(e) => s.setSetup({ city: e.target.value })} /></Field>
+              <Field label="State"><TextInput placeholder="Neb." value={s.setup.state} onChange={(e) => s.setSetup({ state: e.target.value })} /></Field>
+            </div>
+          </section>
+          <section className="card" aria-label="Filed for">
+            <div className="card-head"><b>Filed for</b><span className="faint">{s.setup.style || s.setup.house !== null ? "This shoot only" : "Your defaults"}</span></div>
+            <div className="grid-3">
+              <Field label="Style">
+                <Select<CaptionStyle> value={derive.style(s)} onChange={(v) => s.setSetup({ style: v })} options={CAPTION_STYLES.map((v) => ({ value: v, label: Styles.displayName(v) }))} />
+              </Field>
+              <Field label="Credit">
+                <TextInput placeholder={Styles.defaultHouse(derive.style(s)) ?? ""} value={derive.house(s)} onChange={(e) => s.setSetup({ house: e.target.value })} />
+              </Field>
+              <Field label="Byline"><TextInput value={s.settings.photographer} onChange={(e) => s.updateSettings({ photographer: e.target.value })} /></Field>
+            </div>
+          </section>
+        </div>
 
+        <div className="setup-col">
           {usesRosters ? (
             <>
+              <div className="teams-head">
+                <span className="overline">Teams</span>
+                <button type="button" className="link" onClick={() => s.swapTeams()} title="Swap which team is yours">Swap sides</button>
+              </div>
               <div className="teams">
                 <TeamCard slot="A" />
-                <div className="teams-mid"><button type="button" className="icon-btn swap" title="Swap the teams" aria-label="Swap the teams" onClick={() => s.swapTeams()}>⇄</button></div>
                 <TeamCard slot="B" />
               </div>
-              {s.slots.A.team && s.slots.B.team && s.frames.length ? (
-                <p className="muted small">Uniforms are read from a few of your photos before the run starts, so the two sides are told apart by what they wore today. {s.scouting ? <Spinner /> : <button type="button" className="link" onClick={() => s.scoutUniforms()}>Read them now</button>}</p>
+              {s.slots.A.team && s.slots.B.team && s.frames.length && (!s.slots.A.team.uniform || !s.slots.B.team.uniform) ? (
+                <p className="faint small">What each team is wearing is read from a few of your photos when the run starts. {s.scouting ? <Spinner /> : <button type="button" className="link" onClick={() => s.scoutUniforms()}>Read it now</button>}</p>
               ) : null}
               <FaceStatus />
             </>
           ) : (
-            <MeetFields />
+            <section className="card" aria-label="The meet">
+              <div className="card-head"><b>The meet</b><span className="faint">No rosters — athletes are named from the entry list</span></div>
+              <MeetFields />
+            </section>
           )}
-
-          <Overline>Where</Overline>
-          <div className="grid-3">
-            <Field label="Venue"><TextInput placeholder="Memorial Stadium" value={s.setup.venue} onChange={(e) => s.setSetup({ venue: e.target.value })} /></Field>
-            <Field label="City"><TextInput placeholder="Lincoln" value={s.setup.city} onChange={(e) => s.setSetup({ city: e.target.value })} /></Field>
-            <Field label="State"><TextInput placeholder="Neb." value={s.setup.state} onChange={(e) => s.setSetup({ state: e.target.value })} /></Field>
-          </div>
-
-          <Overline>Filed for</Overline>
-          <div className="grid-3">
-            <Field label="House style">
-              <Select<CaptionStyle> value={derive.style(s)} onChange={(v) => s.setSetup({ style: v })} options={CAPTION_STYLES.map((v) => ({ value: v, label: Styles.displayName(v) }))} />
-            </Field>
-            <Field label="Credit to" hint={s.setup.house === null ? "Your default, from Settings" : undefined}>
-              <TextInput placeholder={Styles.defaultHouse(derive.style(s)) ?? ""} value={derive.house(s)} onChange={(e) => s.setSetup({ house: e.target.value })} />
-            </Field>
-            <Field label="Byline"><TextInput value={s.settings.photographer} onChange={(e) => s.updateSettings({ photographer: e.target.value })} /></Field>
-          </div>
-        </section>
+        </div>
       </div>
       <RunBar />
     </div>
@@ -74,12 +88,12 @@ export function Setup() {
 function MeetFields() {
   const s = useStore();
   return (
-    <div className="meet">
-      <Field label="Meet" wide hint="As a caption names it: “the Nebraska Class A state cross country championships”."><TextInput placeholder="Waverly Invitational" value={s.setup.eventName} onChange={(e) => s.setSetup({ eventName: e.target.value })} /></Field>
-      <Field label="Entry list (optional)" wide hint={`One per line: bib, name, school. ${derive.entries(s).length ? `${derive.entries(s).length} entries read.` : "Without one, athletes are described by school lettering."}`}>
-        <textarea className="input textarea" rows={5} placeholder={"1204, Jane Doe, Waverly\n1311, Ann Roe, Gretna"} value={s.setup.entriesText} onChange={(e) => s.setSetup({ entriesText: e.target.value })} />
+    <>
+      <Field label="Meet" hint="As a caption names it: “the Nebraska Class A state cross country championships”."><TextInput placeholder="Waverly Invitational" value={s.setup.eventName} onChange={(e) => s.setSetup({ eventName: e.target.value })} /></Field>
+      <Field label="Entry list (optional)" hint={`One per line: bib, name, school. ${derive.entries(s).length ? `${derive.entries(s).length} entries read.` : "Without one, athletes are described by school lettering."}`}>
+        <textarea className="input textarea" rows={8} placeholder={"1204, Jane Doe, Waverly\n1311, Ann Roe, Gretna"} value={s.setup.entriesText} onChange={(e) => s.setSetup({ entriesText: e.target.value })} />
       </Field>
-    </div>
+    </>
   );
 }
 
@@ -107,12 +121,12 @@ function PhotosCard() {
   if (!s.folder) {
     return (
       <section className="card photos-card" aria-label="Photographs">
-        <Overline>Photographs</Overline>
+        <div className="card-head"><b>Photographs</b></div>
         <div className={`drop${over ? " drop-over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
           {s.loadingFolder ? <Spinner /> : (
             <>
               <p className="drop-title">Drop a folder of photographs here</p>
-              <p className="muted small">JPEG and camera RAW. Captions are written into the JPEGs; RAW files get an .xmp sidecar.</p>
+              <p className="faint small">JPEG and camera RAW. Captions are written into the JPEGs; RAW files get an .xmp sidecar.</p>
               <div className="row center">
                 {writable ? <Button kind="primary" onClick={() => s.chooseFolder()}>Choose folder</Button> : null}
                 <Button kind={writable ? "secondary" : "primary"} onClick={() => input.current?.click()}>{writable ? "Open read-only" : "Choose folder"}</Button>
@@ -124,7 +138,7 @@ function PhotosCard() {
         </div>
         {s.recents.length ? (
           <div className="recents">
-            <Overline>Recent shoots</Overline>
+            <div className="overline">Recent shoots</div>
             {s.recents.map((r) => (
               <div key={r.id} className="recent">
                 <button type="button" className="recent-open" onClick={() => s.openRecent(r)}>
@@ -140,23 +154,20 @@ function PhotosCard() {
     );
   }
 
-  const dated = s.frames.map((f) => f.exif?.captureDate).filter((d): d is Date => !!d);
-  const first = dated.length ? new Date(Math.min(...dated.map((d) => d.getTime()))) : null;
   const counts = derive.counts(s);
+  const camera = s.frames.find((f) => f.exif?.cameraModel)?.exif?.cameraModel;
+  const kinds = [...new Set(s.frames.map((f) => (SupportedFormats.isRaw(f.name) ? "RAW" : "JPEG")))].join(" + ");
   return (
     <section className="card photos-card" aria-label="Photographs">
-      <Overline>Photographs</Overline>
-      <div className="folder-head">
-        <div>
-          <div className="folder-name">{s.folder.name}</div>
-          <div className="meta">{s.frames.length} photos{first ? ` · ${first.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}` : ""}{counts.done ? ` · ${counts.done} already read` : ""}{!s.folder.writable ? " · read-only" : ""}</div>
-        </div>
-        <Button small kind="ghost" onClick={() => s.closeShoot()}>Change</Button>
+      <div className="card-head"><b>Photographs</b><button type="button" className="link" onClick={() => s.closeShoot()}>Change</button></div>
+      <div className="folder">
+        <b>{s.folder.name}</b>
+        <span>{s.frames.length} photos · {kinds}{camera ? ` · ${camera}` : ""}{counts.done ? ` · ${counts.done} already read` : ""} · {s.folder.writable ? "captions are written into the files" : "read-only"}</span>
       </div>
-      <div className="thumb-grid">
-        {s.frames.slice(0, 24).map((f) => <Thumb key={f.id} frame={f} />)}
-      </div>
-      {s.frames.length > 24 ? <p className="muted small">and {s.frames.length - 24} more</p> : null}
+      <div className="sthumbs">{s.frames.slice(0, 6).map((f) => <Thumb key={f.id} frame={f} />)}</div>
+      {s.photoHeadline ? (
+        <div className="found"><span className="found-mark">✓</span><div><b>Headline found in the photos</b><span>{s.photoHeadline}</span></div></div>
+      ) : null}
     </section>
   );
 }
@@ -170,33 +181,37 @@ function RunBar() {
   const legacy = s.frames.filter((f) => f.state === "done" && !f.observation).map((f) => f.id);
   const tier = TIERS[s.settings.tier];
   return (
-    <div className="runbar">
-      <div className="runbar-tier">
-        <Segmented<Tier> value={s.settings.tier} onChange={(v) => s.updateSettings({ tier: v })}
-          options={(["economy", "balanced", "best"] as Tier[]).map((t) => ({ value: t, label: `${TIERS[t].name} · ${Cost.dollars(Cost.perPhoto(t) * 1000)}/1k`, title: TIERS[t].blurb }))} />
-        <span className="muted small">{tier.blurb}</span>
-      </div>
-      <div className="runbar-go">
-        {blocker ? <span className="muted small">{blocker}</span> : <span className="muted small">{todo ? `${todo} to read · about ${Cost.dollars(derive.estimate(s))}` : "Every photo has been read."}</span>}
-        {counts.done ? <Button onClick={() => s.setScreen("review")}>Review</Button> : null}
-        {legacy.length && !blocker ? <Button disabled={s.running} onClick={() => s.startRun({ ids: legacy })} title="These have captions from the first Cutline, without players to correct. Reading them again costs about the same as new photos.">Re-read {legacy.length} from the first Cutline · {Cost.dollars(legacy.length * Cost.perPhoto(s.settings.tier))}</Button> : null}
-        <Button kind="primary" disabled={!!blocker || s.running || (!todo)} onClick={() => s.startRun()}>{s.running ? "Reading…" : !s.frames.length ? "Caption photos" : !todo ? "All read" : todo === s.frames.length ? `Caption ${todo} photos` : `Caption ${todo} more`}</Button>
-      </div>
-    </div>
+    <footer className="runbar">
+      <Segmented<Tier> value={s.settings.tier} onChange={(v) => s.updateSettings({ tier: v })}
+        options={(["economy", "balanced", "best"] as Tier[]).map((t) => ({ value: t, label: <>{TIERS[t].name}<em>{Cost.perThousand(t)}</em></>, title: TIERS[t].blurb }))} />
+      <span className="runbar-note">per 1,000 photos. {tier.blurb}</span>
+      <span className="spacer" />
+      <span className="runbar-est">{blocker ?? (todo ? `${todo} photo${todo === 1 ? "" : "s"} · about ${Cost.dollars(derive.estimate(s))}` : s.frames.length ? "Every photo has been read" : "")}</span>
+      {counts.done ? <Button onClick={() => s.setScreen("review")}>Review</Button> : null}
+      {legacy.length && !blocker ? <Button disabled={s.running} onClick={() => s.startRun({ ids: legacy })} title="These have captions from the first Cutline, without players to correct. Reading them again costs about the same as new photos.">Re-read {legacy.length} from the first Cutline</Button> : null}
+      <Button kind="primary" large disabled={!!blocker || s.running || (!todo)} onClick={() => s.startRun()}>{s.running ? "Reading…" : !s.frames.length ? "Caption photos" : !todo ? "All read" : todo === s.frames.length ? `Caption ${todo} photos` : `Caption ${todo} more`}</Button>
+    </footer>
   );
 }
 
 function FaceStatus() {
   const s = useStore();
-  if (!s.settings.faces) return null;
-  if (Levels.info(s.setup.levelId).kind !== "college") return <p className="muted small">Face matching is on, but it is used only for college rosters.</p>;
-  if (!derive.facesOn(s)) return <p className="muted small">Face matching is on; neither roster has headshots to match against.</p>;
+  const college = Levels.info(s.setup.levelId).kind === "college";
+  if (!college) return null;
   const f = s.faces;
+  let state: string, action = null as React.ReactNode;
+  if (!s.settings.faces) { state = "off"; action = <button type="button" className="link" onClick={() => s.updateSettings({ faces: true })}>Turn on</button>; }
+  else if (!derive.facesOn(s)) state = "on · neither roster has headshots";
+  else if (f.status === "ready") state = `on · ${f.done} of ${f.total} roster photos ready`;
+  else if (f.status === "preparing") state = `on · reading roster photos ${f.done}/${f.total}`;
+  else if (f.status === "unavailable") state = `unavailable · ${f.error}`;
+  else { state = "on · prepared when the run starts"; action = <button type="button" className="link" onClick={() => s.prepareFaces()}>Prepare now</button>; }
   return (
-    <p className="muted small">
-      Face matching (on this device only):{" "}
-      {f.status === "ready" ? `${f.done} of ${f.total} roster photos ready.` : f.status === "preparing" ? <><Spinner /> reading roster photos {f.done}/{f.total}…</> : f.status === "unavailable" ? <span className="warn">{f.error}</span> : "prepared when the run starts."}
-      {f.status === "off" || f.status === "unavailable" ? <>{" "}<button type="button" className="link" onClick={() => s.prepareFaces()}>Prepare now</button></> : null}
-    </p>
+    <div className="faces">
+      <span><b>Face matching</b> · {state}{f.status === "preparing" ? <> <Spinner /></> : null}</span>
+      <span className="faint">Names a player whose number is hidden, from college roster headshots. Runs on this computer only.</span>
+      <span className="spacer" />
+      {action}
+    </div>
   );
 }

@@ -54,7 +54,7 @@ export function SettingsPanel() {
         <section>
           <h3>Reading</h3>
           <Field label="Accuracy and cost">
-            <Segmented<Tier> value={s.settings.tier} onChange={(v) => set({ tier: v })} options={(["economy", "balanced", "best"] as Tier[]).map((t) => ({ value: t, label: `${TIERS[t].name} · ${Cost.dollars(Cost.perPhoto(t) * 1000)}/1k` }))} />
+            <Segmented<Tier> value={s.settings.tier} onChange={(v) => set({ tier: v })} options={(["economy", "balanced", "best"] as Tier[]).map((t) => ({ value: t, label: <>{TIERS[t].name}<em>{Cost.perThousand(t)}</em></> }))} />
           </Field>
           <p className="muted small">{TIERS[s.settings.tier].blurb}</p>
           <div className="grid-2">
