@@ -83,6 +83,8 @@ function renderClause(obs: Observation, ids: Identity[], ctx: CaptionContext, na
     // A reference that starts with its own article ("a Bowling Green player") after one the
     // model wrote is doubled; keep the model's.
     if (art && /^(a|an|the)\s/i.test(rendered)) rendered = rendered.replace(/^(a|an|the)\s/i, "");
+    // "with the {B:players}" would give "with the members of the Elkhorn Antlers".
+    if (/^members of /i.test(rendered)) before = before.replace(/\bthe\s+$/i, "");
     pieces.push(before, rendered);
     last = m.index! + m[0].length;
   }

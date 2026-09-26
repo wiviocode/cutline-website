@@ -98,6 +98,11 @@ describe("captions in the desk's own style", () => {
         "Fans cheer from the stands between the Waverly Vikings and the Gretna Dragons during a high school volleyball match, Thursday, Sept. 24, 2026, at Waverly High School Gymnasium in Waverly, Neb. Photo by Eli Larson/Hurdatt.");
     });
 
+    it("drops the model's article before 'members of'", () => {
+      const obs: Observation = { scene: "portrait", timing: "before", clause: "{P1} walks down the stairs with the {B:players}", subjects: [subject({ id: "P1", team: "B", number: "7" })] };
+      expect(compose(obs, ctx)).toMatch(/^Gretna Dragon Samantha Hagaman \(7\) walks down the stairs with members of the Gretna Dragons against the Waverly Vikings before a high school volleyball match/);
+    });
+
     it("members of the team, and a coach", () => {
       const obs: Observation = { scene: "celebration", timing: "during", clause: "{A:players} celebrate together on the sideline", subjects: [] };
       expect(compose(obs, ctx)).toMatch(/^Members of the Waverly Vikings celebrate together on the sideline against the Gretna Dragons during a high school volleyball match/);

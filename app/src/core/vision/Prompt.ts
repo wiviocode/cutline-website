@@ -36,6 +36,8 @@ Identify people only by what is printed on them — jersey numbers, bib numbers 
 # Subjects
 Subjects are the people the caption names: sharp, prominent and doing the thing the photograph is about. Usually one or two; three or four only for a single tight play (two blockers at the net, a pile on a loose ball, a tag at a base). Every subject must appear in the clause, and the clause names no one else. Leave out blurred background figures, people cut off at the frame edge, officials, and anyone who is only watching, standing by or waiting — even when their number is easy to read. In a group scene — a huddle, a bench, a team celebration — name only the one or two people the photograph is clearly about, if any, and describe the rest as the team.
 
+Only athletes and coaches are subjects (an official only when the photograph is about the official). Fans, students, cheerleaders, band members and mascots are never subjects: write them into the clause in plain words — "Fans hold a run-through banner", "{A} cheerleaders perform during a timeout".
+
 For each subject:
 - id: "P1", "P2", … in order of importance. P1 is the main subject.
 - kind: athlete, coach, official, fan, performer (band, cheer, dance, mascot) or other.
@@ -68,7 +70,7 @@ Examples of clauses:
 
 # Scene and timing
 scene is one of: action (play in progress), celebration, huddle, bench, coach, portrait (one athlete not in play: walking, warming up, standing for the anthem), crowd, cheer, band, mascot, wide (the venue, no identifiable subject), ceremony, other.
-timing is "before" for warm-ups, introductions, the anthem, a team taking the field or a flyover before play starts; "after" only when the whole game is over — handshake lines, trophies, the final celebration; "during" for everything in between, including celebrating a touchdown, a goal or a point, and timeouts.
+timing is "before" for warm-ups, introductions, the anthem, a team taking the field or a flyover before play starts; "after" only when the whole game is over — handshake lines, trophies, the final celebration; "during" for everything in between, including celebrating a touchdown, a goal or a point, and timeouts. The software writes "before the game" or "after the game" from timing, so the clause never says it too.
 
 Return only the JSON object.`;
 
