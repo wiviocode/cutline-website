@@ -130,6 +130,12 @@ function renderSubject(s: Subject, id: Identity | undefined, ctx: CaptionContext
   const teamKey = id?.teamKey ?? (s.team === "A" || s.team === "B" ? s.team : null);
   const team = teamKey && ctx.matchup ? Matchup.team(ctx.matchup, teamKey) : null;
 
+  // A coach named from the staff list, whatever kind of subject the reading called them.
+  if (id?.player?.role === "staff" && team) {
+    named.add(teamKey!);
+    return staffReference(id.player, team, ctx.style);
+  }
+
   if (s.kind !== "athlete") {
     const role = nonAthleteNoun(s);
     if (team) {
@@ -188,6 +194,19 @@ function playerReference(p: Player, team: Team, style: CaptionStyle, side: Ident
   if (Styles.includesPosition(style) && position) return `${teamLabel} ${position} ${name}${tail}`;
   // No position on the roster (common in high school): "Syracuse's Logan Jazbec (22)".
   return `${possessive(team.school)} ${name}${tail}`;
+}
+
+/**
+ * A coach always carries the title: "Nebraska head coach Dani Busboom Kelly", "Waverly Vikings
+ * head coach Terri Neujahr", "head coach Mike Schall of the North Carolina Tar Heels".
+ */
+function staffReference(p: Player, team: Team, style: CaptionStyle): string {
+  const name = Player.fullName(p);
+  const title = p.position || "coach";
+  if (style === "simple") return `${title} ${name}`;
+  if (Styles.usesOfTheTeamForm(style)) return `${title} ${name} of ${Team.withArticle(team)}`;
+  const label = Styles.usesSingularTeamBeforeName(style) ? Team.fullName(team) : teamName(team, style);
+  return `${label} ${title} ${name}`;
 }
 
 /** How a team is named as a noun: AP "Nebraska"; others "the Gretna Dragons" is left to callers. */

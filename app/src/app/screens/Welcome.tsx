@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useStore } from "../store";
-import { Button, Field, Mark, Select, TextInput, Spinner } from "../components";
+import { Button, Field, Mark, Segmented, Select, TextInput, Spinner } from "../components";
 import { CAPTION_STYLES, Styles, type CaptionStyle } from "@core/caption/Styles";
+import { TemplateBuilder } from "@core/metadata/TemplateBuilder";
+import { Storage } from "@platform/storage";
+import { TemplateForm, draftTemplate, type TemplateDraft } from "./TemplateForm";
 
 export function Welcome() {
   const s = useStore();
@@ -11,9 +14,16 @@ export function Welcome() {
   const [style, setStyle] = useState<CaptionStyle>(s.settings.style);
   // A key already saved counts; one typed over it has to be checked first.
   const ok = s.keyStatus === "ok" && !!s.apiKey && (!key.trim() || key.trim() === s.apiKey);
+  const [wantTemplate, setWantTemplate] = useState(false);
+  const [draft, setDraft] = useState<TemplateDraft | null>(null);
+  const templateReady = !wantTemplate || (!!draft?.name.trim() && TemplateBuilder.hasContent(draft.fields));
 
   const finish = async () => {
     await s.updateSettings({ photographer: name.trim(), house: house.trim(), style });
+    if (wantTemplate && draft && templateReady) {
+      await Storage.saveTemplate(draft.name.trim(), TemplateBuilder.build(draft.fields));
+      await s.updateSettings({ templateName: draft.name.trim() });
+    }
     await s.finishWelcome();
   };
 
@@ -48,8 +58,17 @@ export function Welcome() {
           <p className="sample">{sample(style, name || "Eli Larson", house)}</p>
         </section>
 
+        <section className="welcome-step">
+          <h2><span className="step-n">3</span> An IPTC template <span className="muted small">optional</span></h2>
+          <p className="muted">Credit, copyright and contact fields written into every photograph with the caption — what a Photo Mechanic stationery pad holds. You can also make one or load a .XMP pad later in Settings.</p>
+          <Segmented value={wantTemplate ? "make" : "skip"} onChange={(v) => { setWantTemplate(v === "make"); if (v === "make" && !draft) setDraft(draftTemplate(name.trim(), house.trim())); }}
+            options={[{ value: "skip", label: "Not now" }, { value: "make", label: "Make one" }]} />
+          {wantTemplate && draft ? <TemplateForm draft={draft} onChange={setDraft} /> : null}
+        </section>
+
         <div className="welcome-foot">
-          <Button kind="primary" onClick={finish} disabled={!ok || !name.trim()}>Start</Button>
+          {wantTemplate && !templateReady ? <span className="muted small">Give the template a name and at least one field, or choose Not now.</span> : null}
+          <Button kind="primary" onClick={finish} disabled={!ok || !name.trim() || !templateReady}>Start</Button>
         </div>
       </div>
     </div>

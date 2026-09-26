@@ -26,6 +26,8 @@ export interface Player {
   classYear?: string | null;
   /** A roster headshot, when the page had one. Used only for on-device face matching. */
   headshotURL?: string | null;
+  /** A coach or other staff member: no number, and `position` holds the title as a caption writes it ("head coach"). */
+  role?: "staff";
 }
 
 export interface Team {
@@ -39,6 +41,8 @@ export interface Team {
   /** Today's uniform in words: "red jerseys with white numbers". The strongest team cue. */
   uniform: string;
   players: Player[];
+  /** Coaches and staff, as the roster page listed them. */
+  staff: Player[];
   sourceURL?: string | null;
   logoURL?: string | null;
 }
@@ -62,6 +66,7 @@ export const Player = {
       secondary: p.secondary ?? null,
       classYear: p.classYear ?? null,
       headshotURL: p.headshotURL ?? null,
+      ...(p.role === "staff" ? { role: "staff" as const } : {}),
     };
   },
   fullName(p: Player): string {
@@ -94,6 +99,7 @@ export const Team = {
       colors: p.colors ?? [],
       uniform: p.uniform ?? "",
       players: p.players ?? [],
+      staff: p.staff ?? [],
       sourceURL: p.sourceURL ?? null,
       logoURL: p.logoURL ?? null,
     };
@@ -112,6 +118,33 @@ export const Team = {
   },
   sortedPlayers(t: Team): Player[] {
     return [...t.players].sort(Player.compare);
+  },
+};
+
+export const Staff = {
+  /** A coach or staff member from a roster page: "Head Coach" is printed, "head coach" is captioned. */
+  make(p: { firstName: string; lastName: string; title: string; headshotURL?: string | null; id?: string }): Player {
+    const title = p.title.replace(/\s+/g, " ").trim();
+    return Player.make({ id: p.id, number: "", firstName: p.firstName, lastName: p.lastName, position: Staff.captionTitle(title), positionAbbr: title, headshotURL: p.headshotURL ?? null, role: "staff" });
+  },
+  /**
+   * The title as it reads before a name in a caption: the first title of several, lowercase
+   * except for initialisms. "Associate Head Coach/Recruiting Coordinator" → "associate head coach",
+   * "Deputy AD - Senior Woman Administrator" → "deputy AD".
+   */
+  captionTitle(printed: string): string {
+    const first = printed.split(/\s*(?:\/|\(|\s-\s|,|;|\|)\s*/)[0].trim();
+    return first.split(/\s+/).filter(Boolean).map((w) => (/^[A-Z]{2,}$/.test(w) ? w : w.toLowerCase())).join(" ");
+  },
+  /** Head coach first, then the other coaches, then everyone else, each in the order listed. */
+  sorted(list: Player[]): Player[] {
+    const rank = (p: Player) => (/^head coach$/i.test(p.position) ? 0 : /coach/i.test(p.position) ? 1 : 2);
+    return list.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map((x) => x.p);
+  },
+  /** Split a printed name: "Dani Busboom Kelly" → Dani / Busboom Kelly. */
+  splitName(full: string): { firstName: string; lastName: string } {
+    const [firstName = "", ...rest] = full.replace(/\s+/g, " ").trim().split(" ");
+    return { firstName, lastName: rest.join(" ") };
   },
 };
 

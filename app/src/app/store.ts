@@ -25,7 +25,7 @@ import { applyFaceHints, type FaceHint } from "@core/vision/FaceEvidence";
 import { FaceMatcher, headCrops } from "@platform/faces";
 import type { Observation } from "@core/vision/Observation";
 import { resizedSize } from "@core/vision/ImageSize";
-import { Team, Player, type Matchup, type TeamKey } from "@core/roster/Roster";
+import { Team, Player, Staff, type Matchup, type TeamKey } from "@core/roster/Roster";
 import { RosterImport, type ImportRequest } from "@core/roster/RosterImport";
 import { Sports, Levels, type SportID, type Gender } from "@core/sports/Sports";
 import { parseHeadline } from "@core/sports/Headline";
@@ -74,6 +74,8 @@ export interface Frame {
   writeError: string | null;
   /** On-device face matches per subject, best first. */
   faceHints: Record<string, FaceHint[]>;
+  /** What a copied caption replaced, until the next edit — so the copy can be undone. Not saved. */
+  copyUndo?: { caption: string; captionEdited: boolean; state: FrameState } | null;
 }
 
 export interface Setup {
@@ -157,6 +159,7 @@ interface State {
   editTeam(slot: TeamKey, patch: Partial<Team>): void;
   editPlayer(slot: TeamKey, id: string, patch: Partial<Player>): void;
   addPlayer(slot: TeamKey): void;
+  addStaff(slot: TeamKey): void;
   removePlayer(slot: TeamKey, id: string): void;
   swapTeams(): void;
   saveTeamToLibrary(slot: TeamKey): Promise<void>;
@@ -175,6 +178,9 @@ interface State {
   setFilter(f: Filter): void;
   setManual(frameID: string, subjectID: string, manual: ManualID | null): Promise<void>;
   editCaption(frameID: string, text: string): Promise<void>;
+  /** The previous captioned frame's caption, as this frame's own edited caption — for a burst of near-identical frames. */
+  copyPreviousCaption(frameID: string): Promise<void>;
+  undoCopy(frameID: string): Promise<void>;
   revertCaption(frameID: string): Promise<void>;
   setNote(frameID: string, note: string): void;
   reread(frameID: string): Promise<void>;
@@ -256,6 +262,13 @@ export const derive = {
       case "unapproved": return s.frames.filter((f) => !f.approved);
       default: return s.frames;
     }
+  },
+
+  /** The nearest earlier photograph, in the folder's order, that has a caption to copy. */
+  previousCaptioned(s: Pick<State, "frames">, id: string): Frame | null {
+    const i = s.frames.findIndex((f) => f.id === id);
+    for (let j = i - 1; j >= 0; j--) if (s.frames[j].caption.trim()) return s.frames[j];
+    return null;
   },
 
   counts(s: Pick<State, "frames">) {
@@ -384,10 +397,13 @@ export const useStore = create<State>((set, get) => {
     try {
       const file = await f.photo.file();
       const packet = await packetFor(s, f);
-      const original = s.settings.embed ? new Uint8Array(await file.arrayBuffer()) : null;
+      const target = s.settings.writeTo;
+      const original = target !== "sidecar" ? new Uint8Array(await file.arrayBuffer()) : null;
       const plan = MetadataOutput.plan(f.name, packet, original);
       if (plan.kind === "embed") await folder.writeBytes(f.name, plan.bytes);
       else await folder.writeText(plan.name, plan.text);
+      // "Both": the sidecar beside the embedded file, for software that reads only one or the other.
+      if (target === "both" && plan.kind === "embed") await folder.writeText(XMPSidecar.sidecarName(f.name), packet);
       // The write changed the file's size and date; the manifest records the new signature.
       const fresh = (await folder.listPhotos()).find((p) => p.name === f.name);
       if (fresh) {
@@ -610,10 +626,12 @@ export const useStore = create<State>((set, get) => {
       setTeam(slot, { ...team, ...patch });
     },
 
+    // Players and coaches alike: an id belongs to one list or the other.
     editPlayer(slot, id, patch) {
       const team = get().slots[slot].team;
       if (!team) return;
-      setTeam(slot, { ...team, players: team.players.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
+      const edit = (list: Player[]) => list.map((p) => (p.id === id ? { ...p, ...patch } : p));
+      setTeam(slot, { ...team, players: edit(team.players), staff: edit(team.staff ?? []) });
     },
 
     addPlayer(slot) {
@@ -621,9 +639,14 @@ export const useStore = create<State>((set, get) => {
       setTeam(slot, { ...team, players: [...team.players, Player.make({ number: "" })] });
     },
 
+    addStaff(slot) {
+      const team = get().slots[slot].team ?? Team.make({ school: "" });
+      setTeam(slot, { ...team, staff: [...(team.staff ?? []), Staff.make({ firstName: "", lastName: "", title: "Head Coach" })] });
+    },
+
     removePlayer(slot, id) {
       const team = get().slots[slot].team;
-      if (team) setTeam(slot, { ...team, players: team.players.filter((p) => p.id !== id) });
+      if (team) setTeam(slot, { ...team, players: team.players.filter((p) => p.id !== id), staff: (team.staff ?? []).filter((p) => p.id !== id) });
     },
 
     swapTeams() {
@@ -770,17 +793,37 @@ export const useStore = create<State>((set, get) => {
       const next = { ...f.manual };
       if (manual) {
         const team = manual.teamKey ? get().slots[manual.teamKey].team : null;
-        const p = team?.players.find((x) => x.id === manual.playerID);
+        const p = team ? [...team.players, ...(team.staff ?? [])].find((x) => x.id === manual.playerID) : undefined;
         next[subjectID] = p ? { ...manual, number: p.number, name: Player.fullName(p) } : manual;
       } else delete next[subjectID];
-      patchFrame(frameID, { manual: next, captionEdited: false });
+      patchFrame(frameID, { manual: next, captionEdited: false, copyUndo: null });
       recompose(frameID);
       await saveRecord(get().folder, frame(frameID)!);
       if (frame(frameID)!.approved) await writeFrame(frameID);
     },
 
     async editCaption(frameID, text) {
-      patchFrame(frameID, { caption: text, captionEdited: true });
+      patchFrame(frameID, { caption: text, captionEdited: true, copyUndo: null });
+      await saveRecord(get().folder, frame(frameID)!);
+      if (frame(frameID)!.approved) await writeFrame(frameID);
+    },
+
+    async copyPreviousCaption(frameID) {
+      const f = frame(frameID), prev = derive.previousCaptioned(get(), frameID);
+      if (!f || !prev || f.state === "working") return;
+      // A frame not read yet takes the caption as its own and is not sent to be read.
+      patchFrame(frameID, {
+        caption: prev.caption, captionEdited: true, copyUndo: f.copyUndo ?? { caption: f.caption, captionEdited: f.captionEdited, state: f.state },
+        ...(f.state === "pending" || f.state === "failed" ? { state: "done" as const, error: null } : {}),
+      });
+      await saveRecord(get().folder, frame(frameID)!);
+      if (frame(frameID)!.approved) await writeFrame(frameID);
+    },
+
+    async undoCopy(frameID) {
+      const u = frame(frameID)?.copyUndo;
+      if (!u) return;
+      patchFrame(frameID, { caption: u.caption, captionEdited: u.captionEdited, state: u.state, copyUndo: null });
       await saveRecord(get().folder, frame(frameID)!);
       if (frame(frameID)!.approved) await writeFrame(frameID);
     },
@@ -885,7 +928,8 @@ export const useStore = create<State>((set, get) => {
 
       if (recent?.setup) {
         const saved = recent.setup as { setup: Partial<Setup>; a: Team | null; b: Team | null };
-        set((s) => ({ setup: { ...s.setup, style: null, house: null, ...saved.setup }, slots: { A: { ...emptySlot(), team: saved.a }, B: { ...emptySlot(), team: saved.b } } }));
+        const withStaff = (t: Team | null) => (t ? { ...t, staff: t.staff ?? [] } : null);
+        set((s) => ({ setup: { ...s.setup, style: null, house: null, ...saved.setup }, slots: { A: { ...emptySlot(), team: withStaff(saved.a) }, B: { ...emptySlot(), team: withStaff(saved.b) } } }));
       } else {
         // What the photographs already say: location, and often the sport and both teams.
         const first = await photos[0].file();

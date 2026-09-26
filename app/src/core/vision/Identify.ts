@@ -78,9 +78,11 @@ export const Identify = {
 
     if (manual) {
       const team = manual.teamKey && ctx.matchup ? Matchup.team(ctx.matchup, manual.teamKey) : null;
+      // A player, or a coach from the staff list.
+      const people = team ? [...team.players, ...(team.staff ?? [])] : [];
       const player = team && manual.playerID
-        ? team.players.find((p) => p.id === manual.playerID)
-          ?? team.players.find((p) => p.number === manual.number && Player.fullName(p) === manual.name) ?? null
+        ? people.find((p) => p.id === manual.playerID)
+          ?? people.find((p) => p.number === (manual.number ?? "") && Player.fullName(p) === manual.name) ?? null
         : null;
       return { ...base, teamKey: manual.teamKey, player, status: player ? "confirmed" : "unknown", source: "manual", reason: player ? "Set by hand" : "Left unnamed by hand", side };
     }

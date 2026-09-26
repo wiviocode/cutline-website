@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Compose, type CaptionContext } from "../src/core/caption/Compose";
 import { Identify } from "../src/core/vision/Identify";
 import { Observation, type Subject } from "../src/core/vision/Observation";
-import { Team, Player, type Matchup } from "../src/core/roster/Roster";
+import { Team, Player, Staff, type Matchup } from "../src/core/roster/Roster";
 import { Levels } from "../src/core/sports/Sports";
 
 const p = (number: string, first: string, last: string, position = "", positionAbbr = "") =>
@@ -103,6 +103,22 @@ describe("captions in the desk's own style", () => {
       const obs: Observation = { scene: "action", timing: "during", clause: "{P1} serves the ball", subjects: [subject({ id: "P1", team: "B", number: "7" })] };
       expect(compose(obs, ctx)).toBe(
         "Gretna Dragon Samantha Hagaman (7) serves the ball against the Waverly Vikings during a high school volleyball match, Thursday, Sept. 24, 2026, at Waverly High School Gymnasium in Waverly, Neb. Photo by Eli Larson/Hurdatt.");
+    });
+
+    it("names a coach picked from the staff, with the title", () => {
+      const neujahr = Staff.make({ firstName: "Terri", lastName: "Neujahr", title: "Head Coach" });
+      const withStaff: CaptionContext = { ...ctx, matchup: { a: { ...waverly, staff: [neujahr] }, b: gretna } };
+      const obs: Observation = { scene: "coach", timing: "during", clause: "{P1} talks with {P2} during a timeout", subjects: [subject({ id: "P1", kind: "coach", team: "A", role: "coach" }), subject({ id: "P2", team: "A", number: "3" })] };
+      const ids = Identify.all(obs, { matchup: withStaff.matchup, unitSport: false }, { P1: { teamKey: "A", playerID: neujahr.id } });
+      expect(ids[0]).toMatchObject({ status: "confirmed", source: "manual" });
+      expect(Compose.caption(obs, ids, withStaff).caption).toBe(
+        "Waverly Vikings head coach Terri Neujahr talks with Waverly Viking Gracie Lauenstein (3) during a timeout against the Gretna Dragons during a high school volleyball match, Thursday, Sept. 24, 2026, at Waverly High School Gymnasium in Waverly, Neb. Photo by Eli Larson/Hurdatt.");
+      // In AP style: "Nebraska head coach …".
+      const cook = Staff.make({ firstName: "Dani", lastName: "Busboom Kelly", title: "Head Coach" });
+      const ap = { ...apCtx({ a: { ...nebraskaVB, staff: [cook] }, b: unc }, "volleyball", new Date(2026, 8, 18, 19)) };
+      const one: Observation = { scene: "coach", timing: "during", clause: "{P1} reacts", subjects: [subject({ id: "P1", kind: "coach", team: "A" })] };
+      expect(Compose.caption(one, Identify.all(one, { matchup: ap.matchup, unitSport: false }, { P1: { teamKey: "A", playerID: cook.id } }), ap).caption)
+        .toMatch(/^Nebraska head coach Dani Busboom Kelly reacts during an NCAA college volleyball match against North Carolina/);
     });
 
     it("fans between the two teams", () => {

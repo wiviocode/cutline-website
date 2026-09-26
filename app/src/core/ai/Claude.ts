@@ -29,6 +29,7 @@ export interface ExtractedRoster {
   school: string;
   nickname: string;
   players: { number: string; first: string; last: string; position: string; year: string }[];
+  coaches: { first: string; last: string; title: string }[];
 }
 
 export interface TeamGuess { school: string; nickname: string; colors: string[] }
@@ -110,22 +111,24 @@ export class Claude {
     const content: Anthropic.ContentBlockParam[] = [];
     if (req.image) content.push(imageBlock(req.image));
     if (req.pdf) content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: req.pdf } });
-    content.push({ type: "text", text: `${req.text ? `Roster page text:\n\n${req.text}\n\n` : ""}Extract the ${req.sport} roster: every player listed, in order, with the jersey number exactly as printed ("" if none), first and last name, position as printed (keep abbreviations, keep both positions of a two-way player, e.g. "RB/LB"), and class year as printed. Ignore coaches and staff, navigation, schedules, news and sponsors. Do not invent anyone. Also give the school's name as a newspaper would write it on first reference (e.g. "Nebraska", "Bowling Green", "Waverly") and its team nickname if the page shows it, else "".` });
+    content.push({ type: "text", text: `${req.text ? `Roster page text:\n\n${req.text}\n\n` : ""}Extract the ${req.sport} roster: every player listed, in order, with the jersey number exactly as printed ("" if none), first and last name, position as printed (keep abbreviations, keep both positions of a two-way player, e.g. "RB/LB"), and class year as printed. List the coaches and staff the page shows separately, each with their title as printed ("Head Coach", "Assistant Coach"); none if it shows none. Ignore navigation, schedules, news and sponsors. Do not invent anyone. Also give the school's name as a newspaper would write it on first reference (e.g. "Nebraska", "Bowling Green", "Waverly") and its team nickname if the page shows it, else "".` });
     const reply = await this.structured({
       model: req.model,
       maxTokens: 16000,
       content,
       schema: {
-        type: "object", additionalProperties: false, required: ["school", "nickname", "players"],
+        type: "object", additionalProperties: false, required: ["school", "nickname", "players", "coaches"],
         properties: {
           school: { type: "string" }, nickname: { type: "string" },
           players: { type: "array", items: { type: "object", additionalProperties: false, required: ["number", "first", "last", "position", "year"],
             properties: { number: { type: "string" }, first: { type: "string" }, last: { type: "string" }, position: { type: "string" }, year: { type: "string" } } } },
+          coaches: { type: "array", items: { type: "object", additionalProperties: false, required: ["first", "last", "title"],
+            properties: { first: { type: "string" }, last: { type: "string" }, title: { type: "string" } } } },
         },
       },
     });
     const j = reply.json as Partial<ExtractedRoster>;
-    return { roster: { school: String(j.school ?? ""), nickname: String(j.nickname ?? ""), players: Array.isArray(j.players) ? j.players : [] }, usage: reply.usage };
+    return { roster: { school: String(j.school ?? ""), nickname: String(j.nickname ?? ""), players: Array.isArray(j.players) ? j.players : [], coaches: Array.isArray(j.coaches) ? j.coaches : [] }, usage: reply.usage };
   }
 
   /** A college's caption name, nickname and colours from its athletics site's name. */

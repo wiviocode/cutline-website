@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useStore } from "../store";
 import { Button, TextInput, Spinner, Select } from "../components";
-import { Team, Player, type TeamKey } from "@core/roster/Roster";
+import { Team, Player, Staff, type TeamKey } from "@core/roster/Roster";
 import { Levels, Sports } from "@core/sports/Sports";
 import { colourName } from "@core/vision/Prompt";
 
@@ -63,7 +63,7 @@ export function TeamCard({ slot }: { slot: TeamKey }) {
           <div className="swatches">
             {team!.colors.slice(0, 3).map((c) => <span key={c} className="swatch" style={{ background: cssColour(c) }} title={/^[0-9a-f]{6}$/i.test(c) ? colourName(c) : c} />)}
           </div>
-          <span className="meta">{team!.players.length} players{team!.players.some((p) => p.headshotURL) ? " · headshots" : ""}</span>
+          <span className="meta">{team!.players.length} players{team!.staff?.length ? ` · ${team!.staff.length} coach${team!.staff.length === 1 ? "" : "es"}` : ""}{team!.players.some((p) => p.headshotURL) ? " · headshots" : ""}</span>
           <button type="button" className="link small" onClick={() => setShowRoster((v) => !v)}>{showRoster ? "Hide roster" : "Edit roster"}</button>
           <button type="button" className="link small" onClick={() => s.saveTeamToLibrary(slot)}>Save to your teams</button>
         </div>
@@ -107,6 +107,20 @@ function RosterTable({ slot }: { slot: TeamKey }) {
         </tbody>
       </table>
       <Button small onClick={() => s.addPlayer(slot)}>Add player</Button>
+      <table className="staff-table">
+        <thead><tr><th>Coaches</th><th /><th>Title</th><th /></tr></thead>
+        <tbody>
+          {(team.staff ?? []).map((p) => (
+            <tr key={p.id}>
+              <td><input className="cell" value={p.firstName} aria-label="Coach first name" onChange={(e) => s.editPlayer(slot, p.id, { firstName: e.target.value })} /></td>
+              <td><input className="cell" value={p.lastName} aria-label="Coach last name" onChange={(e) => s.editPlayer(slot, p.id, { lastName: e.target.value })} /></td>
+              <td><input className="cell" value={p.positionAbbr} aria-label="Coach title" placeholder="Head Coach" onChange={(e) => s.editPlayer(slot, p.id, { positionAbbr: e.target.value, position: Staff.captionTitle(e.target.value) })} /></td>
+              <td><button type="button" className="icon-btn" aria-label={`Remove ${Player.fullName(p)}`} onClick={() => s.removePlayer(slot, p.id)}>×</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Button small onClick={() => s.addStaff(slot)}>Add coach</Button>
     </div>
   );
 }

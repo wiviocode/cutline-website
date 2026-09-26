@@ -12,7 +12,7 @@
 import type { Claude, SentImage } from "../ai/Claude";
 import { Cost, TEXT_MODEL, Usage } from "../ai/Models";
 import { Sports, type Gender, type LevelKind, type SportID } from "../sports/Sports";
-import { Player, Team } from "./Roster";
+import { Player, Staff, Team } from "./Roster";
 import { Positions } from "./Positions";
 import { RosterPages, dedupe, type RosterSource, type TeamIdentity } from "./RosterPages";
 import { CSVRosterImporter } from "./CSVRosterImporter";
@@ -89,7 +89,7 @@ export const RosterImport = {
         let page: FetchedPage;
         try { page = await fetch(url); } catch (e) { failed(e); continue; }
         const result = await RosterImport.fromHTML(page.text, page.url || url, req, claude).catch((e) => { failed(e); return null; });
-        if (result) return result;
+        if (result) return withMaxPrepsStaff(result, fetch);
       }
       return null;
     };
@@ -155,7 +155,7 @@ export const RosterImport = {
           if (!identity.colors.length && g.team.colors.length) identity.colors = g.team.colors;
         } catch { /* a team with no nickname is still a team */ }
       }
-      return { team: toTeam(exact.players, identity, url), source: exact.source, url, dollars, notes: notes.concat(numberNotes(exact.players)) };
+      return { team: toTeam(exact.players, identity, url, exact.staff), source: exact.source, url, dollars, notes: notes.concat(numberNotes(exact.players)) };
     }
     if (!claude) throw new RosterImportError("This page has no roster data the app can read on its own. Add an API key to read it with Claude.");
     const text = RosterImport.pageText(html);
@@ -185,13 +185,15 @@ export const RosterImport = {
 
   fromCSV(csv: string, req: ImportRequest, school = ""): ImportResult {
     const { players, skippedRows } = CSVRosterImporter.import(csv);
+    const names = (p: (typeof players)[number]) => (p.firstName || p.lastName ? { firstName: p.firstName, lastName: p.lastName } : Staff.splitName(p.fullName));
     const list = players.filter((p) => p.role === "player").map((p) => {
       const parsed = Positions.parse(p.position, req.sport);
-      const [first, ...rest] = (p.firstName || p.lastName ? [p.firstName, p.lastName] : p.fullName.split(" "));
-      return Player.make({ number: p.jerseyNumber, firstName: first ?? "", lastName: (p.firstName || p.lastName ? p.lastName : rest.join(" ")) ?? "", position: parsed.position, positionAbbr: p.position, side: parsed.side, secondary: parsed.secondary });
+      return Player.make({ number: p.jerseyNumber, ...names(p), position: parsed.position, positionAbbr: p.position, side: parsed.side, secondary: parsed.secondary });
     });
+    // A coach's row carries the title in the position column ("Head Coach").
+    const staff = players.filter((p) => p.role === "coach" || p.role === "staff").map((p) => Staff.make({ ...names(p), title: p.position || (p.role === "coach" ? "Coach" : "Staff") }));
     if (!list.length) throw new RosterImportError("No players found in that file.");
-    return { team: Team.make({ school, players: dedupe(list) }), source: "csv", url: null, dollars: 0, notes: skippedRows ? [`${skippedRows} rows had no number and were skipped.`] : [] };
+    return { team: Team.make({ school, players: dedupe(list), staff: Staff.sorted(staff) }), source: "csv", url: null, dollars: 0, notes: skippedRows ? [`${skippedRows} rows had no number and were skipped.`] : [] };
   },
 
   /**
@@ -220,12 +222,23 @@ async function extract(input: { text?: string; image?: SentImage; pdf?: string }
     return Player.make({ number: p.number.replace(/^#/, ""), firstName: p.first, lastName: p.last, position: parsed.position, positionAbbr: p.position, side: parsed.side, secondary: parsed.secondary, classYear: p.year || null });
   }));
   if (!players.length) throw new RosterImportError("No players could be read from that.");
-  const team = Team.make({ school: roster.school, nickname: roster.nickname || null, players });
+  const staff = Staff.sorted(roster.coaches.filter((c) => c.first || c.last).map((c) => Staff.make({ firstName: c.first, lastName: c.last, title: c.title || "Coach" })));
+  const team = Team.make({ school: roster.school, nickname: roster.nickname || null, players, staff });
   return { team, source: "model", url: null, dollars: Cost.of(model, usage as Usage), notes: numberNotes(players) };
 }
 
-function toTeam(players: Player[], identity: TeamIdentity, url: string): Team {
-  return Team.make({ school: identity.school ?? "", nickname: identity.nickname, colors: identity.colors, players, sourceURL: url, logoURL: identity.logoURL });
+function toTeam(players: Player[], identity: TeamIdentity, url: string, staff: Player[] = []): Team {
+  return Team.make({ school: identity.school ?? "", nickname: identity.nickname, colors: identity.colors, players, staff, sourceURL: url, logoURL: identity.logoURL });
+}
+
+/** MaxPreps lists a team's coaches on their own page beside the roster; a roster read without them is still a roster. */
+async function withMaxPrepsStaff(result: ImportResult, fetch: PageFetcher): Promise<ImportResult> {
+  if (result.source !== "maxpreps" || !result.url || result.team.staff.length || !/\/roster\/?(\?.*)?$/.test(result.url)) return result;
+  try {
+    const page = await fetch(result.url.replace(/roster\/?(\?.*)?$/, "staff/"));
+    const staff = RosterPages.maxPrepsStaff(page.text);
+    return staff.length ? { ...result, team: { ...result.team, staff } } : result;
+  } catch { return result; }
 }
 
 function numberNotes(players: Player[]): string[] {
@@ -233,7 +246,6 @@ function numberNotes(players: Player[]): string[] {
   return missing ? [`${missing} player${missing === 1 ? " has" : "s have"} no number on the roster and can only be named by hand.`] : [];
 }
 
-/** MaxPreps states the roster's gender; a boys roster on a girls' shoot is worth saying out loud. */
 /** "26-27" → "25-26". */
 function previousSeason(season: string): string | null {
   const m = /^(\d{2})-(\d{2})$/.exec(season);
@@ -242,6 +254,7 @@ function previousSeason(season: string): string | null {
   return `${pad(+m[1] - 1)}-${pad(+m[2] - 1)}`;
 }
 
+/** A page titled for the other gender is worth saying out loud. */
 function genderCheck(identity: TeamIdentity, req: ImportRequest, notes: string[]) {
   const t = (identity.title ?? "").toLowerCase();
   if (req.gender === "womens" && /\bboys\b/.test(t)) notes.push(`This page is a boys' roster ("${identity.title}").`);

@@ -17,6 +17,8 @@ import type { Team } from "@core/roster/Roster";
 import type { SportID, Gender, LevelKind } from "@core/sports/Sports";
 import { NamingPattern } from "@core/naming/NamingPattern";
 
+export type WriteTarget = "embed" | "sidecar" | "both";
+
 export interface Settings {
   style: CaptionStyle;
   photographer: string;
@@ -25,8 +27,8 @@ export interface Settings {
   tier: Tier;
   /** How an athlete the app could not name is written: the desk's XXXXX, or "a Nebraska player". */
   unnamed: UnnamedMode;
-  /** Write into the JPEG itself; off writes .xmp sidecars beside every photograph instead. */
-  embed: boolean;
+  /** Where an approved caption goes: into the JPEG itself, an .xmp sidecar beside it, or both. */
+  writeTo: WriteTarget;
   concurrency: number;
   /** On-device face matching against roster headshots, offered for college rosters only. */
   faces: boolean;
@@ -41,7 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   house: "",
   tier: "balanced",
   unnamed: "placeholder",
-  embed: true,
+  writeTo: "embed",
   concurrency: 4,
   faces: false,
   templateName: null,
@@ -95,8 +97,11 @@ function db(): Promise<IDBPDatabase> {
 
 export const Storage = {
   async settings(): Promise<Settings> {
-    const stored = (await (await db()).get("kv", "settings2")) as Partial<Settings> | undefined;
-    return { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
+    const stored = (await (await db()).get("kv", "settings2")) as (Partial<Settings> & { embed?: boolean }) | undefined;
+    // Settings saved before "both" was offered carry a yes-or-no `embed`.
+    const writeTo: WriteTarget = stored?.writeTo ?? (stored?.embed === false ? "sidecar" : "embed");
+    const { embed: _old, ...rest } = stored ?? {};
+    return { ...DEFAULT_SETTINGS, ...rest, writeTo };
   },
   async saveSettings(s: Settings): Promise<void> { await (await db()).put("kv", s, "settings2"); },
 
@@ -108,7 +113,8 @@ export const Storage = {
 
   async teams(): Promise<SavedTeam[]> {
     const all = (await (await db()).getAll("teams")) as SavedTeam[];
-    return all.sort((a, b) => a.team.school.localeCompare(b.team.school));
+    // Teams saved before coaches were read have no staff list.
+    return all.map((t) => ({ ...t, team: { ...t.team, staff: t.team.staff ?? [] } })).sort((a, b) => a.team.school.localeCompare(b.team.school));
   },
   async saveTeam(t: SavedTeam): Promise<void> { await (await db()).put("teams", t, t.team.id); },
   async deleteTeam(id: string): Promise<void> { await (await db()).delete("teams", id); },

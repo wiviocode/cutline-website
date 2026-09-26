@@ -3,13 +3,16 @@ import { useStore } from "../store";
 import { Button, Field, Modal, Segmented, Select, TextInput, Spinner } from "../components";
 import { CAPTION_STYLES, Styles, type CaptionStyle } from "@core/caption/Styles";
 import { TIERS, Cost, type Tier } from "@core/ai/Models";
-import { Storage } from "@platform/storage";
+import { Storage, type WriteTarget } from "@platform/storage";
 import { IPTCTemplate } from "@core/metadata/IPTCTemplate";
+import { TemplateBuilder } from "@core/metadata/TemplateBuilder";
+import { TemplateForm, draftTemplate, type TemplateDraft } from "./TemplateForm";
 
 export function SettingsPanel() {
   const s = useStore();
   const [key, setKey] = useState("");
   const [templates, setTemplates] = useState<string[]>([]);
+  const [draft, setDraft] = useState<TemplateDraft | null>(null);
   const file = useRef<HTMLInputElement>(null);
   useEffect(() => { void Storage.templateNames().then(setTemplates); }, []);
   const set = s.updateSettings;
@@ -68,16 +71,32 @@ export function SettingsPanel() {
           <h3>Writing</h3>
           <div className="grid-2">
             <Field label="Where captions go">
-              <Segmented value={s.settings.embed ? "embed" : "sidecar"} onChange={(v) => set({ embed: v === "embed" })} options={[{ value: "embed", label: "Into the JPEG" }, { value: "sidecar", label: ".xmp sidecars" }]} />
+              <Segmented<WriteTarget> value={s.settings.writeTo} onChange={(v) => set({ writeTo: v })} options={[{ value: "embed", label: "Into the JPEG" }, { value: "sidecar", label: ".xmp sidecars" }, { value: "both", label: "Both" }]} />
             </Field>
             <Field label="IPTC template" hint="A Photo Mechanic stationery pad (.XMP): credit, copyright, contact and the rest, on every frame.">
               <div className="row">
                 <Select value={s.settings.templateName ?? ""} onChange={(v) => set({ templateName: v || null })} options={[{ value: "", label: "None" }, ...templates.map((t) => ({ value: t, label: t }))]} />
-                <Button small onClick={() => file.current?.click()}>Add</Button>
+                <Button small onClick={() => setDraft(draftTemplate(s.settings.photographer, s.settings.house))}>Make one</Button>
+                <Button small onClick={() => file.current?.click()}>Load .XMP</Button>
                 <input ref={file} type="file" hidden accept=".xmp,.XMP,.xml" onChange={(e) => { const f = e.target.files?.[0]; if (f) void addTemplate(f); e.target.value = ""; }} />
               </div>
             </Field>
           </div>
+          {draft ? (
+            <div className="card-inset">
+              <TemplateForm draft={draft} onChange={setDraft} taken={templates.includes(draft.name.trim())} />
+              <div className="row">
+                <Button kind="primary" small disabled={!draft.name.trim() || !TemplateBuilder.hasContent(draft.fields)} onClick={async () => {
+                  const name = draft.name.trim();
+                  await Storage.saveTemplate(name, TemplateBuilder.build(draft.fields));
+                  setTemplates(await Storage.templateNames());
+                  await set({ templateName: name });
+                  setDraft(null);
+                }}>Save template</Button>
+                <Button small kind="ghost" onClick={() => setDraft(null)}>Cancel</Button>
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
     </Modal>

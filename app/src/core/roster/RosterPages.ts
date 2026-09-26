@@ -15,7 +15,7 @@
  * Anything else falls through to the model (RosterExtraction), which reads the page's text.
  */
 
-import { Player, type PlayerSide } from "./Roster";
+import { Player, Staff, type PlayerSide } from "./Roster";
 import { Positions } from "./Positions";
 
 export type RosterSource = "maxpreps" | "sidearm-nextgen" | "wmt" | "sidearm-classic" | "model" | "csv" | "manual";
@@ -34,6 +34,8 @@ export interface TeamIdentity {
 export interface ParsedRoster {
   source: RosterSource;
   players: Player[];
+  /** Coaches and staff, when the page lists them. MaxPreps keeps them on a page of their own. */
+  staff: Player[];
   identity: TeamIdentity;
 }
 
@@ -58,6 +60,15 @@ export const RosterPages = {
     const gender = t?.gender === "Boys" || t?.gender === "Girls" ? t.gender : null;
     const season = typeof t?.year === "string" && /^\d{2}-\d{2}$/.test(t.year) ? t.year : null;
     return { posted: pp.athleteData.length > 0, gender, season };
+  },
+
+  /** A MaxPreps staff page (…/volleyball/staff/): its coaches, as MaxPreps titles them. */
+  maxPrepsStaff(html: string): Player[] {
+    const pp = (nextData(html)?.props as Record<string, unknown> | undefined)?.pageProps as Record<string, unknown> | undefined;
+    const list = Array.isArray(pp?.initStaffList) ? (pp!.initStaffList as unknown[]) : [];
+    return Staff.sorted(list.map(obj).filter((c): c is Obj => !!c).map((c) => Staff.make({
+      firstName: str(c.userFirstName), lastName: str(c.userLastName), title: str(c.position) || "Coach", headshotURL: str(c.photoUrl) || null,
+    })).filter((c) => c.firstName || c.lastName));
   },
 
   /** Best-effort identity for any page, for when the roster came from the model. */
@@ -107,6 +118,7 @@ function maxPreps(html: string, sport: string): ParsedRoster | null {
   return {
     source: "maxpreps",
     players: dedupe(players),
+    staff: [],
     identity: maxPrepsIdentity(t),
   };
 }
@@ -207,7 +219,13 @@ function nuxtRoster(html: string, pageURL: string, sport: string): ParsedRoster 
   if (rosters) {
     // A page can hold more than one roster (the season shown, plus others it preloaded); the
     // largest one on the page is the one it was opened for.
-    const lists = rosters.map((r) => (Array.isArray(obj(r)?.players) ? (obj(r)!.players as unknown[]) : [])).sort((a, b) => b.length - a.length);
+    const shown = rosters.map(obj).filter((r): r is Obj => !!r)
+      .sort((a, b) => (Array.isArray(b.players) ? b.players.length : 0) - (Array.isArray(a.players) ? a.players.length : 0))[0];
+    const lists = [Array.isArray(shown?.players) ? (shown!.players as unknown[]) : []];
+    const staff = Staff.sorted((Array.isArray(shown?.coaches) ? (shown!.coaches as unknown[]) : []).map(obj).filter((c): c is Obj => !!c && !c.hide).map((c) => {
+      const image = obj(c.image);
+      return Staff.make({ firstName: str(c.firstName), lastName: str(c.lastName), title: str(c.title) || "Coach", headshotURL: absolute(str(image?.absoluteUrl) || str(image?.url), pageURL) });
+    }).filter((c) => c.firstName || c.lastName));
     const players = (lists[0] ?? []).map(obj).filter((p): p is Obj => !!p && !p.hide).map((p) => {
       const image = obj(p.image);
       const printed = str(p.positionShort) || str(p.positionLong);
@@ -217,7 +235,7 @@ function nuxtRoster(html: string, pageURL: string, sport: string): ParsedRoster 
         headshot: absolute(str(image?.absoluteUrl) || str(image?.url), pageURL),
       }, sport);
     }).filter((p) => p.firstName || p.lastName);
-    if (players.length) return { source: "sidearm-nextgen", players, identity: og };
+    if (players.length) return { source: "sidearm-nextgen", players, staff, identity: og };
   }
 
   // WMT
@@ -238,7 +256,14 @@ function nuxtRoster(html: string, pageURL: string, sport: string): ParsedRoster 
           headshot: absolute(str(photo?.url), pageURL),
         }, sport);
       }).filter((p) => p.firstName || p.lastName);
-      if (players.length) return { source: "wmt", players, identity: og };
+      // Coaches and support staff, in the site's own order, on a list of their own.
+      const staffKey = Object.keys(data).find((k) => /staff-members-list/.test(k) && Array.isArray(obj(data[k])?.rosterStaffs));
+      const staff = Staff.sorted((staffKey ? (obj(data[staffKey])!.rosterStaffs as unknown[]) : []).map(obj).filter((c): c is Obj => !!c).map((c) => {
+        const person = obj(c.staff_member) ?? obj(c.staff) ?? c;
+        const photo = obj(c.photo) ?? obj(person.master_photo) ?? obj(c.master_photo);
+        return Staff.make({ firstName: str(c.first_name) || str(person.first_name), lastName: str(c.last_name) || str(person.last_name), title: str(c.position) || str(person.position) || "Coach", headshotURL: absolute(str(photo?.url), pageURL) });
+      }).filter((c) => c.firstName || c.lastName));
+      if (players.length) return { source: "wmt", players, staff, identity: og };
     }
   }
   return null;
@@ -268,7 +293,17 @@ function sidearmClassic(html: string, pageURL: string, sport: string): ParsedRos
     }, sport));
   }
   if (!players.length) return null;
-  return { source: "sidearm-classic", players, identity: openGraphIdentity(html) };
+  const staff: Player[] = [];
+  const cre = /<li class="sidearm-roster-coach[\s"][\s\S]*?(?=<li class="sidearm-roster-coach[\s"]|<\/ul>)/g;
+  while ((m = cre.exec(html))) {
+    const li = m[0];
+    const name = decode(firstMatch(li, /sidearm-roster-coach-name[^>]*>[\s\S]*?<(?:p|a|span)[^>]*>([\s\S]*?)</) ?? "");
+    if (!name) continue;
+    const title = decode(firstMatch(li, /sidearm-roster-coach-title[^>]*>[\s\S]*?<span[^>]*>([\s\S]*?)</) ?? "") || "Coach";
+    const img = firstMatch(li, /data-src="([^"]+)"/) ?? firstMatch(li, /<img[^>]+src="([^"]+)"/);
+    staff.push(Staff.make({ ...Staff.splitName(name), title, headshotURL: img ? absolute(img.replace(/\?.*$/, ""), pageURL) : null }));
+  }
+  return { source: "sidearm-classic", players, staff: Staff.sorted(staff), identity: openGraphIdentity(html) };
 }
 
 // ---------------------------------------------------------------- shared

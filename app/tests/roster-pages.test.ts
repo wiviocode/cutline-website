@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { RosterPages } from "../src/core/roster/RosterPages";
-import { Player } from "../src/core/roster/Roster";
+import { Player, Staff } from "../src/core/roster/Roster";
 
 const page = (name: string) =>
   gunzipSync(readFileSync(fileURLToPath(new URL(`./fixtures/rosters/${name}.html.gz`, import.meta.url)))).toString("utf8");
@@ -70,6 +70,31 @@ describe("roster pages read without a model", () => {
     expect(RosterPages.cleanSiteName("University of Nebraska - Official Athletics Website")).toBe("Nebraska");
     expect(RosterPages.cleanSiteName("Bowling Green State University Athletics")).toBe("Bowling Green State University");
     expect(RosterPages.cleanSiteName("University of North Dakota Athletics")).toBe("North Dakota");
+  });
+
+  it("reads the coaches too, head coach first, with titles as a caption writes them", () => {
+    const wmt = RosterPages.parse(page("wmt_nebraska_volleyball"), "https://huskers.com/sports/volleyball/roster", "volleyball")!;
+    expect(wmt.staff[0]).toMatchObject({ firstName: "Dani", lastName: "Busboom Kelly", position: "head coach", positionAbbr: "Head Coach", number: "", role: "staff" });
+    expect(wmt.staff[0].headshotURL).toMatch(/^https:\/\/huskers\.com\/imgproxy\//);
+    expect(wmt.staff.find((c) => c.lastName === "Reyes")?.position).toBe("associate head coach");
+
+    const next = RosterPages.parse(page("sidearm_next_unc_volleyball"), "https://goheels.com/sports/womens-volleyball/roster", "volleyball")!;
+    expect(next.staff.map((c) => `${c.firstName} ${c.lastName}: ${c.position}`).slice(0, 2)).toEqual(["Mike Schall: head coach", "Rachel Ferguson: associate head coach"]);
+
+    const classic = RosterPages.parse(page("sidearm_classic_und_football"), "https://fightinghawks.com/sports/football/roster", "football")!;
+    expect(classic.staff[0]).toMatchObject({ firstName: "Eric", lastName: "Schmidt", position: "head coach" });
+    expect(classic.staff.length).toBeGreaterThan(5);
+
+    // MaxPreps keeps a team's coaches on a page of their own beside the roster.
+    expect(RosterPages.maxPrepsStaff(page("maxpreps_waverly_volleyball_staff")).map((c) => `${c.firstName} ${c.lastName}: ${c.positionAbbr}`)).toEqual(["Terri Neujahr: Head Coach"]);
+    expect(RosterPages.parse(page("maxpreps_waverly_volleyball"), "https://www.maxpreps.com/ne/waverly/waverly-vikings/volleyball/roster/", "volleyball")!.staff).toEqual([]);
+  });
+
+  it("turns a printed title into the words before a name", () => {
+    expect(Staff.captionTitle("Head Coach")).toBe("head coach");
+    expect(Staff.captionTitle("Associate Head Coach/Recruiting Coordinator")).toBe("associate head coach");
+    expect(Staff.captionTitle("Deputy AD - Senior Woman Administrator (Sport Administrator)")).toBe("deputy AD");
+    expect(Staff.captionTitle("Associate Athletic Trainer (Volleyball)")).toBe("associate athletic trainer");
   });
 
   it("returns null for a page with no roster data it can trust", () => {
