@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore, derive, type Frame } from "../store";
 import { Button, Kbd, Segmented, StatusDot, Thumb, Spinner } from "../components";
 import { PlayerPicker } from "./PlayerPicker";
+import { RenameDialog } from "./Rename";
 import { Compose } from "@core/caption/Compose";
 import { Cost } from "@core/ai/Models";
 import { Player } from "@core/roster/Roster";
@@ -13,13 +14,14 @@ export function Review() {
   const visible = derive.visible(s);
   const selected = s.frames.find((f) => f.id === s.selectedID) ?? visible[0] ?? null;
   const [picking, setPicking] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const counts = derive.counts(s);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const typing = t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.isContentEditable;
-      if (picking || useStore.getState().panel) return;
+      if (picking || renaming || useStore.getState().panel) return;
       if (typing) { if (e.key === "Escape") t.blur(); return; }
       if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); s.step(1); }
       else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); s.step(-1); }
@@ -29,7 +31,7 @@ export function Review() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [s, selected, picking]);
+  }, [s, selected, picking, renaming]);
 
   return (
     <div className="review">
@@ -51,6 +53,7 @@ export function Review() {
             <>
               {counts.pending + counts.failed ? <Button small onClick={() => s.startRun()}>Read {counts.pending + counts.failed} remaining</Button> : null}
               {s.frames.some((f) => f.approved && !f.written) && s.folder?.writable ? <Button small onClick={() => s.writeAllApproved()}>Write approved</Button> : null}
+              {s.folder?.writable && derive.usesRosters(s) ? <Button small kind="ghost" onClick={() => setRenaming(true)}>Rename…</Button> : null}
               {s.folder && !s.folder.writable && s.frames.some((f) => f.approved) ? <Button small onClick={() => s.downloadSidecars()} title="This browser cannot write into the photographs; take the captions as .xmp sidecars instead">Download captions (.xmp)</Button> : null}
             </>
           )}
@@ -64,6 +67,7 @@ export function Review() {
       </div>
 
       {picking && selected?.observation ? <PlayerPicker frame={selected} subjectID={picking} onClose={() => setPicking(null)} /> : null}
+      {renaming ? <RenameDialog onClose={() => setRenaming(false)} /> : null}
     </div>
   );
 }

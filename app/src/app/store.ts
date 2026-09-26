@@ -7,7 +7,9 @@
 
 import { create } from "zustand";
 import { Storage, DEFAULT_SETTINGS, type Settings, type SavedTeam, type RecentShoot } from "@platform/storage";
-import { pickFolder, reopenFolder, FileListFolder, supportsWritableFolders, type PhotoFolder, type PhotoFile } from "@platform/fs";
+import { pickFolder, reopenFolder, FileListFolder, supportsWritableFolders, applyRenamePlan, type PhotoFolder, type PhotoFile } from "@platform/fs";
+import { HDSNaming, type Fixture } from "@core/naming/HDSNaming";
+import { PhotoRenamer, type RenamePlan } from "@core/naming/PhotoRenamer";
 import { browserSource, ImageCache, THUMB_EDGE, PREVIEW_EDGE, resized, base64, orientedSize, decodableBlob } from "@platform/images";
 import { readPhotoMetadata, readEmbeddedIPTC } from "@platform/exif";
 import { fetchPage, relayAvailable } from "@platform/relay";
@@ -16,6 +18,7 @@ import { Claude, describe as describeError, type SentImage } from "@core/ai/Clau
 import { Cost, SCOUT_MODEL, TIERS, Usage, type Tier } from "@core/ai/Models";
 import { readPhoto } from "@core/pipeline/ReadPhoto";
 import { Compose, type CaptionContext } from "@core/caption/Compose";
+import type { CaptionStyle } from "@core/caption/Styles";
 import { Identify, type Identity, type ManualID } from "@core/vision/Identify";
 import { Prompt, type MeetEntry, type ShootContext } from "@core/vision/Prompt";
 import { applyFaceHints, type FaceHint } from "@core/vision/FaceEvidence";
@@ -83,6 +86,9 @@ export interface Setup {
   eventName: string;
   /** A meet's entry list, as pasted: "bib, name, school" per line. */
   entriesText: string;
+  /** This shoot's house style and credit, when they differ from the photographer's defaults. */
+  style: CaptionStyle | null;
+  house: string | null;
 }
 
 export interface Notice { text: string; kind: "error" | "info" }
@@ -177,6 +183,10 @@ interface State {
   writeAllApproved(): Promise<void>;
   /** For a folder this browser cannot write: every approved caption as an .xmp sidecar, in a zip. */
   downloadSidecars(): Promise<void>;
+
+  // rename
+  renamePlan(coveredIsHome: boolean): Promise<RenamePlan | null>;
+  applyRename(plan: RenamePlan): Promise<void>;
 }
 
 // ------------------------------------------------------------------------------------------ derived
@@ -185,6 +195,9 @@ export const derive = {
   sport(s: Pick<State, "setup">) { return Sports.info(s.setup.sport); },
   level(s: Pick<State, "setup">) { return Levels.info(s.setup.levelId); },
   usesRosters(s: Pick<State, "setup">) { return Sports.usesRosters(s.setup.sport); },
+  /** The shoot's own style and credit, else the photographer's. */
+  style(s: Pick<State, "setup" | "settings">): CaptionStyle { return s.setup.style ?? s.settings.style; },
+  house(s: Pick<State, "setup" | "settings">): string { return s.setup.house ?? s.settings.house; },
 
   /** Face matching runs only when it is turned on, for a college roster that has headshots. */
   facesOn(s: Pick<State, "settings" | "setup" | "slots">): boolean {
@@ -212,9 +225,9 @@ export const derive = {
 
   captionContext(s: Pick<State, "slots" | "setup" | "settings">, frame?: Frame | null): CaptionContext {
     return {
-      style: s.settings.style, sport: s.setup.sport, gender: s.setup.gender, level: Levels.info(s.setup.levelId), matchup: derive.matchup(s),
+      style: derive.style(s), sport: s.setup.sport, gender: s.setup.gender, level: Levels.info(s.setup.levelId), matchup: derive.matchup(s),
       eventName: s.setup.eventName.trim() || undefined, venue: s.setup.venue.trim() || undefined, city: s.setup.city.trim() || undefined, state: s.setup.state.trim() || undefined,
-      captureDate: frame?.exif?.captureDate ?? null, photographer: s.settings.photographer, house: s.settings.house, unnamed: s.settings.unnamed,
+      captureDate: frame?.exif?.captureDate ?? null, photographer: s.settings.photographer, house: derive.house(s), unnamed: s.settings.unnamed,
     };
   },
 
@@ -320,7 +333,7 @@ async function packetFor(s: State, f: Frame): Promise<string> {
     city: s.setup.city, state: s.setup.state, sublocation: s.setup.venue,
   }) : HurrdatFields.make({ descriptor: `${s.setup.eventName} - ${HurrdatFields.datePlaceholder}`, city: s.setup.city, state: s.setup.state, sublocation: s.setup.venue });
   return MetadataOutput.packet(f.caption, altText(s, f), f.name, f.exif ?? {}, {
-    template: await template(s), city: s.setup.city, state: s.setup.state, fields, photographer: s.settings.photographer, house: s.settings.house,
+    template: await template(s), city: s.setup.city, state: s.setup.state, fields, photographer: s.settings.photographer, house: derive.house(s),
   }, f.captionEdited ? "manual" : "ai");
 }
 
@@ -431,7 +444,7 @@ export const useStore = create<State>((set, get) => {
     library: [],
     recents: [],
     panel: null,
-    setup: { levelId: "ncaa-d1", sport: "football", gender: "mens", venue: "", city: "", state: "", eventName: "", entriesText: "" },
+    setup: { levelId: "ncaa-d1", sport: "football", gender: "mens", venue: "", city: "", state: "", eventName: "", entriesText: "", style: null, house: null },
     slots: { A: emptySlot(), B: emptySlot() },
     scouting: false,
     faces: { status: "off", done: 0, total: 0, error: null },
@@ -801,6 +814,31 @@ export const useStore = create<State>((set, get) => {
       await get().setApproved(id, true);
     },
 
+    async renamePlan(coveredIsHome) {
+      const s = get();
+      if (!s.folder || !derive.usesRosters(s) || !s.slots.A.team || !s.slots.B.team) return null;
+      const sportCode = HDSNaming.sportCode(s.setup.sport, s.setup.gender);
+      if (!sportCode) return null;
+      // Capture order, not the card's filenames, so the numbering follows the game.
+      const ordered = [...s.frames].sort((a, b) => (a.exif?.captureDate?.getTime() ?? 0) - (b.exif?.captureDate?.getTime() ?? 0) || a.name.localeCompare(b.name));
+      const date = ordered.find((f) => f.exif?.captureDate)?.exif?.captureDate ?? new Date();
+      const fixture: Fixture = { initials: HDSNaming.initials(s.settings.photographer), date, sportCode, covered: Team.fullName(s.slots.A.team), opponent: Team.fullName(s.slots.B.team), coveredIsHome };
+      const recordDir = await s.folder.sub(FrameRecord.folder, false).catch(() => null);
+      return PhotoRenamer.plan({ photos: ordered.map((f) => f.name), fixture, pattern: s.settings.namingPattern, existingNames: await s.folder.listNames(), recordNames: recordDir ? await recordDir.listNames() : new Set() });
+    },
+
+    async applyRename(plan) {
+      const s = get();
+      if (!s.folder?.writable) return;
+      try {
+        const count = await applyRenamePlan(s.folder, await s.folder.sub(FrameRecord.folder, false).catch(() => null), plan);
+        const recent = s.recentID ? (await Storage.recents()).find((r) => r.id === s.recentID) ?? null : null;
+        await openFolder(s.folder, recent);
+        set({ screen: "review" });
+        get().notify(`Renamed ${count} photograph${count === 1 ? "" : "s"}, with their records.`, "info");
+      } catch (e) { get().notify((e as Error).message); }
+    },
+
     async downloadSidecars() {
       const s = get();
       const approved = s.frames.filter((f) => f.approved && f.caption);
@@ -846,8 +884,8 @@ export const useStore = create<State>((set, get) => {
       set({ folder, frames, recentID: id, selectedID: frames[0].id, spent: 0, filter: "all" });
 
       if (recent?.setup) {
-        const saved = recent.setup as { setup: Setup; a: Team | null; b: Team | null };
-        set((s) => ({ setup: { ...s.setup, ...saved.setup }, slots: { A: { ...emptySlot(), team: saved.a }, B: { ...emptySlot(), team: saved.b } } }));
+        const saved = recent.setup as { setup: Partial<Setup>; a: Team | null; b: Team | null };
+        set((s) => ({ setup: { ...s.setup, style: null, house: null, ...saved.setup }, slots: { A: { ...emptySlot(), team: saved.a }, B: { ...emptySlot(), team: saved.b } } }));
       } else {
         // What the photographs already say: location, and often the sport and both teams.
         const first = await photos[0].file();

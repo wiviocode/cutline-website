@@ -259,3 +259,7 @@ p { margin: 0; }
   .strip-item { width: 110px; flex: none; }
   .inspector { border-left: 0; }
 }
+
+.rename-list { display: flex; flex-direction: column; gap: 4px; background: var(--ink-0); border: 1px solid var(--ink-4); border-radius: 8px; padding: 10px; }
+.rename-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.rename-to { color: var(--text-1); }

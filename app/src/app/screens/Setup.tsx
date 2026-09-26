@@ -4,6 +4,7 @@ import { Button, Field, Overline, Segmented, Select, TextInput, Thumb, Spinner }
 import { TeamCard } from "./TeamCard";
 import { Sports, Levels, type SportID } from "@core/sports/Sports";
 import { TIERS, Cost, type Tier } from "@core/ai/Models";
+import { CAPTION_STYLES, Styles, type CaptionStyle } from "@core/caption/Styles";
 import { supportsWritableFolders, HandleFolder } from "@platform/fs";
 import { SupportedFormats } from "@core/images/SupportedFormats";
 
@@ -51,6 +52,17 @@ export function Setup() {
             <Field label="Venue"><TextInput placeholder="Memorial Stadium" value={s.setup.venue} onChange={(e) => s.setSetup({ venue: e.target.value })} /></Field>
             <Field label="City"><TextInput placeholder="Lincoln" value={s.setup.city} onChange={(e) => s.setSetup({ city: e.target.value })} /></Field>
             <Field label="State"><TextInput placeholder="Neb." value={s.setup.state} onChange={(e) => s.setSetup({ state: e.target.value })} /></Field>
+          </div>
+
+          <Overline>Filed for</Overline>
+          <div className="grid-3">
+            <Field label="House style">
+              <Select<CaptionStyle> value={derive.style(s)} onChange={(v) => s.setSetup({ style: v })} options={CAPTION_STYLES.map((v) => ({ value: v, label: Styles.displayName(v) }))} />
+            </Field>
+            <Field label="Credit to" hint={s.setup.house === null ? "Your default, from Settings" : undefined}>
+              <TextInput placeholder={Styles.defaultHouse(derive.style(s)) ?? ""} value={derive.house(s)} onChange={(e) => s.setSetup({ house: e.target.value })} />
+            </Field>
+            <Field label="Byline"><TextInput value={s.settings.photographer} onChange={(e) => s.updateSettings({ photographer: e.target.value })} /></Field>
           </div>
         </section>
       </div>
@@ -168,7 +180,7 @@ function RunBar() {
         {blocker ? <span className="muted small">{blocker}</span> : <span className="muted small">{todo ? `${todo} to read · about ${Cost.dollars(derive.estimate(s))}` : "Every photo has been read."}</span>}
         {counts.done ? <Button onClick={() => s.setScreen("review")}>Review</Button> : null}
         {legacy.length && !blocker ? <Button disabled={s.running} onClick={() => s.startRun({ ids: legacy })} title="These have captions from the first Cutline, without players to correct. Reading them again costs about the same as new photos.">Re-read {legacy.length} from the first Cutline · {Cost.dollars(legacy.length * Cost.perPhoto(s.settings.tier))}</Button> : null}
-        <Button kind="primary" disabled={!!blocker || s.running || (!todo)} onClick={() => s.startRun()}>{s.running ? "Reading…" : !s.frames.length ? "Caption photos" : todo === s.frames.length ? `Caption ${todo} photos` : `Caption ${todo} more`}</Button>
+        <Button kind="primary" disabled={!!blocker || s.running || (!todo)} onClick={() => s.startRun()}>{s.running ? "Reading…" : !s.frames.length ? "Caption photos" : !todo ? "All read" : todo === s.frames.length ? `Caption ${todo} photos` : `Caption ${todo} more`}</Button>
       </div>
     </div>
   );
