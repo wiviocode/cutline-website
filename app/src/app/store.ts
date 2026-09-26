@@ -738,6 +738,8 @@ export const useStore = create<State>((set, get) => {
         const r = await matcher.prepare(players, (done, total) => set({ faces: { ...get().faces, done, total } }));
         matcherKey = key;
         set({ faces: { status: r.ready ? "ready" : "unavailable", done: r.ready, total: r.total, error: r.ready ? null : "No faces could be found in the roster photos." } });
+        // Photographs read before face matching was on get their look now, on this device, at no cost.
+        if (r.ready) void get().matchFaces(get().frames.filter((f) => f.observation && f.sent && !Object.keys(f.faceHints).length).map((f) => f.id));
         return r.ready > 0;
       } catch (e) {
         set({ faces: { status: "unavailable", done: 0, total: 0, error: `Face matching could not start: ${(e as Error).message}` } });

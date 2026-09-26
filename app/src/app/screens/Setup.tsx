@@ -200,7 +200,7 @@ function FaceStatus() {
   if (!college) return null;
   const f = s.faces;
   let state: string, action = null as React.ReactNode;
-  if (!s.settings.faces) { state = "off"; action = <button type="button" className="link" onClick={() => s.updateSettings({ faces: true })}>Turn on</button>; }
+  if (!s.settings.faces) { state = "off"; action = <button type="button" className="link" onClick={async () => { await s.updateSettings({ faces: true }); void useStore.getState().prepareFaces(); }}>Turn on</button>; }
   else if (!derive.facesOn(s)) state = "on · neither roster has headshots";
   else if (f.status === "ready") state = `on · ${f.done} of ${f.total} roster photos ready`;
   else if (f.status === "preparing") state = `on · reading roster photos ${f.done}/${f.total}`;
