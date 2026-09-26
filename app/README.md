@@ -83,7 +83,7 @@ Captions written by the first Cutline are kept and can be read again.
 cd app
 npm install
 npm run dev        # http://localhost:5173/app/
-npm test           # 141 checks, including a camera JPEG written and read back
+npm test           # 143 checks, including a camera JPEG written and read back
 npm run build      # into ../dist/app
 ```
 
