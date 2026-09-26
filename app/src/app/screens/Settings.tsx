@@ -61,7 +61,7 @@ export function SettingsPanel() {
             <Field label="Photographs at once" hint="More is faster; lower it if Anthropic rate-limits your key.">
               <Select value={String(s.settings.concurrency)} onChange={(v) => set({ concurrency: Number(v) })} options={["2", "4", "6", "8"].map((v) => ({ value: v, label: v }))} />
             </Field>
-            <Field label="Face matching" hint="On-device only, never sent anywhere. Offered for college rosters with headshots; off for high school, whose athletes are mostly minors.">
+            <Field label="Automatic face matching" hint="On every photograph as it is read. Either way, “Match faces” on the review screen looks at one photograph when you ask. On this computer only; college rosters with headshots, never high school, whose athletes are mostly minors.">
               <Segmented value={s.settings.faces ? "on" : "off"} onChange={(v) => set({ faces: v === "on" })} options={[{ value: "off", label: "Off" }, { value: "on", label: "College only" }]} />
             </Field>
           </div>

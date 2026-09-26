@@ -391,6 +391,8 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
   const inClause = new Set((obs?.clause.match(/\{P\d+\}/g) ?? []).map((t) => t.slice(1, -1)));
   const previous = derive.previousCaptioned(s, frame.id);
   const marks = frame.identities.filter((i) => i.player).map((i) => ({ name: Player.fullName(i.player!), sure: i.status === "confirmed" }));
+  // A look at the faces is offered for college rosters with headshots, when someone is not yet sure.
+  const faceable = !!obs && derive.facesAvailable(s) && obs.subjects.some((x) => x.kind === "athlete" && x.box && frame.identities.find((i) => i.subjectId === x.id)?.status !== "confirmed");
 
   const commit = () => { setEditing(false); if (draft !== frame.caption) void s.editCaption(frame.id, draft); };
   const writeState = frame.approved
@@ -431,7 +433,18 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
 
         {obs ? (
           <section className="insp-section">
-            <div className="insp-head"><span className="overline">In the photo</span><span className="faint">{obs.subjects.length === 1 ? "1 person" : `${obs.subjects.length} people`}</span></div>
+            <div className="insp-head">
+              <span className="overline">In the photo</span>
+              <span className="insp-head-actions">
+                {faceable ? (
+                  <button type="button" className="link" disabled={!!s.faceBusy || frame.state === "working"} onClick={() => void s.faceLook(frame.id)}
+                    title="Compare the faces of anyone not yet named with the roster headshots — on this computer, at no cost">
+                    {s.faceBusy === frame.id ? <><Spinner /> Matching faces…</> : "Match faces"}
+                  </button>
+                ) : null}
+                <span className="faint">{obs.subjects.length === 1 ? "1 person" : `${obs.subjects.length} people`}</span>
+              </span>
+            </div>
             {obs.subjects.length === 0 ? <p className="muted small">No one named — {obs.scene === "wide" ? "a wide view" : obs.scene === "crowd" ? "the crowd" : "a group scene"}.</p> : null}
             <div className="who">
               {obs.subjects.map((x) => {

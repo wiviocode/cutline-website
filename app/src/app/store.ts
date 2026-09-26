@@ -177,8 +177,13 @@ interface State {
   saveTeamToLibrary(slot: TeamKey): Promise<void>;
   deleteSaved(id: string): Promise<void>;
   scoutUniforms(): Promise<void>;
-  prepareFaces(): Promise<boolean>;
-  matchFaces(ids?: string[]): Promise<void>;
+  /** Prepare the roster photos; `onDemand` does it for a single look even with automatic matching off. */
+  prepareFaces(onDemand?: boolean): Promise<boolean>;
+  matchFaces(ids?: string[], onDemand?: boolean): Promise<void>;
+  /** Look at the faces in one photograph now, whatever the automatic setting. */
+  faceLook(frameID: string): Promise<void>;
+  /** The photograph whose faces are being looked at, if any. */
+  faceBusy: string | null;
 
   // run
   startRun(opts?: { ids?: string[]; redo?: boolean }): Promise<void>;
@@ -219,7 +224,12 @@ export const derive = {
 
   /** Face matching runs only when it is turned on, for a college roster that has headshots. */
   facesOn(s: Pick<State, "settings" | "setup" | "slots">): boolean {
-    return s.settings.faces && Levels.info(s.setup.levelId).kind === "college"
+    return s.settings.faces && derive.facesAvailable(s);
+  },
+
+  /** Faces can be looked at, on demand or automatically: a college roster with headshots. */
+  facesAvailable(s: Pick<State, "setup" | "slots">): boolean {
+    return Levels.info(s.setup.levelId).kind === "college"
       && [s.slots.A.team, s.slots.B.team].some((t) => t?.players.some((p) => p.headshotURL));
   },
 
@@ -328,7 +338,8 @@ function composed(s: State, f: Frame): Pick<Frame, "identities" | "caption"> {
   if (!f.observation) return { identities: [], caption: f.caption };
   const matchup = derive.matchup(s);
   const read = Identify.all(f.observation, { matchup: Sports.usesRosters(s.setup.sport) || matchup ? matchup : null, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport) }, f.manual);
-  const identities = derive.facesOn(s) ? applyFaceHints(read, f.observation, f.faceHints, matchup) : read;
+  // Face matches, once a frame has any — whether found automatically or asked for on this frame.
+  const identities = derive.facesAvailable(s) && Object.keys(f.faceHints).length ? applyFaceHints(read, f.observation, f.faceHints, matchup) : read;
   if (f.captionEdited) return { identities, caption: f.caption };
   const c = Compose.caption(f.observation, identities, derive.captionContext(s, f));
   return { identities, caption: c.caption };
@@ -494,6 +505,7 @@ export const useStore = create<State>((set, get) => {
     loadingFolder: false,
     photoHeadline: null,
     showBoxes: true,
+    faceBusy: null,
     running: false,
     cancelRequested: false,
     runDone: 0,
@@ -726,9 +738,9 @@ export const useStore = create<State>((set, get) => {
       } finally { set({ scouting: false }); }
     },
 
-    async prepareFaces() {
+    async prepareFaces(onDemand = false) {
       const s = get();
-      if (!derive.facesOn(s)) return false;
+      if (!(onDemand ? derive.facesAvailable(s) : derive.facesOn(s))) return false;
       const players = [...(s.slots.A.team?.players ?? []), ...(s.slots.B.team?.players ?? [])];
       const key = players.map((p) => p.id + (p.headshotURL ?? "")).join(",");
       if (key === matcherKey && matcher.size) return true;
@@ -739,7 +751,7 @@ export const useStore = create<State>((set, get) => {
         matcherKey = key;
         set({ faces: { status: r.ready ? "ready" : "unavailable", done: r.ready, total: r.total, error: r.ready ? null : "No faces could be found in the roster photos." } });
         // Photographs read before face matching was on get their look now, on this device, at no cost.
-        if (r.ready) void get().matchFaces(get().frames.filter((f) => f.observation && f.sent && !Object.keys(f.faceHints).length).map((f) => f.id));
+        if (r.ready && derive.facesOn(get())) void get().matchFaces(get().frames.filter((f) => f.observation && f.sent && !Object.keys(f.faceHints).length).map((f) => f.id));
         return r.ready > 0;
       } catch (e) {
         set({ faces: { status: "unavailable", done: 0, total: 0, error: `Face matching could not start: ${(e as Error).message}` } });
@@ -747,8 +759,8 @@ export const useStore = create<State>((set, get) => {
       }
     },
 
-    async matchFaces(ids) {
-      if (!derive.facesOn(get()) || !matcher.size) return;
+    async matchFaces(ids, onDemand = false) {
+      if (!(onDemand ? derive.facesAvailable(get()) : derive.facesOn(get())) || !matcher.size) return;
       const list = get().frames.filter((f) => f.observation && f.sent && (!ids || ids.includes(f.id)));
       for (const f of list) {
         const targets = f.observation!.subjects.filter((x) => x.kind === "athlete" && x.box && f.identities.find((i) => i.subjectId === x.id)?.status !== "confirmed");
@@ -767,6 +779,22 @@ export const useStore = create<State>((set, get) => {
           await saveRecord(get().folder, frame(f.id)!);
         } catch { /* a frame whose faces cannot be read keeps what the reading said */ }
       }
+    },
+
+    async faceLook(frameID) {
+      if (get().faceBusy) return;
+      set({ faceBusy: frameID });
+      try {
+        const ready = await get().prepareFaces(true);
+        if (!ready) { get().notify(get().faces.error ?? "Face matching needs a college roster with headshots."); return; }
+        await get().matchFaces([frameID], true);
+        const f = frame(frameID);
+        const named = f?.identities.filter((i) => i.source === "face").length ?? 0;
+        const looked = Object.keys(f?.faceHints ?? {}).length;
+        get().notify(named ? `Named ${named === 1 ? "one player" : `${named} players`} by face — marked to check.`
+          : looked ? "No face was a close enough match to name. The nearest are listed first when you change a player."
+          : "No faces could be read in this photograph.", "info");
+      } finally { set({ faceBusy: null }); }
     },
 
     // ---------------------------------------------------------------- run

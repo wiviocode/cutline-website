@@ -208,8 +208,8 @@ function FaceStatus() {
   else { state = "on · prepared when the run starts"; action = <button type="button" className="link" onClick={() => s.prepareFaces()}>Prepare now</button>; }
   return (
     <div className="faces">
-      <span><b>Face matching</b> · {state}{f.status === "preparing" ? <> <Spinner /></> : null}</span>
-      <span className="faint">Names a player whose number is hidden, from college roster headshots. Runs on this computer only.</span>
+      <span><b>Automatic face matching</b> · {state}{f.status === "preparing" ? <> <Spinner /></> : null}</span>
+      <span className="faint">Names a player whose number is hidden, from the roster headshots. Off, “Match faces” on the review screen still looks at one photo when you ask. On this computer only.</span>
       <span className="spacer" />
       {action}
     </div>
