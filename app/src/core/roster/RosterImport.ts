@@ -37,7 +37,8 @@ export interface ImportResult {
 }
 
 export class RosterImportError extends Error {
-  constructor(message: string) { super(message); this.name = "RosterImportError"; }
+  /** When several addresses are tried, the most telling failure is the one reported. */
+  constructor(message: string, readonly weight = 0) { super(message); this.name = "RosterImportError"; }
 }
 
 export const RosterImport = {
@@ -54,7 +55,8 @@ export const RosterImport = {
     if (!sport) return [url.toString()];
 
     if (host.endsWith("maxpreps.com")) {
-      if (parts.length < 3) return [url.toString()];
+      // A roster link as pasted, perhaps for one season (/basketball/girls/25-26/roster/), is read as is.
+      if (parts.length < 3 || parts.includes("roster")) return [url.toString()];
       const base = `https://www.maxpreps.com/${parts.slice(0, 3).join("/")}/${sport.maxPreps}`;
       // Boys is MaxPreps' unmarked default for most sports and girls for volleyball and softball;
       // the page states its own gender, which is checked after reading.
@@ -77,12 +79,16 @@ export const RosterImport = {
   async fromLink(input: string, req: ImportRequest, fetch: PageFetcher, claude: Claude | null): Promise<ImportResult> {
     const urls = RosterImport.candidates(input, req);
     if (!urls.length) throw new RosterImportError("That doesn't look like a link.");
-    let lastError = "";
+    let lastError = "", lastWeight = -1;
+    const failed = (e: unknown) => {
+      const weight = e instanceof RosterImportError ? e.weight : 0;
+      if (weight >= lastWeight) { lastError = (e as Error).message; lastWeight = weight; }
+    };
     const tryAll = async (list: string[]) => {
       for (const url of list) {
         let page: FetchedPage;
-        try { page = await fetch(url); } catch (e) { lastError = (e as Error).message; continue; }
-        const result = await RosterImport.fromHTML(page.text, page.url || url, req, claude).catch((e) => { lastError = (e as Error).message; return null; });
+        try { page = await fetch(url); } catch (e) { failed(e); continue; }
+        const result = await RosterImport.fromHTML(page.text, page.url || url, req, claude).catch((e) => { failed(e); return null; });
         if (result) return result;
       }
       return null;
@@ -124,6 +130,18 @@ export const RosterImport = {
   async fromHTML(html: string, url: string, req: ImportRequest, claude: Claude | null): Promise<ImportResult> {
     const notes: string[] = [];
     let dollars = 0;
+    // MaxPreps says what a roster page is. Another gender's roster, or a season with no players
+    // posted yet, is reported as such — never handed to the model to find names in the page's clutter.
+    const mp = RosterPages.maxPrepsPage(html);
+    if (mp) {
+      const wanted = req.gender === "womens" ? "Girls" : "Boys";
+      if (mp.gender && mp.gender !== wanted) throw new RosterImportError(`That link is the ${mp.gender.toLowerCase()}' roster, and this game is set to ${wanted.toLowerCase()}.`, 1);
+      if (!mp.posted) {
+        const last = mp.season ? previousSeason(mp.season) : null;
+        const lastURL = last ? url.replace(/\/(\d{2}-\d{2}\/)?roster\/?(\?.*)?$/, `/${last}/roster/`) : null;
+        throw new RosterImportError(`MaxPreps has no ${mp.season ? `${mp.season} ` : ""}roster posted for this team yet. Paste it from the school's site${lastURL && lastURL !== url ? `, or start from last season's by reading ${lastURL}` : ""}.`, 2);
+      }
+    }
     const exact = RosterPages.parse(html, url, req.sport);
     if (exact) {
       const identity = { ...exact.identity };
@@ -216,6 +234,14 @@ function numberNotes(players: Player[]): string[] {
 }
 
 /** MaxPreps states the roster's gender; a boys roster on a girls' shoot is worth saying out loud. */
+/** "26-27" → "25-26". */
+function previousSeason(season: string): string | null {
+  const m = /^(\d{2})-(\d{2})$/.exec(season);
+  if (!m) return null;
+  const pad = (n: number) => String((n + 100) % 100).padStart(2, "0");
+  return `${pad(+m[1] - 1)}-${pad(+m[2] - 1)}`;
+}
+
 function genderCheck(identity: TeamIdentity, req: ImportRequest, notes: string[]) {
   const t = (identity.title ?? "").toLowerCase();
   if (req.gender === "womens" && /\bboys\b/.test(t)) notes.push(`This page is a boys' roster ("${identity.title}").`);

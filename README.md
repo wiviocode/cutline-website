@@ -93,7 +93,7 @@ client, face matching. `src/app` is the interface. `scripts/` is the evaluation 
 cd app
 npm install
 npm run dev        # http://localhost:5173/app/
-npm test           # 144 checks, including a real JPEG written and read back
+npm test           # 146 checks, including a real JPEG written and read back
 ```
 
 From the repository root, `npm run build` does what the host does: installs and builds the app,

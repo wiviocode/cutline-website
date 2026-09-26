@@ -47,6 +47,19 @@ export const RosterPages = {
       ?? sidearmClassic(html, pageURL, sport);
   },
 
+  /**
+   * A MaxPreps roster page, read for what it says about itself: whether any players are posted,
+   * which gender, and which season ("26-27"). Null for any other page.
+   */
+  maxPrepsPage(html: string): { posted: boolean; gender: "Boys" | "Girls" | null; season: string | null } | null {
+    const pp = (nextData(html)?.props as Record<string, unknown> | undefined)?.pageProps as Record<string, unknown> | undefined;
+    if (!pp || !Array.isArray(pp.athleteData)) return null;
+    const t = (pp.teamContext as Record<string, unknown> | undefined)?.data as Record<string, unknown> | undefined;
+    const gender = t?.gender === "Boys" || t?.gender === "Girls" ? t.gender : null;
+    const season = typeof t?.year === "string" && /^\d{2}-\d{2}$/.test(t.year) ? t.year : null;
+    return { posted: pp.athleteData.length > 0, gender, season };
+  },
+
   /** Best-effort identity for any page, for when the roster came from the model. */
   identity(html: string): TeamIdentity {
     return { ...EMPTY_IDENTITY, ...openGraphIdentity(html) };

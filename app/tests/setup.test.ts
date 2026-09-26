@@ -38,6 +38,33 @@ describe("roster links", () => {
     expect(urls.some((u) => u.includes("football"))).toBe(false);
   });
 
+  const mpPage = (gender: string, year: string, rows: unknown[][]) =>
+    `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { pageProps: { athleteData: rows, teamContext: { data: { gender, year, schoolName: "Millard South", schoolMascot: "Patriots", sportSeasonName: `${gender} Basketball Varsity Winter ${year}` } } } } })}</script>`;
+  const girlsBB = { sport: "basketball" as const, gender: "womens" as const, level: "highSchool" as const };
+  const mpURL = "https://www.maxpreps.com/ne/omaha/millard-south-patriots/basketball/girls/roster/";
+
+  it("says a MaxPreps roster is not posted yet, and where last season's is, without asking the model", async () => {
+    const claude = { extractRoster: () => { throw new Error("the model should not be asked"); } } as never;
+    await expect(RosterImport.fromHTML(mpPage("Girls", "26-27", []), mpURL, girlsBB, claude))
+      .rejects.toThrow("MaxPreps has no 26-27 roster posted for this team yet. Paste it from the school's site, or start from last season's by reading https://www.maxpreps.com/ne/omaha/millard-south-patriots/basketball/girls/25-26/roster/.");
+    expect(RosterImport.candidates("https://www.maxpreps.com/ne/omaha/millard-south-patriots/basketball/girls/25-26/roster/", girlsBB))
+      .toEqual(["https://www.maxpreps.com/ne/omaha/millard-south-patriots/basketball/girls/25-26/roster/"]);
+  });
+
+  it("never takes another gender's MaxPreps roster, and reports the most telling failure", async () => {
+    const row = (n: string, first: string, last: string) => { const r: unknown[] = Array(40).fill(""); r[5] = first; r[6] = last; r[8] = n; r[33] = `${first} ${last}`; return r; };
+    await expect(RosterImport.fromHTML(mpPage("Boys", "26-27", [row("3", "Sam", "Ray")]), mpURL, girlsBB, null)).rejects.toThrow("That link is the boys' roster, and this game is set to girls.");
+    // The girls' page is empty and the unmarked one is the boys': the photographer hears about the girls'.
+    const pages: Record<string, string> = {
+      [mpURL]: mpPage("Girls", "26-27", []),
+      "https://www.maxpreps.com/ne/omaha/millard-south-patriots/basketball/roster/": mpPage("Boys", "26-27", [row("3", "Sam", "Ray")]),
+    };
+    const fetchPage = async (u: string) => { if (pages[u]) return { url: u, text: pages[u] }; throw new Error(`HTTP 404 from ${u}`); };
+    await expect(RosterImport.fromLink("maxpreps.com/ne/omaha/millard-south-patriots/", girlsBB, fetchPage, null)).rejects.toThrow(/no 26-27 roster posted/);
+    const posted = await RosterImport.fromHTML(mpPage("Girls", "25-26", [row("12", "Jane", "Doe")]), mpURL.replace("roster/", "25-26/roster/"), girlsBB, null);
+    expect(posted.team.players.map((p) => `${p.number} ${p.firstName} ${p.lastName}`)).toEqual(["12 Jane Doe"]);
+  });
+
   it("reduces a page to text a model can read, including script payloads", () => {
     const html = `<html><head><style>.x{}</style></head><body><nav>Home</nav><script>window.__DATA__ = {"players":[{"name":"Jane Doe","number":"12"}]} ${" ".repeat(500)}</script></body></html>`;
     const t = RosterImport.pageText(html);
