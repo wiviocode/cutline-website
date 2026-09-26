@@ -48,7 +48,11 @@ const MAX_RAW_BYTES = 4_000_000;
 export function slimHTML(html: string): string {
   let h = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, "")
     .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "").replace(/<!--[\s\S]*?-->/g, "");
-  h = h.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (m, attrs: string) => (/__NUXT_DATA__|__NEXT_DATA__|application\/(ld\+)?json/i.test(attrs) ? m : ""));
+  // Kept: tagged data scripts, and large inline scripts that assign JSON-like data — ESPN and
+  // others put the roster in `window[...] = {...}`. What goes back is text for a parser and is
+  // never run, so keeping a script costs only bytes. External and small scripts go.
+  h = h.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (m, attrs: string, body: string) =>
+    (/__NUXT_DATA__|__NEXT_DATA__|application\/(ld\+)?json/i.test(attrs) || (!/\bsrc=/i.test(attrs) && body.length > 2000 && /"[^"]{2,40}"\s*:/.test(body)) ? m : ""));
   h = h.replace(/\s(class|style|data-v-[\w-]+|aria-[\w-]+|role|tabindex|data-bind)="[^"]*"/g, (m, a: string) => (a === "class" && /sidearm-roster/.test(m) ? m : ""));
   return h.replace(/\s{2,}/g, " ");
 }

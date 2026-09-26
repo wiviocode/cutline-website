@@ -78,13 +78,46 @@ export const RosterImport = {
     const urls = RosterImport.candidates(input, req);
     if (!urls.length) throw new RosterImportError("That doesn't look like a link.");
     let lastError = "";
-    for (const url of urls) {
-      let page: FetchedPage;
-      try { page = await fetch(url); } catch (e) { lastError = (e as Error).message; continue; }
-      const result = await RosterImport.fromHTML(page.text, page.url || url, req, claude).catch((e) => { lastError = (e as Error).message; return null; });
-      if (result) return result;
-    }
+    const tryAll = async (list: string[]) => {
+      for (const url of list) {
+        let page: FetchedPage;
+        try { page = await fetch(url); } catch (e) { lastError = (e as Error).message; continue; }
+        const result = await RosterImport.fromHTML(page.text, page.url || url, req, claude).catch((e) => { lastError = (e as Error).message; return null; });
+        if (result) return result;
+      }
+      return null;
+    };
+    const first = await tryAll(urls);
+    if (first) return first;
+    // MaxPreps files a sport played out of its usual season under a season segment —
+    // Nebraska's fall softball is /softball/fall/. The team's own page links to it.
+    const seasonal = await RosterImport.maxPrepsSeasonal(input, req, fetch).catch(() => []);
+    const second = seasonal.length ? await tryAll(seasonal.filter((u) => !urls.includes(u))) : null;
+    if (second) return second;
     throw new RosterImportError(lastError || "No roster found at that link.");
+  },
+
+  /** Roster addresses taken from a MaxPreps team page's own links to the sport. */
+  async maxPrepsSeasonal(input: string, req: ImportRequest, fetch: PageFetcher): Promise<string[]> {
+    let url: URL;
+    try { url = new URL(/^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`); } catch { return []; }
+    if (!url.hostname.toLowerCase().endsWith("maxpreps.com")) return [];
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (parts.length < 3) return [];
+    const teamPath = `/${parts.slice(0, 3).join("/")}`;
+    const slug = Sports.info(req.sport).maxPreps;
+    const home = await fetch(`https://www.maxpreps.com${teamPath}/`);
+    const re = new RegExp(`${teamPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/${slug}/([a-z/-]*)`, "g");
+    const paths = new Set<string>();
+    for (const m of home.text.matchAll(re)) paths.add(`${teamPath}/${slug}/${m[1].replace(/roster\/?$/, "")}`.replace(/\/+$/, "/"));
+    const wanted = req.gender === "womens" ? /girls/ : /boys/;
+    const other = req.gender === "womens" ? /boys/ : /girls/;
+    // Varsity first: JV, freshman and reserve rosters only when nothing else is linked.
+    const lower = /\/(jv|junior-varsity|freshman|fresh|reserve|c-team|sophomore)\b/;
+    const score = (p: string) => (lower.test(p) ? 0 : 2) + (wanted.test(p) ? 1 : 0);
+    return [...paths].filter((p) => !other.test(p) && !/\/(schedule|stats|videos|photos|news|standings|rankings)\b/.test(p))
+      .sort((a, b) => score(b) - score(a))
+      .map((p) => `https://www.maxpreps.com${p.endsWith("/") ? p : `${p}/`}roster/`);
   },
 
   /** A page's HTML: its own data if it has any, else the model reads its text. */
@@ -108,6 +141,10 @@ export const RosterImport = {
     }
     if (!claude) throw new RosterImportError("This page has no roster data the app can read on its own. Add an API key to read it with Claude.");
     const text = RosterImport.pageText(html);
+    // A bot check instead of the page: the site will not be read automatically, and should not be forced.
+    if (text.length < 2000 && /challenge-container|cf-challenge|captcha|just a moment|access denied|are you a robot/i.test(html)) {
+      throw new RosterImportError("This site blocks automated reading. Open the roster in your browser, select the table, copy it and use Paste.");
+    }
     if (text.length < 200) throw new RosterImportError("That page came back nearly empty — try pasting the roster's text instead.");
     const r = await RosterImport.fromText(text, req, claude);
     const identity = RosterPages.identity(html);

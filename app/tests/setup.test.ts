@@ -29,6 +29,15 @@ describe("roster links", () => {
     expect(RosterImport.candidates("https://www.maxpreps.com/ne/gretna/gretna-dragons/football/schedule/", { ...hs, sport: "football", gender: "mens" })[0]).toBe("https://www.maxpreps.com/ne/gretna/gretna-dragons/football/roster/");
     expect(RosterImport.candidates("https://www.maxpreps.com/ne/omaha/millard-south-patriots/", { ...hs, sport: "basketball", gender: "womens" })[0]).toBe("https://www.maxpreps.com/ne/omaha/millard-south-patriots/basketball/girls/roster/");
   });
+  it("follows a MaxPreps team page to a sport filed under its season, varsity first", async () => {
+    const home = `<a href="/ne/waverly/waverly-vikings/softball/jv/">JV</a><a href="/ne/waverly/waverly-vikings/softball/fall/">Softball</a><a href="/ne/waverly/waverly-vikings/softball/fall/schedule/">Schedule</a><a href="/ne/waverly/waverly-vikings/football/">FB</a>`;
+    const urls = await RosterImport.maxPrepsSeasonal("maxpreps.com/ne/waverly/waverly-vikings/", { sport: "softball", gender: "womens", level: "highSchool" }, async () => ({ url: "", text: home }));
+    expect(urls[0]).toBe("https://www.maxpreps.com/ne/waverly/waverly-vikings/softball/fall/roster/");
+    expect(urls).toContain("https://www.maxpreps.com/ne/waverly/waverly-vikings/softball/jv/roster/");
+    expect(urls.some((u) => u.includes("schedule"))).toBe(false);
+    expect(urls.some((u) => u.includes("football"))).toBe(false);
+  });
+
   it("reduces a page to text a model can read, including script payloads", () => {
     const html = `<html><head><style>.x{}</style></head><body><nav>Home</nav><script>window.__DATA__ = {"players":[{"name":"Jane Doe","number":"12"}]} ${" ".repeat(500)}</script></body></html>`;
     const t = RosterImport.pageText(html);

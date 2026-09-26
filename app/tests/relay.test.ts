@@ -179,6 +179,15 @@ describe("What the relay hands back", () => {
     expect(t.text.length).toBeLessThan(4_000_000);
   });
 
+  it("keeps a large inline script that carries data, as some rosters are only there", async () => {
+    const data = `<script>window["__espnfitt__"]={"roster":[${Array.from({ length: 60 }, (_, i) => `{"name":"Player ${i}","jersey":"${i}"}`).join(",")}]}</script>`;
+    const r = relay({ "https://site.example/espn": () => page(`<html><body><div id="app"></div><script src="/app.js"></script><script>ga("send")</script>${data}</body></html>`) }, table);
+    const t = await (await r(req("url=https://site.example/espn"))).json();
+    expect(t.text).toContain("Player 59");
+    expect(t.text).not.toContain("app.js");
+    expect(t.text).not.toContain("ga(");
+  });
+
   it("text mode returns only text, and truncates at the cap", async () => {
     const big = "x".repeat(4_500_000);
     const r = relay({
