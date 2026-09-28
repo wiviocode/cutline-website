@@ -82,7 +82,10 @@ export interface Frame {
   writeError: string | null;
   /** On-device face matches per subject, best first. */
   faceHints: Record<string, FaceHint[]>;
+  /** A write into the file is under way. Not saved. */
+  writing?: boolean;
   /** What a copied caption replaced, until the next edit — so the copy can be undone. Not saved. */
+
   copyUndo?: { caption: string; captionEdited: boolean; state: FrameState } | null;
 }
 
@@ -247,7 +250,9 @@ export const derive = {
       return s.slots.A.team && s.slots.B.team ? { a: s.slots.A.team, b: s.slots.B.team } : null;
     }
     const blank = (name: string) => Team.make({ school: name });
-    return { a: s.slots.A.team ?? blank("Home"), b: s.slots.B.team ?? blank("Visitors") };
+    // A side not set yet has no name, and a caption leaves out what it cannot name.
+    return { a: s.slots.A.team ?? blank(""), b: s.slots.B.team ?? blank("") };
+
   },
 
   entries(s: Pick<State, "setup">): MeetEntry[] {
@@ -434,7 +439,13 @@ export const useStore = create<State>((set, get) => {
     if (!f) return;
     patchFrame(id, composed(s, f));
   };
-  const recomposeAll = () => set((s) => ({ frames: s.frames.map((f) => (f.observation ? { ...f, ...composed(s, f) } : f)) }));
+  // An approved caption that changes (a team renamed, the place filled in) is no longer what the
+  // file holds: it is marked unwritten, for "Write approved" to put right.
+  const recomposeAll = () => set((s) => ({ frames: s.frames.map((f) => {
+    if (!f.observation) return f;
+    const next = composed(s, f);
+    return { ...f, ...next, ...(f.approved && f.written && next.caption !== f.caption ? { written: false } : {}) };
+  }) }));
   const slotPatch = (slot: TeamKey, patch: Partial<SlotState>) => set((s) => ({ slots: { ...s.slots, [slot]: { ...s.slots[slot], ...patch } } }));
   const setTeam = (slot: TeamKey, team: Team | null) => { slotPatch(slot, { team }); recomposeAll(); persistRecent(); };
 
@@ -455,6 +466,7 @@ export const useStore = create<State>((set, get) => {
   const writeFrame = async (id: string): Promise<void> => {
     const s = get(), f = frame(id), folder = s.folder;
     if (!f || !folder?.writable || !f.caption) return;
+    patchFrame(id, { writing: true });
     try {
       const file = await f.photo.file();
       const packet = await packetFor(s, f);
@@ -466,16 +478,16 @@ export const useStore = create<State>((set, get) => {
       // "Both": the sidecar beside the embedded file, for software that reads only one or the other.
       if (target === "both" && plan.kind === "embed") await folder.writeText(XMPSidecar.sidecarName(f.name), packet);
       // The write changed the file's size and date; the manifest records the new signature.
-      const fresh = (await folder.listPhotos()).find((p) => p.name === f.name);
+      const fresh = await folder.photo(f.name);
       if (fresh) {
         patchFrame(id, { photo: fresh });
         const text = await folder.readText(ProcessedFilesManifest.fileName);
         const sig = ProcessedFilesManifest.signature(fresh);
         await folder.writeText(ProcessedFilesManifest.fileName, ProcessedFilesManifest.serialise(ProcessedFilesManifest.markProcessed(text ? ProcessedFilesManifest.parse(text) : [], sig.filename, sig.fileSize, sig.modificationDate)));
       }
-      patchFrame(id, { written: true, writeError: null });
+      patchFrame(id, { written: true, writeError: null, writing: false });
     } catch (e) {
-      patchFrame(id, { written: false, writeError: (e as Error).message });
+      patchFrame(id, { written: false, writeError: (e as Error).message, writing: false });
     }
   };
 
@@ -594,7 +606,13 @@ export const useStore = create<State>((set, get) => {
 
     async openRecent(r) {
       const handle = await Storage.folderHandle(r.id);
-      if (!handle) { get().notify("That folder can't be reopened here — choose it again."); return; }
+      if (!handle) {
+        // A folder opened read-only leaves nothing to reopen it by; choosing it again brings its setup back.
+        if (supportsWritableFolders()) { await get().chooseFolder(); return; }
+        get().notify(`Choose "${r.folderName}" again with Open read-only — its teams and setup come back with it.`, "info");
+        return;
+      }
+
       const folder = await reopenFolder(handle).catch(() => null);
       if (!folder) { get().notify("Permission to open the folder was not given."); return; }
       await openFolder(folder, r);
@@ -850,8 +868,11 @@ export const useStore = create<State>((set, get) => {
       try {
         // Uniforms first: the strongest cue for telling the sides apart, read once per shoot.
         if (derive.usesRosters(s) && (!s.slots.A.team?.uniform || !s.slots.B.team?.uniform)) await get().scoutUniforms();
-        if (derive.facesOn(get())) await get().prepareFaces();
       } finally { set({ starting: false }); }
+      // Roster faces are read alongside the photographs, not before them; frames finished first are
+      // looked at when the faces are ready.
+      if (derive.facesOn(get())) void get().prepareFaces();
+
       const ids = (opts.ids ?? get().frames.filter((f) => opts.redo || f.state === "pending" || f.state === "failed").map((f) => f.id));
       if (!ids.length) { set({ screen: "review" }); return; }
       const sel = get().selectedID ?? ids[0];
@@ -1038,6 +1059,9 @@ export const useStore = create<State>((set, get) => {
         });
       }
       const id = recent?.id ?? `${folder.name}:${photos.length}:${photos[0].name}`;
+      // The same folder chosen again — read-only in Safari or Firefox, or picked afresh — picks up
+      // where it was left: its teams, place and style.
+      recent ??= get().recents.find((r) => r.id === id) ?? null;
       set((s) => ({ folder, frames, recentID: id, selectedID: frames[0].id, keep: null, spent: keepSpend ? s.spent : 0, filter: "all" }));
       // What the photographs already say: location, and often the sport and both teams.
       const iptc = await readEmbeddedIPTC(await photos[0].file());

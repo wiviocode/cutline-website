@@ -103,7 +103,16 @@ describe("captions in the desk's own style", () => {
     expect(compose(timeout, apCtx(vb, "volleyball", sept18))).toMatch(/^Nebraska players huddle during a timeout in an NCAA college volleyball match against North Carolina,/);
   });
 
+  it("AP: a side with no name yet is left out, not called 'Visitors'", () => {
+    const noB: Matchup = { a: nebraskaVB, b: Team.make({ school: "" }) };
+    const obs: Observation = { scene: "celebration", timing: "during", clause: "{P1} celebrates", subjects: [subject({ id: "P1", team: "A", number: "11" })] };
+    expect(compose(obs, apCtx(noB, "volleyball", sept18))).toMatch(/^Nebraska outside hitter Teraya Sigler \(11\) celebrates during an NCAA college volleyball match, Friday,/);
+    const fans: Observation = { scene: "crowd", timing: "during", clause: "Fans cheer", subjects: [] };
+    expect(compose(fans, apCtx(noB, "volleyball", sept18))).toMatch(/^Fans cheer during an NCAA college volleyball match, Friday,/);
+  });
+
   it("AP: an unreadable number becomes the desk's placeholder, with the team", () => {
+
 
     const obs: Observation = { scene: "action", timing: "during", clause: "{P1} blocks the spike", subjects: [subject({ id: "P1", team: "B", number: "", clarity: "hidden" })] };
     expect(compose(obs, apCtx(vb, "volleyball", sept18))).toMatch(/^North Carolina XXXXX blocks the spike during an NCAA college volleyball match against Nebraska,/);

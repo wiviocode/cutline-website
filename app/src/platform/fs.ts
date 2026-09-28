@@ -27,6 +27,8 @@ export interface PhotoFolder {
   /** For remembering the folder between sessions. Chromium only. */
   readonly handle: FileSystemDirectoryHandle | null;
   listPhotos(): Promise<PhotoFile[]>;
+  /** One photograph as it is now — after a write changed its size and date. */
+  photo(name: string): Promise<PhotoFile | null>;
   listNames(): Promise<Set<string>>;
   readText(name: string): Promise<string | null>;
   readBytes(name: string): Promise<Uint8Array | null>;
@@ -73,6 +75,14 @@ export class HandleFolder implements PhotoFolder {
       out.push({ name, size: f.size, lastModified: f.lastModified, file: () => fh.getFile() });
     }
     return out.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async photo(name: string): Promise<PhotoFile | null> {
+    try {
+      const fh = await this.handle.getFileHandle(name);
+      const f = await fh.getFile();
+      return { name, size: f.size, lastModified: f.lastModified, file: () => fh.getFile() };
+    } catch { return null; }
   }
 
   async listNames(): Promise<Set<string>> {
@@ -145,7 +155,12 @@ export class FileListFolder implements PhotoFolder {
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((f) => ({ name: f.name, size: f.size, lastModified: f.lastModified, file: async () => f }));
   }
+  async photo(name: string): Promise<PhotoFile | null> {
+    const f = this.files.get(name);
+    return f ? { name: f.name, size: f.size, lastModified: f.lastModified, file: async () => f } : null;
+  }
   async listNames(): Promise<Set<string>> { return new Set([...this.files.keys(), ...this.subs.keys()]); }
+
   async readText(name: string): Promise<string | null> { const f = this.files.get(name); return f ? f.text() : null; }
   async readBytes(name: string): Promise<Uint8Array | null> { const f = this.files.get(name); return f ? new Uint8Array(await f.arrayBuffer()) : null; }
   async writeText(): Promise<void> { throw new ReadOnlyError(); }

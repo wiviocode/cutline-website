@@ -398,7 +398,10 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
 
   const commit = () => { setEditing(false); if (draft !== frame.caption) void s.editCaption(frame.id, draft); };
   const writeState = frame.approved
-    ? (frame.written ? (s.folder?.writable ? "Written to the file" : "Approved") : frame.writeError ? `Not written: ${frame.writeError}` : s.folder?.writable ? "Writing…" : "Approved · read-only folder")
+    ? (frame.written ? (s.folder?.writable ? "Written to the file" : "Approved")
+      : frame.writeError ? `Not written: ${frame.writeError}`
+      : !s.folder?.writable ? "Approved · read-only folder"
+      : frame.writing ? "Writing…" : "Changed since it was written")
     : s.folder?.writable ? (s.settings.writeTo === "both" ? "Writes to JPEG + .xmp" : s.settings.writeTo === "sidecar" ? "Writes an .xmp sidecar" : "Writes into the JPEG") : "Read-only folder";
 
   return (
@@ -510,7 +513,11 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
         <div className="insp-meta">
           <span>{frame.model ? `${modelName(frame.model)} ·${Cost.dollars(frame.dollars)}${frame.zooms.length ? ` · ${frame.zooms.length} close look${frame.zooms.length > 1 ? "s" : ""}` : ""}` : frame.state === "done" ? (frame.captionEdited && !frame.observation ? "Written by hand" : "Caption from an earlier session") : ""}</span>
 
-          <span className={frame.writeError ? "error" : ""}>{writeState}</span>
+          <span className={frame.writeError ? "error" : ""}>
+            {writeState}
+            {frame.approved && !frame.written && !frame.writing && s.folder?.writable ? <> · <button type="button" className="link" onClick={() => void s.setApproved(frame.id, true)}>Write it</button></> : null}
+          </span>
+
         </div>
       </div>
     </aside>

@@ -150,7 +150,13 @@ function renderToken(token: string, obs: Observation, ids: Identity[], ctx: Capt
 
 function renderSubject(s: Subject, id: Identity | undefined, ctx: CaptionContext, named: Set<TeamKey>): string {
   const teamKey = id?.teamKey ?? (s.team === "A" || s.team === "B" ? s.team : null);
-  const team = teamKey && ctx.matchup ? Matchup.team(ctx.matchup, teamKey) : null;
+  const side = teamKey && ctx.matchup ? Matchup.team(ctx.matchup, teamKey) : null;
+  // A side with no name yet is no help to a caption: the player is named without it.
+  const team = side?.school.trim() ? side : null;
+  if (id?.player && !team && ctx.matchup) {
+    const n = formatNumber(id.player.number, ctx.style);
+    return `${Player.fullName(id.player)}${n ? ` ${n}` : ""}`;
+  }
 
   // A coach named from the staff list, whatever kind of subject the reading called them.
   if (id?.player?.role === "staff" && team) {
@@ -320,9 +326,14 @@ function gameTail(body: string, obs: Observation, ctx: CaptionContext, named: Se
   const m = ctx.matchup!;
   const style = ctx.style;
   const nameWithArticle = (t: Team) => (Styles.namesNickname(style) ? Team.withArticle(t) : t.school);
+  const known = (t: Team) => !!t.school.trim();
   let teamClause = "";
-  if (named.size === 0) teamClause = `between ${nameWithArticle(m.a)} and ${nameWithArticle(m.b)}`;
-  else if (named.size === 1) teamClause = `against ${nameWithArticle(Matchup.team(m, Matchup.other([...named][0])))}`;
+  if (named.size === 0 && known(m.a) && known(m.b)) teamClause = `between ${nameWithArticle(m.a)} and ${nameWithArticle(m.b)}`;
+  else if (named.size === 1) {
+    const other = Matchup.team(m, Matchup.other([...named][0]));
+    if (known(other)) teamClause = `against ${nameWithArticle(other)}`;
+  }
+
   // "during a timeout in an NCAA college football game", not "during … during" (Hurrdat keeps its
   // own template there); "before taking the field ahead of", not "before … before".
   const word = timingWord(obs);
