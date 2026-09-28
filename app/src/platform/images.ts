@@ -105,9 +105,13 @@ export function browserSource(photo: PhotoFile): PhotoSource {
 export class ImageCache {
   private urls = new Map<string, string>();
   private pending = new Map<string, Promise<string>>();
-  private queue: (() => void)[] = [];
+  private queue: { run: () => void; drop: () => void }[] = [];
   private active = 0;
-  constructor(private readonly concurrency = 3, private readonly edge = THUMB_EDGE, private readonly useEmbeddedThumb = false) {}
+  /**
+   * `latestFirst`: the newest request is served next and only the few newest wait — the preview
+   * of the frame on screen is not stuck behind every frame the arrow keys passed on the way.
+   */
+  constructor(private readonly concurrency = 3, private readonly edge = THUMB_EDGE, private readonly useEmbeddedThumb = false, private readonly latestFirst = false) {}
 
   cached(key: string): string | null { return this.urls.get(key) ?? null; }
 
@@ -152,10 +156,13 @@ export class ImageCache {
         this.active++;
         work().then(resolve, reject).finally(() => {
           this.active--;
-          this.queue.shift()?.();
+          (this.latestFirst ? this.queue.pop() : this.queue.shift())?.run();
         });
       };
-      if (this.active < this.concurrency) run(); else this.queue.push(run);
+      if (this.active < this.concurrency) { run(); return; }
+      this.queue.push({ run, drop: () => reject(new Error("No longer wanted")) });
+      // Frames passed over are let go; asking again decodes them then.
+      if (this.latestFirst) while (this.queue.length > 3) this.queue.shift()!.drop();
     });
   }
 }

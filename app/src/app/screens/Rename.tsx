@@ -10,7 +10,8 @@ import type { RenamePlan } from "@core/naming/PhotoRenamer";
 export function RenameDialog({ onClose }: { onClose: () => void }) {
   const s = useStore();
   const [home, setHome] = useState(true);
-  const [plan, setPlan] = useState<RenamePlan | null>(null);
+  // Undefined while it is worked out; null when it cannot be — a team not set yet.
+  const [plan, setPlan] = useState<RenamePlan | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   useEffect(() => { let live = true; void s.renamePlan(home).then((p) => { if (live) setPlan(p); }); return () => { live = false; }; }, [home, s]);
   const moving = plan?.items.filter((i) => i.source !== i.destination) ?? [];
@@ -23,7 +24,7 @@ export function RenameDialog({ onClose }: { onClose: () => void }) {
         { value: "home", label: `${s.slots.A.team?.school ?? "Your team"} at home` },
         { value: "away", label: `${s.slots.A.team?.school ?? "Your team"} away` },
       ]} />
-      {!plan ? <Spinner /> : (
+      {plan === undefined ? <Spinner /> : plan === null ? <p className="error small">Renaming needs both teams. Set them on the setup screen first.</p> : (
         <>
           <div className="rename-list">
             {sample.map((i, n) => (

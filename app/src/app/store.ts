@@ -109,7 +109,7 @@ export interface Notice { text: string; kind: "error" | "info" }
 const emptySlot = (): SlotState => ({ team: null, link: "", busy: false, status: "", error: null, notes: [] });
 
 export const thumbnails = new ImageCache(4, THUMB_EDGE, true);
-export const previews = new ImageCache(2, PREVIEW_EDGE, false);
+export const previews = new ImageCache(2, PREVIEW_EDGE, false, true);
 
 interface State {
   screen: Screen;

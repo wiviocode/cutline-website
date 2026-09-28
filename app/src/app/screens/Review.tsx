@@ -65,7 +65,7 @@ export function Review() {
             </>
           ) : (
             <>
-              {counts.pending + counts.failed ? <Button onClick={() => s.startRun()}>Read {counts.pending + counts.failed} remaining</Button> : null}
+              {counts.pending + counts.failed ? <Button onClick={() => s.startRun()} title={`About ${Cost.dollars((counts.pending + counts.failed) * Cost.perPhoto(s.settings.tier))} at ${s.settings.tier}`}>Read {counts.pending + counts.failed} remaining · {Cost.dollars((counts.pending + counts.failed) * Cost.perPhoto(s.settings.tier))}</Button> : null}
               {s.folder?.writable && derive.usesRosters(s) ? <Button kind="ghost" onClick={() => setRenaming(true)}>Rename…</Button> : null}
               {s.frames.some((f) => f.approved && !f.written) && s.folder?.writable ? <Button onClick={() => s.writeAllApproved()}>Write {s.frames.filter((f) => f.approved && !f.written).length} approved</Button> : null}
               {s.folder && !s.folder.writable && s.frames.some((f) => f.approved) ? <Button onClick={() => s.downloadSidecars()} title="This browser cannot write into the photographs; take the captions as .xmp sidecars instead">Download captions (.xmp)</Button> : null}
@@ -174,10 +174,12 @@ function Stage({ frame, onPick, zoomKey }: { frame: Frame; onPick: (id: string) 
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null);
 
-  // The preview, then nothing else until a zoom asks for the original.
+  // The camera's thumbnail at once, the preview when it is decoded, then nothing else until a
+  // zoom asks for the original.
   useEffect(() => {
-    let live = true;
-    void previews.url(frame.id, frame.photo).then((u) => { if (live) setSrc(u); }).catch(() => {});
+    let live = true, sharp = false;
+    void thumbnails.url(frame.id, frame.photo).then((u) => { if (live && !sharp) setSrc((cur) => cur ?? u); }).catch(() => {});
+    void previews.url(frame.id, frame.photo).then((u) => { sharp = true; if (live) setSrc(u); }).catch(() => {});
     return () => { live = false; };
   }, [frame.id, frame.photo]);
   useEffect(() => () => { if (full.url) URL.revokeObjectURL(full.url); }, [full.url]);
