@@ -21,7 +21,7 @@ import { Compose, type CaptionContext } from "@core/caption/Compose";
 import type { CaptionStyle } from "@core/caption/Styles";
 import { Identify, type Identity, type ManualID } from "@core/vision/Identify";
 import { Prompt, type MeetEntry, type ShootContext } from "@core/vision/Prompt";
-import { applyFaceHints, currentHints } from "@core/vision/FaceEvidence";
+import { applyFaceHints, currentHints, FACE_MODEL } from "@core/vision/FaceEvidence";
 import { FaceMatcher, type FaceHint } from "@platform/faces";
 import type { Observation } from "@core/vision/Observation";
 import { resizedSize } from "@core/vision/ImageSize";
@@ -381,7 +381,7 @@ function composed(s: State, f: Frame): Pick<Frame, "identities" | "caption"> {
 function record(f: Frame): FrameRecord {
   return {
     version: 2, filename: f.name, observation: f.observation, sent: f.sent, original: f.original, zooms: f.zooms, model: f.model, dollars: f.dollars,
-    manual: f.manual, note: f.note, caption: f.caption, captionEdited: f.captionEdited, approved: f.approved, faceMatches: f.faceHints, generatedAt: new Date().toISOString(),
+    manual: f.manual, note: f.note, caption: f.caption, captionEdited: f.captionEdited, approved: f.approved, faceMatches: f.faceHints, faceModel: FACE_MODEL, generatedAt: new Date().toISOString(),
   };
 }
 
@@ -1075,7 +1075,7 @@ export const useStore = create<State>((set, get) => {
           state: rec?.observation ? "done" : rec?.caption ? "done" : "pending", error: null,
           observation: rec?.observation ?? null, sent: rec?.sent ?? null, original: rec?.original ?? null, zooms: rec?.zooms ?? [], model: rec?.model ?? null, dollars: rec?.dollars ?? 0,
           manual: rec?.manual ?? {}, note: rec?.note ?? "", identities: [], caption: rec?.caption ?? "", captionEdited: rec?.captionEdited ?? false,
-          approved: rec?.approved ?? false, written: rec?.approved ?? false, writeError: null, faceHints: currentHints(rec?.faceMatches),
+          approved: rec?.approved ?? false, written: rec?.approved ?? false, writeError: null, faceHints: currentHints(rec?.faceMatches, rec?.faceModel),
         });
       }
       const id = recent?.id ?? `${folder.name}:${photos.length}:${photos[0].name}`;

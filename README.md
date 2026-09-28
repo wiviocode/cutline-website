@@ -109,4 +109,6 @@ Settings, teams, and recent shoots live in the browser's IndexedDB on `cutline.p
 
 ## Licence
 
-[MIT](LICENSE). *cut·line* · *noun* · the line of type beneath a photograph.
+[MIT](LICENSE), except the face-matching models in `app/public/models`, which keep their own
+licenses: InsightFace's SCRFD and ArcFace weights are for non-commercial research only (see
+[NOTICE](app/public/models/NOTICE.md)). *cut·line* · *noun* · the line of type beneath a photograph.

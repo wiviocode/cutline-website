@@ -32,6 +32,8 @@ export interface FrameRecord {
    * matcher's `faceHints` held distances from another model and are not read.
    */
   faceMatches?: Record<string, FaceHint[]>;
+  /** The face model that scored `faceMatches`; another model's scores are not compared with this one's. */
+  faceModel?: string;
 
   generatedAt: string;
 }
@@ -69,6 +71,7 @@ export const FrameRecord = {
         captionEdited: !!raw.captionEdited,
         approved: !!raw.approved,
         faceMatches: (raw.faceMatches as FrameRecord["faceMatches"]) ?? {},
+        faceModel: str(raw.faceModel) || undefined,
         generatedAt: str(raw.generatedAt),
       };
     }

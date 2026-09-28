@@ -40,10 +40,28 @@ function relayInDev(): Plugin {
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
+/**
+ * Cross-origin isolation, so onnxruntime can run the face models on several threads. `credentialless`
+ * keeps other sites' images (roster headshots, logos) loading without their opting in; a browser
+ * that does not know it (Safari) simply stays single-threaded.
+ */
+const ISOLATION = { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "credentialless" };
+
+/** The isolation headers on every response of the dev server and `vite preview`, as vercel.json sets them for the site. */
+function isolated(): Plugin {
+  const mount = (use: (fn: (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse, next: () => void) => void) => void) =>
+    use((_req, res, next) => { for (const [k, v] of Object.entries(ISOLATION)) res.setHeader(k, v); next(); });
+  return {
+    name: "cutline-isolated",
+    configureServer(server) { mount((fn) => server.middlewares.use(fn)); },
+    configurePreviewServer(server) { mount((fn) => server.middlewares.use(fn)); },
+  };
+}
+
 export default defineConfig({
   // The app lives at /app on the site; the marketing page owns /.
   base: "/app/",
-  plugins: [react(), relayInDev()],
+  plugins: [react(), relayInDev(), isolated()],
   build: { outDir: "../dist/app", emptyOutDir: true },
   resolve: {
     alias: {

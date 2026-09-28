@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { applyFaceHints, currentHints, type FaceHint } from "../src/core/vision/FaceEvidence";
-import { alignmentTransform, decodeYuNet, headRegion, pickSubjectFace, quality, flipAverage, cosine, TEMPLATE, type DetectedFace } from "../src/core/vision/FaceGeometry";
+import { applyFaceHints, currentHints, FACE_MODEL, type FaceHint } from "../src/core/vision/FaceEvidence";
+import { alignmentTransform, decodeYuNet, decodeSCRFD, refinedFace, headRegion, pickSubjectFace, quality, flipAverage, cosine, TEMPLATE, type DetectedFace } from "../src/core/vision/FaceGeometry";
 import { Identify } from "../src/core/vision/Identify";
 import { Team, Player } from "../src/core/roster/Roster";
 import type { Observation, Subject } from "../src/core/vision/Observation";
@@ -25,7 +25,7 @@ describe("what a face match may do", () => {
   });
 
   it("leaves a weak, crowded or poorly seen match to the photographer", () => {
-    expect(run([subj({})], { P1: [hint(ogbechie, 0.44)] })[0].player).toBeNull();
+    expect(run([subj({})], { P1: [hint(ogbechie, 0.37)] })[0].player).toBeNull();
     expect(run([subj({})], { P1: [hint(ogbechie, 0.52), hint(jackson, 0.47)] })[0].player).toBeNull();
     // A small or turned face never names anyone unasked, however high it scores.
     expect(run([subj({})], { P1: [hint(ogbechie, 0.55, false)] })[0].player).toBeNull();
@@ -42,14 +42,14 @@ describe("what a face match may do", () => {
 
   it("lets a strong face say an unread digit was never there — '2?' on #2 — but not stretch a loose one", () => {
     expect(run([subj({ number: "2?", clarity: "partial" })], { P1: [hint(reilly, 0.6)] })[0].player?.lastName).toBe("Reilly");
-    expect(run([subj({ number: "2?", clarity: "partial" })], { P1: [hint(reilly, 0.44)] })[0].player).toBeNull();
+    expect(run([subj({ number: "2?", clarity: "partial" })], { P1: [hint(reilly, 0.36)] })[0].player).toBeNull();
   });
 
   it("settles a partly read number when a clear face agrees with it", () => {
     const [id] = run([subj({ number: "14", clarity: "partial" })], { P1: [hint(ogbechie, 0.45)] });
     expect(id).toMatchObject({ status: "confirmed" });
     expect(id.reason).toMatch(/face agrees/);
-    const [weak] = run([subj({ number: "14", clarity: "partial" })], { P1: [hint(ogbechie, 0.35)] });
+    const [weak] = run([subj({ number: "14", clarity: "partial" })], { P1: [hint(ogbechie, 0.28)] });
     expect(weak.status).toBe("likely");
   });
 
@@ -58,8 +58,12 @@ describe("what a face match may do", () => {
     expect(id.player?.lastName).toBe("Jackson");
   });
 
-  it("ignores hints saved by the first matcher", () => {
-    expect(currentHints({ P1: [{ playerID: "x", distance: 0.4 }], P2: [{ playerID: "y", score: 0.5, good: true }] })).toEqual({ P1: [], P2: [{ playerID: "y", score: 0.5, good: true }] });
+  it("ignores matches saved by another face model", () => {
+    const saved = { P1: [{ playerID: "x", distance: 0.4 }], P2: [{ playerID: "y", score: 0.5, good: true }] };
+    expect(currentHints(saved, FACE_MODEL)).toEqual({ P1: [], P2: [{ playerID: "y", score: 0.5, good: true }] });
+    // SFace's scores, saved before ArcFace, sit on another scale: they are dropped, not reread.
+    expect(currentHints(saved, undefined)).toEqual({});
+    expect(currentHints(saved, "sface")).toEqual({});
   });
 });
 
@@ -112,6 +116,30 @@ describe("face geometry", () => {
     expect(f.score).toBeCloseTo(Math.sqrt(0.9), 5);
     expect([f.x, f.y, f.w, f.h].map((v) => Math.round(v))).toEqual([48, 16, 64, 64]);
     expect(f.points[0]).toEqual([64, 32]);
+  });
+
+  it("decodes SCRFD's outputs: two anchors a cell, distances and offsets in strides", () => {
+    // 64 x 64 input: stride 8 has 8 x 8 cells, 16 has 4 x 4, 32 has 2 x 2; two anchors each.
+    const n = (s: number) => (64 / s) * (64 / s) * 2;
+    const scores = [8, 16, 32].map((s) => new Float32Array(n(s))), boxes = [8, 16, 32].map((s) => new Float32Array(n(s) * 4)), kps = [8, 16, 32].map((s) => new Float32Array(n(s) * 10));
+    // Stride 16, cell row 1 col 2 (centre 32, 16), second anchor.
+    const i = (1 * 4 + 2) * 2 + 1;
+    scores[1][i] = 0.9;
+    boxes[1].set([1, 0.5, 1, 1.5], i * 4);
+    kps[1].set([-0.5, 0, 0.5, 0, 0, 0.5, -0.25, 1, 0.25, 1], i * 10);
+    const [f] = decodeSCRFD([...scores, ...boxes, ...kps], 64, 64);
+    expect(f.score).toBeCloseTo(0.9, 5);
+    expect([f.x, f.y, f.w, f.h]).toEqual([16, 8, 32, 32]);
+    expect(f.points[0]).toEqual([24, 16]);
+    expect(f.points[2]).toEqual([32, 24]);
+  });
+
+  it("takes the second detector's points only for the same face", () => {
+    const yunet = face(100, 100, 50);
+    const same = { ...face(102, 98, 52), points: yunet.points.map(([x, y]) => [x + 1, y - 1] as [number, number]) };
+    expect(refinedFace(yunet, [same]).points).toEqual(same.points);
+    expect(refinedFace(yunet, [same]).score).toBe(yunet.score);
+    expect(refinedFace(yunet, [face(400, 100, 50)])).toBe(yunet);
   });
 
   it("takes the face in the subject's box, not a neighbour's at its edge", () => {

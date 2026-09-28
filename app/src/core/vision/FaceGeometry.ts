@@ -1,8 +1,8 @@
 /**
- * The arithmetic of face matching, apart from any runtime: reading YuNet's output, choosing the
- * face that belongs to a subject, and the similarity transform that lays a face onto the 112×112
- * template SFace was trained on. The models run elsewhere (@platform/faceWorker); this is what
- * surrounds them, and what the tests can check.
+ * The arithmetic of face matching, apart from any runtime: reading YuNet's and SCRFD's outputs,
+ * choosing the face that belongs to a subject, and the similarity transform that lays a face onto
+ * the 112×112 template ArcFace was trained on. The models run elsewhere (@platform/faceWorker);
+ * this is what surrounds them, and what the tests can check.
  */
 
 /** A face as YuNet reports it: box, score, and five points — the subject's right eye, left eye, nose tip, right and left mouth corners. */
@@ -16,7 +16,7 @@ export interface DetectedFace {
 /** How well a face can be compared: the detector's confidence, the eyes' distance in pixels, and how far the head is turned. */
 export interface FaceQuality { score: number; eyes: number; yaw: number }
 
-/** Where each of the five points sits on SFace's (and ArcFace's) 112×112 aligned face. */
+/** Where each of the five points sits on ArcFace's 112×112 aligned face. */
 export const TEMPLATE: [number, number][] = [[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.7299, 92.2041]];
 
 export const YUNET_STRIDES = [8, 16, 32] as const;
@@ -51,6 +51,31 @@ export function decodeYuNet(out: Outputs, padW: number, padH: number, threshold 
   return nms(faces, nmsIoU);
 }
 
+export const SCRFD_STRIDES = [8, 16, 32] as const;
+
+/**
+ * Faces from SCRFD's nine outputs, in the model's own order: scores, boxes and points at strides
+ * 8, 16 and 32. Two anchors per cell, centred on the cell's corner; a box is its four distances
+ * from the centre and each point an offset from it, all in strides — InsightFace's decoding.
+ */
+export function decodeSCRFD(out: ArrayLike<number>[], width: number, height: number, threshold = 0.3, nmsIoU = 0.4): DetectedFace[] {
+  const faces: DetectedFace[] = [];
+  SCRFD_STRIDES.forEach((s, k) => {
+    const cols = Math.floor(width / s), rows = Math.floor(height / s);
+    const scores = out.at(k)!, boxes = out.at(k + 3)!, kps = out.at(k + 6)!;
+    for (let i = 0; i < rows * cols * 2; i++) {
+      const score = scores[i];
+      if (score < threshold) continue;
+      const cell = Math.floor(i / 2), cx = (cell % cols) * s, cy = Math.floor(cell / cols) * s;
+      const x1 = cx - boxes[i * 4] * s, y1 = cy - boxes[i * 4 + 1] * s, x2 = cx + boxes[i * 4 + 2] * s, y2 = cy + boxes[i * 4 + 3] * s;
+      const points: [number, number][] = [];
+      for (let n = 0; n < 5; n++) points.push([cx + kps[i * 10 + 2 * n] * s, cy + kps[i * 10 + 2 * n + 1] * s]);
+      faces.push({ x: x1, y: y1, w: x2 - x1, h: y2 - y1, score, points });
+    }
+  });
+  return nms(faces, nmsIoU);
+}
+
 export function nms(faces: DetectedFace[], iouLimit: number): DetectedFace[] {
   const sorted = [...faces].sort((a, b) => b.score - a.score);
   const kept: DetectedFace[] = [];
@@ -68,6 +93,16 @@ export function iou(a: DetectedFace, b: DetectedFace): number {
 /** A face moved and scaled: from detector coordinates back to the image's. */
 export function mapFace(f: DetectedFace, scale: number, dx: number, dy: number): DetectedFace {
   return { x: f.x / scale + dx, y: f.y / scale + dy, w: f.w / scale, h: f.h / scale, score: f.score, points: f.points.map(([x, y]) => [x / scale + dx, y / scale + dy]) };
+}
+
+/**
+ * The face with a second detector's five points, where that detector found the same face (boxes
+ * overlapping by 0.3 or more); the first detector's box and confidence stay. Unchanged otherwise.
+ */
+export function refinedFace(face: DetectedFace, second: DetectedFace[]): DetectedFace {
+  let best: DetectedFace | null = null, overlap = 0;
+  for (const d of second) { const o = iou(d, face); if (o > overlap) { best = d; overlap = o; } }
+  return best && overlap >= 0.3 ? { ...face, points: best.points } : face;
 }
 
 export function quality(f: DetectedFace): FaceQuality {

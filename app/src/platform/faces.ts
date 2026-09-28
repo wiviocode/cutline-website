@@ -3,9 +3,10 @@
  * number is turned away.
  *
  * Everything happens in this browser: the headshots come through the relay as images, and the
- * face models (YuNet to find a face, SFace to describe it — see public/models/NOTICE.md) are
- * served from this site and run in a worker here. No face is sent to Anthropic or anywhere else.
- * Offered only for college rosters, and only when the photographer asks.
+ * face models (YuNet to find a face, SCRFD for its points, ArcFace to describe it — see
+ * public/models/NOTICE.md; the last two are for non-commercial research only) are served from
+ * this site and run in a worker here. No face is sent to Anthropic or anywhere else. Offered only
+ * for college rosters, never football, and only when the photographer asks.
  *
  * A match is evidence, not an identification: the review screen shows it as a suggestion, and
  * the caption uses it only as FaceEvidence allows.
@@ -13,7 +14,7 @@
 
 import { openDB, type IDBPDatabase } from "idb";
 import type { Player } from "@core/roster/Roster";
-import { FACE_LISTED, type FaceHint } from "@core/vision/FaceEvidence";
+import { FACE_LISTED, FACE_MODEL, type FaceHint } from "@core/vision/FaceEvidence";
 import { cosine, type FaceQuality } from "@core/vision/FaceGeometry";
 import type { FaceFound, FaceReply, FaceRequest } from "./faceWorker";
 import { RELAY_HEADERS } from "./relay";
@@ -61,13 +62,14 @@ function ask(req: Request): Promise<(FaceFound | null)[]> {
 
 // ---------------------------------------------------------------- the headshots
 
+const STORE = FACE_MODEL;
 let db: Promise<IDBPDatabase> | null = null;
 function cache(): Promise<IDBPDatabase> {
-  // Version 2: SFace embeddings. The first matcher's descriptors are dropped, not reused.
-  return (db ??= openDB("cutline-faces", 2, {
+  // Version 3: ArcFace embeddings. Earlier models' are dropped, not reused: their numbers mean nothing to this one.
+  return (db ??= openDB("cutline-faces", 3, {
     upgrade(d) {
-      if (d.objectStoreNames.contains("descriptors")) d.deleteObjectStore("descriptors");
-      if (!d.objectStoreNames.contains("sface")) d.createObjectStore("sface");
+      for (const old of ["descriptors", "sface"]) if (d.objectStoreNames.contains(old)) d.deleteObjectStore(old);
+      if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE);
     },
   }));
 }
@@ -93,14 +95,14 @@ export class FaceMatcher {
       while (queue.length) {
         const p = queue.shift()!;
         const url = p.headshotURL!;
-        let e = (await store.get("sface", url)) as Float32Array | null | undefined;
+        let e = (await store.get(STORE, url)) as Float32Array | null | undefined;
         if (e === undefined) {
           try {
             const res = await fetch(`/api/fetch?raw=1&url=${encodeURIComponent(smaller(url))}`, { headers: RELAY_HEADERS });
             if (res.ok) {
               const [found] = await ask({ kind: "portrait", blob: await res.blob() });
               e = found && found.quality.score >= 0.6 ? found.embedding : null;
-              await store.put("sface", e, url);
+              await store.put(STORE, e, url);
             }
           } catch { /* a headshot that will not load is a player without a face to match */ }
         }

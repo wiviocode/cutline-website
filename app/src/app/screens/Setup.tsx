@@ -224,7 +224,7 @@ function FaceStatus() {
   return (
     <div className="faces">
       <span><b>Automatic face matching</b> · {state}{f.status === "preparing" ? <> <Spinner /></> : null}</span>
-      <span className="faint">Names a player whose number is hidden by comparing faces with the roster headshots, on this computer — no face leaves it. When this is off, “Match faces” on the review screen still checks one photo at a time.</span>
+      <span className="faint">Names a player whose number is hidden by comparing faces with the roster headshots, on this computer — no face leaves it. When this is off, “Match faces” on the review screen still checks one photo at a time. Uses InsightFace’s ArcFace model, licensed for non-commercial research only.</span>
       <span className="spacer" />
       {action}
     </div>

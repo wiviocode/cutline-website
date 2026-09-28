@@ -7,10 +7,11 @@
  * same photograph. That identity is marked "likely", never "confirmed": a face is a second
  * opinion, and the photographer is shown it as one.
  *
- * Scores are the cosine similarity of SFace embeddings (flip-averaged) between the face in the
- * photograph and the roster headshot: 1 is the same image, around 0.2 unrelated people. On
- * Nebraska volleyball frames against huskers.com headshots, right matches scored 0.40–0.60 and
- * the best wrong ones reached 0.44 — so a name needs 0.47 and a clear lead.
+ * Scores are the cosine similarity of ArcFace ResNet-50 embeddings (each averaged with its mirror
+ * image) between the face in the photograph and the roster headshot: 1 is the same image, 0 no
+ * resemblance. On 71 hand-labeled faces from Nebraska volleyball and soccer frames against 87
+ * roster headshots, the right player scored a median of 0.49; no wrong player scored above 0.30,
+ * and no fan from the student section above 0.26 — so a name needs 0.40 and a clear lead.
  */
 
 import { Matchup, Player, type Matchup as MatchupT, type TeamKey } from "../roster/Roster";
@@ -25,20 +26,23 @@ export interface FaceHint {
   good: boolean;
 }
 
+/** The model these scores come from. Scores saved by another model are dropped, never compared. */
+export const FACE_MODEL = "arcface-r50-w600k";
+
 /** Kept, to put the nearest players first in the picker. */
-export const FACE_LISTED = 0.3;
+export const FACE_LISTED = 0.2;
 /** A likeness worth showing, and enough among the players a partly read number allows. */
-export const FACE_SUGGEST = 0.4;
+export const FACE_SUGGEST = 0.32;
 /** Enough to name an athlete with no number visible. */
-export const FACE_STRONG = 0.47;
+export const FACE_STRONG = 0.4;
 /** How far the best must lead the next. */
 export const FACE_MARGIN = 0.05;
 export const FACE_STRONG_MARGIN = 0.1;
 
-/** Hints saved by the first face matcher (a distance, not a score) mean nothing to this one. */
-export function currentHints(raw: unknown): Record<string, FaceHint[]> {
+/** A photograph's saved face matches, if the model that made them is this one. */
+export function currentHints(raw: unknown, model?: unknown): Record<string, FaceHint[]> {
   const out: Record<string, FaceHint[]> = {};
-  if (!raw || typeof raw !== "object") return out;
+  if (model !== FACE_MODEL || !raw || typeof raw !== "object") return out;
   for (const [k, list] of Object.entries(raw as Record<string, unknown>)) {
     if (!Array.isArray(list)) continue;
     out[k] = list.filter((h): h is FaceHint => !!h && typeof h.playerID === "string" && typeof h.score === "number").map((h) => ({ playerID: h.playerID, score: h.score, good: !!h.good }));

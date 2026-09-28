@@ -39,17 +39,25 @@ device. It never overrules a number that was read; it can name an athlete whose 
 (marked *check*) and settles a partial read it agrees with.
 
 How: [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) (MIT)
-finds the face in the upper part of each subject's box, in the full-resolution original, and
-[SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface)
-(Apache-2.0) describes it after a five-point alignment; both run in onnxruntime-web's WebAssembly
-build, in a worker, from files this site serves (`public/models`, about 11 MB, and the 14 MB
-runtime, each downloaded once). Faces are compared by cosine similarity with flip-averaged
-headshot embeddings: a hidden number is named at 0.47 with a lead of 0.10 over the next player,
-from a face whose eyes are at least 20 pixels apart, and never from a crowded face (another face
-in the same box nearly as likely); between 0.40 and 0.47 the player is offered as a one-click
-suggestion. Tested on 71 hand-labeled faces from a volleyball and a soccer game against 87 roster
-headshots: 27 named unasked and 13 suggested, none wrong; 109 fans from the student section, none
-named. About 0.17 s to decode a 24-megapixel frame and 0.13 s a face on a desktop.
+finds the face in the upper part of each subject's box, in the full-resolution original;
+InsightFace's SCRFD-500M looks again for sharper eye, nose and mouth points; and InsightFace's
+ArcFace ResNet-50 (WebFace600K, quantized to int8) describes the face after a five-point
+alignment. All three run in onnxruntime-web's WebAssembly build, in a worker, on up to four
+threads (the app is served cross-origin isolated for that), from files this site serves
+(`public/models`, about 46 MB, and the 14 MB runtime, each downloaded once). Faces are compared
+by cosine similarity, each averaged with its mirror image: a hidden number is named at 0.40 with a
+lead of 0.10 over the next player, from a face whose eyes are at least 20 pixels apart, and never
+from a crowded face (another face in the same box nearly as likely); from 0.32 the player is
+offered as a one-click suggestion.
+
+ArcFace was chosen from about twenty models benchmarked on 71 hand-labeled faces from a volleyball
+and a soccer game against 87 roster headshots, with 109 fans as faces that must never be named. In
+the browser it names 39 of the 71 unasked and suggests 7 more, none wrong, and names no fan
+(SFace, used before: 27 and 13). About 0.24 s a face on a desktop; reading a roster's headshots
+the first time takes about 10 s. **The SCRFD and ArcFace weights are InsightFace's and licensed
+for non-commercial research only** — they are not covered by Cutline's MIT license (see
+`public/models/NOTICE.md`); anyone using face matching commercially needs InsightFace's license
+or must leave it off.
 
 ## Accuracy and cost
 
