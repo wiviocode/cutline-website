@@ -19,7 +19,7 @@ import type { Observation, Subject } from "./Observation";
 import type { MeetEntry } from "./Prompt";
 
 export type IDStatus = "confirmed" | "likely" | "unknown";
-export type IDSource = "model" | "fuzzy" | "sequence" | "face" | "manual" | "none";
+export type IDSource = "model" | "fuzzy" | "sequence" | "face" | "note" | "manual" | "none";
 
 export interface Identity {
   subjectId: string;
@@ -52,6 +52,8 @@ export interface IdentifyContext {
   matchup: MatchupT | null;
   entries?: MeetEntry[];
   unitSport: boolean;
+  /** The photographer's note for this frame, which can name a player the photograph does not show a number for. */
+  note?: string;
 }
 
 export const Identify = {
@@ -101,6 +103,9 @@ export const Identify = {
     if (s.kind !== "athlete") {
       return { ...base, teamKey: declared, status: "confirmed", reason: "Not an athlete" };
     }
+    // The photographer said who it is ("the hitter is Adriano, #3") and the reading agrees on whom.
+    const noted = namedInNote(s, m, declared, ctx.note);
+    if (noted) return { ...base, teamKey: noted.k, player: noted.p, side, source: "note", status: "confirmed", reason: "Named in your note" };
     if (!s.number || s.clarity === "hidden") {
       // A college nameplate can name a player whose number is turned away.
       const plated = declared ? byNameplate(Matchup.team(m, declared).players, s.uniformText) : [];
@@ -252,7 +257,27 @@ function byNameplate(players: Player[], lettering: string): Player[] {
   });
 }
 
+/**
+ * The roster player the reading pointed this subject at, when the photographer's note names
+ * them too — by last name or by "#number". The note alone never names anyone: the model has to
+ * have tied it to this subject.
+ */
+function namedInNote(s: Subject, m: MatchupT, declared: TeamKey | null, note: string | undefined): { p: Player; k: TeamKey } | null {
+  const text = note?.trim().toLowerCase();
+  const chosen = text ? parseChoice(s.player) : null;
+  if (!text || !chosen) return null;
+  const keys: TeamKey[] = declared ? [declared] : ["A", "B"];
+  const found = keys.flatMap((k) => Matchup.team(m, k).players.filter((p) => (chosen.number ? p.number === chosen.number : true) && nameMatches(p, chosen.name)).map((p) => ({ p, k })));
+  if (found.length !== 1) return null;
+  const { p } = found[0];
+  const last = p.lastName.toLowerCase().replace(/\s+(jr|sr|ii|iii|iv|v)\.?$/, "");
+  const byName = last.length >= 3 && text.includes(last);
+  const byNumber = !!p.number && new RegExp(`(#|\\bno\\.?\\s?|\\bnumber\\s)${p.number}(?!\\d)`).test(text);
+  return byName || byNumber ? found[0] : null;
+}
+
 function nameMatches(p: Player, name: string): boolean {
+
   const n = name.toLowerCase();
   return n.includes(p.lastName.toLowerCase()) && (!p.firstName || n.includes(p.firstName.toLowerCase().slice(0, 3)));
 }

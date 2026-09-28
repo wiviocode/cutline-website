@@ -7,14 +7,12 @@ import { GET as relay } from "../api/fetch.ts";
 
 /**
  * In development Vite serves the page but nothing serves /api/fetch, so a roster could only be
- * pasted. This runs the same function the host runs, on the dev server.
+ * pasted. This runs the same function the host runs, on the dev server and on `vite preview`,
+ * where the production build can be tried with real rosters.
  */
 function relayInDev(): Plugin {
-  return {
-    name: "cutline-relay-in-dev",
-    apply: "serve",
-    configureServer(server) {
-      server.middlewares.use("/api/fetch", async (req, res) => {
+  const mount = (use: (path: string, fn: (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => void) => void) => {
+      use("/api/fetch", async (req, res) => {
         try {
           // The function sees what the browser sent — the app's header, the address — as it
           // would on the host, so the dev relay refuses exactly what the deployed one refuses.
@@ -30,9 +28,15 @@ function relayInDev(): Plugin {
           res.end(JSON.stringify({ error: (e as Error).message }));
         }
       });
-    },
+  };
+  return {
+    name: "cutline-relay-in-dev",
+    apply: "serve",
+    configureServer(server) { mount((p, fn) => server.middlewares.use(p, fn)); },
+    configurePreviewServer(server) { mount((p, fn) => server.middlewares.use(p, fn)); },
   };
 }
+
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
@@ -50,6 +54,11 @@ export default defineConfig({
   },
   // The vision prompt is text, imported as a string so it cannot drift from the schema.
   assetsInclude: ["**/*.txt"],
+  // The face models run in a module worker; onnxruntime-web finds its WebAssembly by URL, which
+  // pre-bundling would move.
+  worker: { format: "es" },
+  optimizeDeps: { exclude: ["onnxruntime-web"] },
+
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",

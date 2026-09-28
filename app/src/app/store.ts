@@ -21,8 +21,8 @@ import { Compose, type CaptionContext } from "@core/caption/Compose";
 import type { CaptionStyle } from "@core/caption/Styles";
 import { Identify, type Identity, type ManualID } from "@core/vision/Identify";
 import { Prompt, type MeetEntry, type ShootContext } from "@core/vision/Prompt";
-import { applyFaceHints, type FaceHint } from "@core/vision/FaceEvidence";
-import { FaceMatcher, headCrops } from "@platform/faces";
+import { applyFaceHints, currentHints } from "@core/vision/FaceEvidence";
+import { FaceMatcher, type FaceHint } from "@platform/faces";
 import type { Observation } from "@core/vision/Observation";
 import { resizedSize } from "@core/vision/ImageSize";
 import { Team, Player, Staff, type Matchup, type TeamKey } from "@core/roster/Roster";
@@ -139,7 +139,14 @@ interface State {
   runTotal: number;
   spent: number;
 
+  /** Between the click and the first photograph: the uniforms and roster faces being read. */
+  starting: boolean;
   selectedID: string | null;
+  /**
+   * The photograph being worked on stays in a filtered list after it stops matching — a fixed
+   * frame does not vanish from "To check" under the photographer — until the selection moves.
+   */
+  keep: string | null;
   filter: Filter;
   notice: Notice | null;
 
@@ -179,7 +186,8 @@ interface State {
   scoutUniforms(): Promise<void>;
   /** Prepare the roster photos; `onDemand` does it for a single look even with automatic matching off. */
   prepareFaces(onDemand?: boolean): Promise<boolean>;
-  matchFaces(ids?: string[], onDemand?: boolean): Promise<void>;
+  /** How many subjects were looked at, and in how many a face could be compared. */
+  matchFaces(ids?: string[], onDemand?: boolean): Promise<{ subjects: number; faces: number; error: string | null }>;
   /** Look at the faces in one photograph now, whatever the automatic setting. */
   faceLook(frameID: string): Promise<void>;
   /** The photograph whose faces are being looked at, if any. */
@@ -277,11 +285,12 @@ export const derive = {
     return a && b ? `${a} v ${b} · ${sport}` : sport;
   },
 
-  visible(s: Pick<State, "frames" | "filter">): Frame[] {
+  visible(s: Pick<State, "frames" | "filter"> & { keep?: string | null }): Frame[] {
+    const keep = s.keep ?? null;
     switch (s.filter) {
-      case "review": return s.frames.filter((f) => f.state === "failed" || (f.state === "done" && !f.approved && Identify.needsReview(f.identities)));
-      case "approved": return s.frames.filter((f) => f.approved);
-      case "unapproved": return s.frames.filter((f) => !f.approved);
+      case "review": return s.frames.filter((f) => f.id === keep || f.state === "failed" || (f.state === "done" && !f.approved && Identify.needsReview(f.identities)));
+      case "approved": return s.frames.filter((f) => f.id === keep || f.approved);
+      case "unapproved": return s.frames.filter((f) => f.id === keep || !f.approved);
       default: return s.frames;
     }
   },
@@ -325,6 +334,23 @@ export const derive = {
 
 // ------------------------------------------------------------------------------------------ helpers
 
+/** Where a frame that is not in the filtered list would sit in it: the next (or previous) listed frame in the folder's order. */
+function nearestIndex(all: Frame[], list: Frame[], id: string | null, delta: number): number {
+  const pos = all.findIndex((f) => f.id === id);
+  if (pos < 0) return 0;
+  const order = new Map(all.map((f, i) => [f.id, i]));
+  if (delta >= 0) {
+    const i = list.findIndex((f) => order.get(f.id)! > pos);
+    return i < 0 ? list.length - 1 : i + Math.max(0, delta - 1);
+  }
+  let i = -1;
+  list.forEach((f, j) => { if (order.get(f.id)! < pos) i = j; });
+  return i < 0 ? 0 : i + delta + 1;
+}
+
+/** A new shoot starts from nothing but the level the photographer last worked at. */
+const freshSetup = (levelId = "ncaa-d1"): Setup => ({ levelId, sport: "football", gender: "mens", venue: "", city: "", state: "", eventName: "", entriesText: "", style: null, house: null });
+
 function claude(s: State): Claude | null {
   return s.apiKey ? new Claude(s.apiKey, { browser: true }) : null;
 }
@@ -337,7 +363,7 @@ function importRequest(s: State): ImportRequest {
 function composed(s: State, f: Frame): Pick<Frame, "identities" | "caption"> {
   if (!f.observation) return { identities: [], caption: f.caption };
   const matchup = derive.matchup(s);
-  const read = Identify.all(f.observation, { matchup: Sports.usesRosters(s.setup.sport) || matchup ? matchup : null, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport) }, f.manual);
+  const read = Identify.all(f.observation, { matchup: Sports.usesRosters(s.setup.sport) || matchup ? matchup : null, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport), note: f.note }, f.manual);
   // Face matches, once a frame has any — whether found automatically or asked for on this frame.
   const identities = derive.facesAvailable(s) && Object.keys(f.faceHints).length ? applyFaceHints(read, f.observation, f.faceHints, matchup) : read;
   if (f.captionEdited) return { identities, caption: f.caption };
@@ -348,7 +374,7 @@ function composed(s: State, f: Frame): Pick<Frame, "identities" | "caption"> {
 function record(f: Frame): FrameRecord {
   return {
     version: 2, filename: f.name, observation: f.observation, sent: f.sent, original: f.original, zooms: f.zooms, model: f.model, dollars: f.dollars,
-    manual: f.manual, note: f.note, caption: f.caption, captionEdited: f.captionEdited, approved: f.approved, faceHints: f.faceHints, generatedAt: new Date().toISOString(),
+    manual: f.manual, note: f.note, caption: f.caption, captionEdited: f.captionEdited, approved: f.approved, faceMatches: f.faceHints, generatedAt: new Date().toISOString(),
   };
 }
 
@@ -462,12 +488,13 @@ export const useStore = create<State>((set, get) => {
     try {
       const reading = await readPhoto({
         claude: c, tier, system: Prompt.system(derive.shoot(s)),
-        identify: { matchup, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport) },
+        identify: { matchup, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport), note: f.note },
         source: browserSource(f.photo), note: f.note || null, sportName: Sports.info(s.setup.sport).noun,
       }).catch(async (e) => {
         // Opus declines the odd frame its safety checks misjudge; Sonnet reads it instead.
         if (describeError(e).kind === "refusal" && TIERS[tier].model !== "claude-sonnet-5") {
-          return readPhoto({ claude: c, tier, model: "claude-sonnet-5", system: Prompt.system(derive.shoot(s)), identify: { matchup, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport) }, source: browserSource(f.photo), note: f.note || null, sportName: Sports.info(s.setup.sport).noun });
+          return readPhoto({ claude: c, tier, model: "claude-sonnet-5", system: Prompt.system(derive.shoot(s)), identify: { matchup, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport), note: f.note }, source: browserSource(f.photo), note: f.note || null, sportName: Sports.info(s.setup.sport).noun });
+
         }
         throw e;
       });
@@ -495,7 +522,7 @@ export const useStore = create<State>((set, get) => {
     library: [],
     recents: [],
     panel: null,
-    setup: { levelId: "ncaa-d1", sport: "football", gender: "mens", venue: "", city: "", state: "", eventName: "", entriesText: "", style: null, house: null },
+    setup: freshSetup(),
     slots: { A: emptySlot(), B: emptySlot() },
     scouting: false,
     faces: { status: "off", done: 0, total: 0, error: null },
@@ -511,7 +538,9 @@ export const useStore = create<State>((set, get) => {
     runDone: 0,
     runTotal: 0,
     spent: 0,
+    starting: false,
     selectedID: null,
+    keep: null,
     filter: "all",
     notice: null,
 
@@ -575,7 +604,9 @@ export const useStore = create<State>((set, get) => {
 
     closeShoot() {
       thumbnails.clear(); previews.clear();
-      set({ folder: null, frames: [], selectedID: null, recentID: null, screen: "setup", spent: 0, slots: { A: emptySlot(), B: emptySlot() }, photoHeadline: null });
+      // The next shoot starts clean: nothing of this one's teams, place or house style carries over.
+      set((s) => ({ folder: null, frames: [], selectedID: null, keep: null, recentID: null, screen: "setup", spent: 0, slots: { A: emptySlot(), B: emptySlot() }, photoHeadline: null,
+        setup: freshSetup(s.setup.levelId), cancelRequested: s.running || s.cancelRequested, filter: "all" }));
     },
 
     // ---------------------------------------------------------------- setup
@@ -605,6 +636,11 @@ export const useStore = create<State>((set, get) => {
         const team = { ...r.team, uniform: previous?.uniform ?? r.team.uniform };
         slotPatch(slot, { busy: false, status: `${team.players.length} players · ${sourceLabel(r.source)}${r.dollars ? ` · ${Cost.dollars(r.dollars)}` : ""}`, notes: r.notes });
         setTeam(slot, team);
+        // Where a roster lives says the level: MaxPreps is high school, Sidearm and WMT sites are colleges'.
+        const kind = Levels.info(get().setup.levelId).kind;
+        if (r.source === "maxpreps" && kind !== "highSchool") { get().setSetup({ levelId: "hs" }); get().notify("Level set to high school — that roster is from MaxPreps.", "info"); }
+        else if (/^(sidearm|wmt)/.test(r.source) && kind === "highSchool") { get().setSetup({ levelId: "ncaa-d1" }); get().notify("Level set to NCAA Division I — that roster is from a college athletics site. Change it if the division differs.", "info"); }
+
       } catch (e) {
         slotPatch(slot, { busy: false, status: "", error: (e as Error).message });
       }
@@ -760,25 +796,27 @@ export const useStore = create<State>((set, get) => {
     },
 
     async matchFaces(ids, onDemand = false) {
-      if (!(onDemand ? derive.facesAvailable(get()) : derive.facesOn(get())) || !matcher.size) return;
+      const tally = { subjects: 0, faces: 0, error: null as string | null };
+      if (!(onDemand ? derive.facesAvailable(get()) : derive.facesOn(get())) || !matcher.size) return tally;
       const list = get().frames.filter((f) => f.observation && f.sent && (!ids || ids.includes(f.id)));
       for (const f of list) {
         const targets = f.observation!.subjects.filter((x) => x.kind === "athlete" && x.box && f.identities.find((i) => i.subjectId === x.id)?.status !== "confirmed");
         if (!targets.length) continue;
         try {
-          const crops = await headCrops(await decodableBlob(await f.photo.file()), targets.map((t) => t.box!), f.sent!);
-          const hints: Record<string, FaceHint[]> = { ...f.faceHints };
           const st = get();
-          for (let i = 0; i < targets.length; i++) {
-            const t = targets[i];
-            const teams = t.team === "A" || t.team === "B" ? [st.slots[t.team].team] : [st.slots.A.team, st.slots.B.team];
-            hints[t.id] = await matcher.match(crops[i], teams.flatMap((team) => team?.players.map((p) => p.id) ?? []));
-          }
+          // Each face is compared with its own side's roster when the uniform said which.
+          const candidates = targets.map((t) => (t.team === "A" || t.team === "B" ? [st.slots[t.team].team] : [st.slots.A.team, st.slots.B.team]).flatMap((team) => team?.players.map((p) => p.id) ?? []));
+          const looks = await matcher.match(await decodableBlob(await f.photo.file()), targets.map((t) => t.box!), f.sent!, candidates);
+          const hints: Record<string, FaceHint[]> = { ...f.faceHints };
+          targets.forEach((t, i) => { hints[t.id] = looks[i].hints; });
+          tally.subjects += targets.length;
+          tally.faces += looks.filter((l) => l.found).length;
           patchFrame(f.id, { faceHints: hints });
           recompose(f.id);
           await saveRecord(get().folder, frame(f.id)!);
-        } catch { /* a frame whose faces cannot be read keeps what the reading said */ }
+        } catch (e) { tally.error ??= (e as Error).message; /* a frame whose faces cannot be read keeps what the reading said */ }
       }
+      return tally;
     },
 
     async faceLook(frameID) {
@@ -787,13 +825,16 @@ export const useStore = create<State>((set, get) => {
       try {
         const ready = await get().prepareFaces(true);
         if (!ready) { get().notify(get().faces.error ?? "Face matching needs a college roster with headshots."); return; }
-        await get().matchFaces([frameID], true);
+        const t = await get().matchFaces([frameID], true);
         const f = frame(frameID);
         const named = f?.identities.filter((i) => i.source === "face").length ?? 0;
-        const looked = Object.keys(f?.faceHints ?? {}).length;
+        const near = Object.values(f?.faceHints ?? {}).some((h) => h.length);
+        if (t.error && !t.faces) { get().notify(`Face matching failed: ${t.error}`); return; }
         get().notify(named ? `Named ${named === 1 ? "one player" : `${named} players`} by face — marked to check.`
-          : looked ? "No face was a close enough match to name. The nearest are listed first when you change a player."
-          : "No faces could be read in this photograph.", "info");
+          : near ? "No face was a close enough match to name. The nearest players are listed first when you change a player."
+          : t.faces ? "The faces here don't resemble anyone on the roster closely enough to suggest."
+          : "No face here was clear enough to compare — turned away, too small or covered.", "info");
+
       } finally { set({ faceBusy: null }); }
     },
 
@@ -801,15 +842,21 @@ export const useStore = create<State>((set, get) => {
 
     async startRun(opts = {}) {
       const s = get();
+      if (s.running || s.starting) return;
       const blocked = derive.blocker(s);
       if (blocked) { get().notify(blocked); return; }
       const c = claude(s)!;
-      // Uniforms first: the strongest cue for telling the sides apart, read once per shoot.
-      if (derive.usesRosters(s) && (!s.slots.A.team?.uniform || !s.slots.B.team?.uniform)) await get().scoutUniforms();
-      if (derive.facesOn(get())) await get().prepareFaces();
+      set({ starting: true });
+      try {
+        // Uniforms first: the strongest cue for telling the sides apart, read once per shoot.
+        if (derive.usesRosters(s) && (!s.slots.A.team?.uniform || !s.slots.B.team?.uniform)) await get().scoutUniforms();
+        if (derive.facesOn(get())) await get().prepareFaces();
+      } finally { set({ starting: false }); }
       const ids = (opts.ids ?? get().frames.filter((f) => opts.redo || f.state === "pending" || f.state === "failed").map((f) => f.id));
       if (!ids.length) { set({ screen: "review" }); return; }
-      set({ running: true, cancelRequested: false, runDone: 0, runTotal: ids.length, screen: "review", selectedID: get().selectedID ?? ids[0] });
+      const sel = get().selectedID ?? ids[0];
+      set({ running: true, cancelRequested: false, runDone: 0, runTotal: ids.length, screen: "review", selectedID: sel, keep: sel });
+
       const queue = [...ids];
       // The first photograph goes alone so the rest read its cached prompt.
       const first = queue.shift()!;
@@ -823,25 +870,35 @@ export const useStore = create<State>((set, get) => {
         }
       };
       await Promise.all(Array.from({ length: Math.max(1, Math.min(8, get().settings.concurrency)) }, worker));
+      const stopped = get().cancelRequested;
       set({ running: false, cancelRequested: false });
       persistRecent();
       const c2 = derive.counts(get());
-      get().notify(`Done: ${c2.done} read${c2.failed ? `, ${c2.failed} failed` : ""}${c2.review ? ` · ${c2.review} to check` : ""}.`, "info");
+      const left = c2.pending ? `, ${c2.pending} not read` : "";
+      get().notify(`${stopped ? "Stopped" : "Done"}: ${c2.done} read${left}${c2.failed ? `, ${c2.failed} failed` : ""}${c2.review ? ` · ${c2.review} to check` : ""}.`, "info");
+
     },
 
     cancelRun() { set({ cancelRequested: true }); },
 
     // ---------------------------------------------------------------- review
 
-    select(id) { set({ selectedID: id }); },
+    select(id) { set({ selectedID: id, keep: id }); },
     step(delta) {
       const s = get(), list = derive.visible(s);
       if (!list.length) return;
-      const i = Math.max(0, list.findIndex((f) => f.id === s.selectedID));
-      const next = list[Math.min(list.length - 1, Math.max(0, i + delta))];
-      set({ selectedID: next.id });
+      const i = list.findIndex((f) => f.id === s.selectedID);
+      // A selection outside the list (it was filtered away) moves to the list's nearest frame in the folder's order.
+      const at = i >= 0 ? i + delta : nearestIndex(s.frames, list, s.selectedID, delta);
+      const next = list[Math.min(list.length - 1, Math.max(0, at))];
+      set({ selectedID: next.id, keep: next.id });
     },
-    setFilter(filter) { set({ filter }); },
+    setFilter(filter) {
+      const s = get();
+      const list = derive.visible({ frames: s.frames, filter, keep: null });
+      const stays = list.some((f) => f.id === s.selectedID);
+      set({ filter, keep: stays ? s.selectedID : list[0]?.id ?? null, selectedID: stays ? s.selectedID : list[0]?.id ?? s.selectedID });
+    },
 
     async setManual(frameID, subjectID, manual) {
       const f = frame(frameID);
@@ -932,7 +989,7 @@ export const useStore = create<State>((set, get) => {
       try {
         const count = await applyRenamePlan(s.folder, await s.folder.sub(FrameRecord.folder, false).catch(() => null), plan);
         const recent = s.recentID ? (await Storage.recents()).find((r) => r.id === s.recentID) ?? null : null;
-        await openFolder(s.folder, recent);
+        await openFolder(s.folder, recent, true);
         set({ screen: "review" });
         get().notify(`Renamed ${count} photograph${count === 1 ? "" : "s"}, with their records.`, "info");
       } catch (e) { get().notify((e as Error).message); }
@@ -960,7 +1017,7 @@ export const useStore = create<State>((set, get) => {
     },
   };
 
-  async function openFolder(folder: PhotoFolder, recent: RecentShoot | null) {
+  async function openFolder(folder: PhotoFolder, recent: RecentShoot | null, keepSpend = false) {
     set({ loadingFolder: true });
     thumbnails.clear(); previews.clear();
     try {
@@ -976,11 +1033,12 @@ export const useStore = create<State>((set, get) => {
           state: rec?.observation ? "done" : rec?.caption ? "done" : "pending", error: null,
           observation: rec?.observation ?? null, sent: rec?.sent ?? null, original: rec?.original ?? null, zooms: rec?.zooms ?? [], model: rec?.model ?? null, dollars: rec?.dollars ?? 0,
           manual: rec?.manual ?? {}, note: rec?.note ?? "", identities: [], caption: rec?.caption ?? "", captionEdited: rec?.captionEdited ?? false,
-          approved: rec?.approved ?? false, written: rec?.approved ?? false, writeError: null, faceHints: rec?.faceHints ?? {},
+          approved: rec?.approved ?? false, written: rec?.approved ?? false, writeError: null, faceHints: currentHints(rec?.faceMatches),
+
         });
       }
       const id = recent?.id ?? `${folder.name}:${photos.length}:${photos[0].name}`;
-      set({ folder, frames, recentID: id, selectedID: frames[0].id, spent: 0, filter: "all" });
+      set((s) => ({ folder, frames, recentID: id, selectedID: frames[0].id, keep: null, spent: keepSpend ? s.spent : 0, filter: "all" }));
       // What the photographs already say: location, and often the sport and both teams.
       const iptc = await readEmbeddedIPTC(await photos[0].file());
       set({ photoHeadline: iptc.headline || null });
@@ -990,6 +1048,7 @@ export const useStore = create<State>((set, get) => {
         const withStaff = (t: Team | null) => (t ? { ...t, staff: t.staff ?? [] } : null);
         set((s) => ({ setup: { ...s.setup, style: null, house: null, ...saved.setup }, slots: { A: { ...emptySlot(), team: withStaff(saved.a) }, B: { ...emptySlot(), team: withStaff(saved.b) } } }));
       } else {
+        set((s) => ({ setup: freshSetup(s.setup.levelId), slots: { A: emptySlot(), B: emptySlot() } }));
         const guess = iptc.headline ? parseHeadline(iptc.headline) : null;
         const patch: Partial<Setup> = {};
         if (iptc.city) patch.city = iptc.city;

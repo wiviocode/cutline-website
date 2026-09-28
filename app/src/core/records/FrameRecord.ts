@@ -9,6 +9,7 @@
 
 import { Observation } from "../vision/Observation";
 import type { ManualID } from "../vision/Identify";
+import type { FaceHint } from "../vision/FaceEvidence";
 import type { ZoomLook } from "../pipeline/ReadPhoto";
 
 export interface FrameRecord {
@@ -26,8 +27,12 @@ export interface FrameRecord {
   /** The caption was typed by hand and is kept over what the reading would compose. */
   captionEdited: boolean;
   approved: boolean;
-  /** On-device face matches, when face matching was on. */
-  faceHints?: Record<string, { playerID: string; distance: number }[]>;
+  /**
+   * On-device face matches per subject; see FaceEvidence. Saved as `faceMatches`: the first
+   * matcher's `faceHints` held distances from another model and are not read.
+   */
+  faceMatches?: Record<string, FaceHint[]>;
+
   generatedAt: string;
 }
 
@@ -63,7 +68,8 @@ export const FrameRecord = {
         caption: str(raw.caption),
         captionEdited: !!raw.captionEdited,
         approved: !!raw.approved,
-        faceHints: (raw.faceHints as FrameRecord["faceHints"]) ?? {},
+        faceMatches: (raw.faceMatches as FrameRecord["faceMatches"]) ?? {},
+
         generatedAt: str(raw.generatedAt),
       };
     }

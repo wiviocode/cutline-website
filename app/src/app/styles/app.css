@@ -83,6 +83,10 @@ p { margin: 0; }
 .chip:hover { border-color: var(--gold-wash-border); color: var(--text-1); }
 .chip .mono { color: var(--text-4); }
 .chip-on { background: var(--gold-wash); border-color: var(--gold-wash-border); color: var(--text-1); }
+/* A face suggestion carries the roster photo it resembles, small. */
+.chip-face { padding-left: 3px; }
+.chip-face .hs { width: 18px; height: 20px; border-radius: 4px; }
+
 
 .switch { display: inline-flex; align-items: center; gap: 7px; background: none; border: 0; padding: 0; color: var(--text-3); cursor: pointer; font-size: 12px; }
 .switch i { width: 26px; height: 15px; border-radius: 8px; background: var(--line-strong); position: relative; transition: background 0.15s; }
@@ -94,6 +98,11 @@ p { margin: 0; }
 .row.center { justify-content: center; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+/* "NCAA Division III" needs the room; sport and gender take what is left. */
+.grid-game { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) max-content; }
+.grid-game .segment { white-space: nowrap; }
+
+
 .grid-city { display: grid; grid-template-columns: 1fr 96px; gap: 10px; }
 
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--ink-5); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }
@@ -329,6 +338,7 @@ p { margin: 0; }
 
 .card-inset { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--surface-well); }
 .template-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.template-form > .link { align-self: flex-start; }
 
 /* ---------- modal */
 .modal-scrim { position: fixed; inset: 0; background: rgba(5, 6, 8, 0.66); display: grid; place-items: center; z-index: 40; padding: 20px; }

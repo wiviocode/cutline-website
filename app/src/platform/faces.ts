@@ -2,84 +2,90 @@
  * On-device face matching against roster headshots — a second opinion for the athlete whose
  * number is turned away.
  *
- * Everything happens in this browser: the headshots come through the relay as images, the
- * face-api models load from a public CDN, and descriptors are computed and compared here. No face
- * is sent to Anthropic or anywhere else. Offered only for college rosters, and only when the
- * photographer turns it on.
+ * Everything happens in this browser: the headshots come through the relay as images, and the
+ * face models (YuNet to find a face, SFace to describe it — see public/models/NOTICE.md) are
+ * served from this site and run in a worker here. No face is sent to Anthropic or anywhere else.
+ * Offered only for college rosters, and only when the photographer asks.
  *
  * A match is evidence, not an identification: the review screen shows it as a suggestion, and
- * the caption uses it only for an athlete with no readable number when the match is strong and
- * clearly better than the next.
+ * the caption uses it only as FaceEvidence allows.
  */
 
 import { openDB, type IDBPDatabase } from "idb";
 import type { Player } from "@core/roster/Roster";
-import type { FaceHint } from "@core/vision/FaceEvidence";
-export type { FaceHint };
+import { FACE_LISTED, type FaceHint } from "@core/vision/FaceEvidence";
+import { cosine, type FaceQuality } from "@core/vision/FaceGeometry";
+import type { FaceFound, FaceReply, FaceRequest } from "./faceWorker";
 import { RELAY_HEADERS } from "./relay";
+export type { FaceHint };
 
-const VERSION = "1.7.15";
-const LIB = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${VERSION}/dist/face-api.esm.js`;
-const MODELS = `https://cdn.jsdelivr.net/npm/@vladmandic/face-api@${VERSION}/model/`;
+/** Big, confident and square-on enough to name someone unasked: eyes 20 pixels apart or more, not turned past profile. */
+export function goodFace(q: FaceQuality): boolean {
+  return q.score >= 0.8 && q.eyes >= 20 && Math.abs(q.yaw) <= 0.8;
+}
+/** Too small to compare at all: under 12 pixels between the eyes. */
+const usable = (q: FaceQuality) => q.eyes >= 12 && q.score >= 0.6;
 
-/** Below this Euclidean distance a match counts as strong. face-api's own guidance is 0.6; sports photographs need tighter. */
-export const STRONG_MATCH = 0.5;
-/** Shown as a suggestion below this. */
-export const WEAK_MATCH = 0.58;
-/** The best match must beat the next by this much to be used unasked. */
-export const MARGIN = 0.06;
+// ---------------------------------------------------------------- the worker
 
+let worker: Worker | null = null;
+let nextID = 1;
+const waiting = new Map<number, { resolve: (f: (FaceFound | null)[]) => void; reject: (e: Error) => void }>();
 
-// The library's surface, as used here.
-interface FaceAPI {
-  tf: { setBackend(b: string): Promise<boolean>; ready(): Promise<void> };
-  nets: Record<"ssdMobilenetv1" | "faceLandmark68Net" | "faceRecognitionNet", { loadFromUri(u: string): Promise<void> }>;
-  detectSingleFace(input: HTMLCanvasElement, options?: unknown): { withFaceLandmarks(): { withFaceDescriptor(): Promise<{ descriptor: Float32Array; detection: { score: number } } | undefined> } };
-  SsdMobilenetv1Options: new (o: { minConfidence: number }) => unknown;
-  euclideanDistance(a: Float32Array | number[], b: Float32Array | number[]): number;
+type Request = FaceRequest extends infer R ? (R extends FaceRequest ? Omit<R, "id"> : never) : never;
+
+function ask(req: Request): Promise<(FaceFound | null)[]> {
+
+  if (!worker) {
+    worker = new Worker(new URL("./faceWorker.ts", import.meta.url), { type: "module" });
+    worker.onmessage = (e: MessageEvent<FaceReply>) => {
+      const w = waiting.get(e.data.id);
+      if (!w) return;
+      waiting.delete(e.data.id);
+      if (e.data.ok) w.resolve(e.data.faces); else w.reject(new Error(e.data.error));
+    };
+    worker.onerror = (e) => {
+      // A worker that failed to start fails everything waiting on it; the next ask starts another.
+      for (const w of waiting.values()) w.reject(new Error(e.message || "The face models could not start."));
+      waiting.clear();
+      worker?.terminate();
+      worker = null;
+    };
+  }
+  const id = nextID++;
+  return new Promise((resolve, reject) => {
+    waiting.set(id, { resolve, reject });
+    worker!.postMessage({ ...req, id } as FaceRequest);
+  });
 }
 
-let api: Promise<FaceAPI> | null = null;
-function load(): Promise<FaceAPI> {
-  return (api ??= (async () => {
-    const f = (await import(/* @vite-ignore */ LIB)) as unknown as FaceAPI;
-    await f.tf.setBackend("webgl").catch(() => f.tf.setBackend("cpu"));
-    await f.tf.ready();
-    await Promise.all([f.nets.ssdMobilenetv1.loadFromUri(MODELS), f.nets.faceLandmark68Net.loadFromUri(MODELS), f.nets.faceRecognitionNet.loadFromUri(MODELS)]);
-    return f;
-  })());
-}
+// ---------------------------------------------------------------- the headshots
 
 let db: Promise<IDBPDatabase> | null = null;
 function cache(): Promise<IDBPDatabase> {
-  return (db ??= openDB("cutline-faces", 1, { upgrade(d) { d.createObjectStore("descriptors"); } }));
-}
-
-async function canvasOf(blob: Blob, maxEdge: number): Promise<HTMLCanvasElement> {
-  const bmp = await createImageBitmap(blob, { imageOrientation: "from-image" });
-  const s = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(bmp.width * s));
-  c.height = Math.max(1, Math.round(bmp.height * s));
-  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
-  bmp.close();
-  return c;
+  // Version 2: SFace embeddings. The first matcher's descriptors are dropped, not reused.
+  return (db ??= openDB("cutline-faces", 2, {
+    upgrade(d) {
+      if (d.objectStoreNames.contains("descriptors")) d.deleteObjectStore("descriptors");
+      if (!d.objectStoreNames.contains("sface")) d.createObjectStore("sface");
+    },
+  }));
 }
 
 /** A smaller copy of a headshot where the site can serve one. */
 function smaller(url: string): string {
   // Sidearm resizes on request; WMT's imgproxy URLs are signed and are used as they are.
-  if (/\/images\/\d{4}\//.test(url) && !url.includes("imgproxy")) return `${url.split("?")[0]}?width=500&quality=85`;
+  if (/\/images\/\d{4}\//.test(url) && !url.includes("imgproxy")) return `${url.split("?")[0]}?width=600&quality=90`;
   return url;
 }
 
 export class FaceMatcher {
   private refs = new Map<string, Float32Array>();
 
-  /** Descriptors for every player with a headshot, from the cache where they were computed before. */
+  /** Embeddings for every player with a headshot, from the cache where they were computed before. */
   async prepare(players: Player[], onProgress?: (done: number, total: number) => void): Promise<{ ready: number; total: number }> {
-    const f = await load();
     const store = await cache();
+    await ask({ kind: "warm" });
     const withShots = players.filter((p) => p.headshotURL);
     let done = 0;
     const queue = [...withShots];
@@ -87,56 +93,43 @@ export class FaceMatcher {
       while (queue.length) {
         const p = queue.shift()!;
         const url = p.headshotURL!;
-        let d = (await store.get("descriptors", url)) as number[] | null | undefined;
-        if (d === undefined) {
+        let e = (await store.get("sface", url)) as Float32Array | null | undefined;
+        if (e === undefined) {
           try {
             const res = await fetch(`/api/fetch?raw=1&url=${encodeURIComponent(smaller(url))}`, { headers: RELAY_HEADERS });
             if (res.ok) {
-              const found = await f.detectSingleFace(await canvasOf(await res.blob(), 640)).withFaceLandmarks().withFaceDescriptor();
-              d = found ? Array.from(found.descriptor) : null;
-              await store.put("descriptors", d, url);
+              const [found] = await ask({ kind: "portrait", blob: await res.blob() });
+              e = found && found.quality.score >= 0.6 ? found.embedding : null;
+              await store.put("sface", e, url);
             }
           } catch { /* a headshot that will not load is a player without a face to match */ }
         }
-        if (d) this.refs.set(p.id, Float32Array.from(d));
+        if (e) this.refs.set(p.id, e);
         onProgress?.(++done, withShots.length);
       }
     };
-    await Promise.all([work(), work(), work()]);
+    await Promise.all([work(), work(), work(), work()]);
     return { ready: this.refs.size, total: withShots.length };
   }
 
   get size(): number { return this.refs.size; }
 
-  /** The closest players to the face in a crop, best first, among the given ids. */
-  async match(crop: HTMLCanvasElement, candidates: string[]): Promise<FaceHint[]> {
-    if (!this.refs.size) return [];
-    const f = await load();
-    const found = await f.detectSingleFace(crop, new f.SsdMobilenetv1Options({ minConfidence: 0.6 })).withFaceLandmarks().withFaceDescriptor();
-    if (!found) return [];
-    return candidates.filter((id) => this.refs.has(id))
-      .map((id) => ({ playerID: id, distance: +f.euclideanDistance(found.descriptor, this.refs.get(id)!).toFixed(3) }))
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, 3)
-      .filter((h) => h.distance < WEAK_MATCH);
+  /**
+   * For each subject's box, the players whose headshots its face most resembles, best first,
+   * among that subject's candidates — and whether a usable face was found at all.
+   */
+  async match(photo: Blob, boxes: [number, number, number, number][], sent: { width: number; height: number }, candidates: string[][]): Promise<{ hints: FaceHint[]; found: boolean }[]> {
+    if (!this.refs.size || !boxes.length) return boxes.map(() => ({ hints: [], found: false }));
+    const faces = await ask({ kind: "subjects", blob: photo, boxes, sent });
+    return faces.map((face, i) => {
+      if (!face || !usable(face.quality)) return { hints: [], found: false };
+      const good = goodFace(face.quality);
+      const hints = candidates[i].filter((id) => this.refs.has(id))
+        .map((id) => ({ playerID: id, score: +cosine(face.embedding, this.refs.get(id)!).toFixed(3), good }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .filter((h) => h.score >= FACE_LISTED);
+      return { hints, found: true };
+    });
   }
-}
-
-/**
- * The head of a subject, from their box on the frame as sent: the top part of the box, squared
- * and padded, drawn from a larger decode of the photograph.
- */
-export async function headCrops(photo: Blob, boxes: [number, number, number, number][], sent: { width: number; height: number }): Promise<HTMLCanvasElement[]> {
-  const full = await canvasOf(photo, 2400);
-  const sx = full.width / sent.width, sy = full.height / sent.height;
-  return boxes.map((box) => {
-    const [x1, y1, x2, y2] = [box[0] * sx, box[1] * sy, box[2] * sx, box[3] * sy];
-    const side = Math.max(48, Math.min((x2 - x1) * 1.1, (y2 - y1) * 0.8));
-    const cx = (x1 + x2) / 2, top = Math.max(0, y1 - side * 0.15);
-    const c = document.createElement("canvas");
-    const out = Math.min(400, Math.max(160, Math.round(side)));
-    c.width = out; c.height = out;
-    c.getContext("2d")!.drawImage(full, Math.max(0, cx - side / 2), top, side, side, 0, 0, out, out);
-    return c;
-  });
 }

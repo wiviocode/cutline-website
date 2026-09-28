@@ -80,7 +80,31 @@ describe("captions in the desk's own style", () => {
     expect(compose(obs, apCtx(vb, "volleyball", sept18))).toMatch(/^Nebraska players stand for pregame introductions before an NCAA college volleyball match against North Carolina, Friday/);
   });
 
+  it("AP: teammates are not given the school twice, and the rest of the side are teammates", () => {
+    const obs: Observation = { scene: "celebration", timing: "during", clause: "{P1} celebrates a point with {P2} and {A:players}", subjects: [
+      subject({ id: "P1", team: "A", number: "2" }), subject({ id: "P2", team: "A", number: "15" }),
+    ] };
+    expect(compose(obs, apCtx(vb, "volleyball", sept18))).toMatch(/^Nebraska setter Bergen Reilly \(2\) celebrates a point with middle blocker Andi Jackson \(15\) and teammates during an NCAA college volleyball match against North Carolina,/);
+    // An unnamed teammate first: the named one still needs no school.
+    const unnamed: Observation = { ...obs, clause: "{P1} and {P2} celebrate a point with {A:players}", subjects: [subject({ id: "P1", team: "A", number: "", clarity: "hidden" }), subject({ id: "P2", team: "A", number: "2" })] };
+    expect(compose(unnamed, apCtx(vb, "volleyball", sept18))).toMatch(/^Nebraska XXXXX and setter Bergen Reilly \(2\) celebrate a point with teammates during/);
+    // With the other side in the sentence, "teammates" would be ambiguous.
+    const both: Observation = { scene: "action", timing: "during", clause: "{P1} spikes the ball past {P2} as {A:players} watch", subjects: [subject({ id: "P1", team: "A", number: "15" }), subject({ id: "P2", team: "B", number: "21" })] };
+    expect(compose(both, apCtx(vb, "volleyball", sept18))).toContain("as Nebraska players watch");
+  });
+
+  it("AP: the model's own 'before the game' and a second 'during' are not doubled", () => {
+    const pre: Observation = { scene: "portrait", timing: "before", clause: "{A:players} run onto the court before the game", subjects: [] };
+    expect(compose(pre, apCtx(vb, "volleyball", sept18))).toMatch(/^Nebraska players run onto the court before an NCAA college volleyball match against North Carolina,/);
+    const stairs: Observation = { scene: "portrait", timing: "before", clause: "{A:players} walk down the stairs before taking the field", subjects: [] };
+    expect(compose(stairs, apCtx(vb, "volleyball", sept18))).toMatch(/before taking the field ahead of an NCAA college volleyball match against North Carolina,/);
+    const timeout: Observation = { scene: "huddle", timing: "during", clause: "{A:players} huddle during a timeout", subjects: [] };
+
+    expect(compose(timeout, apCtx(vb, "volleyball", sept18))).toMatch(/^Nebraska players huddle during a timeout in an NCAA college volleyball match against North Carolina,/);
+  });
+
   it("AP: an unreadable number becomes the desk's placeholder, with the team", () => {
+
     const obs: Observation = { scene: "action", timing: "during", clause: "{P1} blocks the spike", subjects: [subject({ id: "P1", team: "B", number: "", clarity: "hidden" })] };
     expect(compose(obs, apCtx(vb, "volleyball", sept18))).toMatch(/^North Carolina XXXXX blocks the spike during an NCAA college volleyball match against Nebraska,/);
   });
@@ -128,9 +152,17 @@ describe("captions in the desk's own style", () => {
     });
 
     it("drops the model's article before 'members of'", () => {
-      const obs: Observation = { scene: "portrait", timing: "before", clause: "{P1} walks down the stairs with the {B:players}", subjects: [subject({ id: "P1", team: "B", number: "7" })] };
-      expect(compose(obs, ctx)).toMatch(/^Gretna Dragon Samantha Hagaman \(7\) walks down the stairs with members of the Gretna Dragons against the Waverly Vikings before a high school volleyball match/);
+      const obs: Observation = { scene: "portrait", timing: "before", clause: "{A:players} walk down the stairs with the {B:players}", subjects: [] };
+      expect(compose(obs, ctx)).toMatch(/^Members of the Waverly Vikings walk down the stairs with members of the Gretna Dragons before a high school volleyball match/);
     });
+
+    it("a player's own side is her teammates, and an unnamed one takes the team singular", () => {
+      const obs: Observation = { scene: "portrait", timing: "before", clause: "{P1} walks down the stairs with the {B:players}", subjects: [subject({ id: "P1", team: "B", number: "7" })] };
+      expect(compose(obs, ctx)).toMatch(/^Gretna Dragon Samantha Hagaman \(7\) walks down the stairs with teammates against the Waverly Vikings before a high school volleyball match/);
+      const unnamed: Observation = { scene: "portrait", timing: "before", clause: "{P1} runs through a tunnel of fans before the game", subjects: [subject({ id: "P1", team: "A", number: "", clarity: "hidden" })] };
+      expect(compose(unnamed, ctx)).toMatch(/^Waverly Viking XXXXX runs through a tunnel of fans against the Gretna Dragons before a high school volleyball match,/);
+    });
+
 
     it("members of the team, and a coach", () => {
       const obs: Observation = { scene: "celebration", timing: "during", clause: "{A:players} celebrate together on the sideline", subjects: [] };
@@ -205,7 +237,18 @@ describe("identification against the roster", () => {
     expect(b.status).toBe("likely");
   });
 
+  it("the photographer's note names the player the reading tied it to", () => {
+    const s = subject({ id: "P1", team: "A", number: "", clarity: "hidden", player: "3 Virginia Adriano" });
+    const obs: Observation = { scene: "action", timing: "during", clause: "{P1} attacks", subjects: [s] };
+    expect(Identify.all(obs, { matchup: vb, unitSport: false, note: "the hitter is Virginia Adriano #3" })[0]).toMatchObject({ status: "confirmed", source: "note" });
+    expect(Identify.all(obs, { matchup: vb, unitSport: false, note: "she is #3" })[0].player?.lastName).toBe("Adriano");
+    // A note about someone else, or no note, leaves the hidden number unnamed.
+    expect(Identify.all(obs, { matchup: vb, unitSport: false, note: "the ball is out" })[0].player).toBeNull();
+    expect(Identify.all(obs, { matchup: vb, unitSport: false })[0].player).toBeNull();
+  });
+
   it("never believes a roster pick whose digits it did not see", () => {
+
     const [a] = Identify.all({ scene: "action", timing: "during", clause: "", subjects: [subject({ id: "P1", team: "A", number: "", clarity: "hidden", player: "15 Andi Jackson" })] }, ctx);
     expect(a.status).toBe("unknown");
     expect(a.player).toBeNull();

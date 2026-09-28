@@ -49,13 +49,13 @@ export function Welcome() {
         <section className="welcome-step">
           <h2><span className="step-n">2</span> Your byline and house style</h2>
           <div className="grid-2">
-            <Field label="Your name, as credited"><TextInput placeholder="Eli Larson" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+            <Field label="Your name, as credited"><TextInput placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} /></Field>
             <Field label="Credit to" hint={`Blank for "${Styles.defaultHouse(style) ?? "no house"}"`}><TextInput placeholder={Styles.defaultHouse(style) ?? "Nebraska Athletics"} value={house} onChange={(e) => setHouse(e.target.value)} /></Field>
             <Field label="House style" wide>
               <Select value={style} onChange={setStyle} options={CAPTION_STYLES.map((v) => ({ value: v, label: Styles.displayName(v) }))} />
             </Field>
           </div>
-          <p className="sample">{sample(style, name || "Eli Larson", house)}</p>
+          <p className="sample">{sample(style, name || "Jane Doe", house)}</p>
         </section>
 
         <section className="welcome-step">
@@ -67,7 +67,10 @@ export function Welcome() {
         </section>
 
         <div className="welcome-foot">
-          {wantTemplate && !templateReady ? <span className="muted small">Give the template a name and at least one field, or choose Not now.</span> : null}
+          {!ok ? <span className="muted small">Check your API key to start.</span>
+            : !name.trim() ? <span className="muted small">Add your name as it is credited to start.</span>
+            : wantTemplate && !templateReady ? <span className="muted small">Give the template a name and at least one field, or choose Not now.</span> : null}
+
           <Button kind="primary" onClick={finish} disabled={!ok || !name.trim() || !templateReady}>Start</Button>
         </div>
       </div>

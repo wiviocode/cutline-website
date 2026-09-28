@@ -10,6 +10,8 @@ import { Matchup, Player } from "@core/roster/Roster";
 import { PhotoMetadata } from "@core/images/PhotoMetadata";
 import { decodableBlob } from "@platform/images";
 import { Identify, type Identity } from "@core/vision/Identify";
+import { FACE_SUGGEST, likeness } from "@core/vision/FaceEvidence";
+
 import type { Subject } from "@core/vision/Observation";
 
 /**
@@ -145,7 +147,7 @@ const FilmThumb = memo(function FilmThumb({ frame, on, n }: { frame: Frame; on: 
 function boxLabelText(x: Subject, id: Identity | undefined): string {
   const p = id?.player;
   if (p) return `${p.role === "staff" ? "" : `${p.number} `}${p.lastName}${id?.status === "likely" ? "?" : ""}`;
-  return x.number ? `${x.number} ?` : `1 ${x.kind === "athlete" ? "?" : x.role || x.kind}`;
+  return x.number ? `${x.number} ?` : x.kind === "athlete" ? "?" : x.role || x.kind;
 }
 
 function statusClass(id: Identity | undefined, s: Subject): string {
@@ -324,7 +326,7 @@ function Stage({ frame, onPick, zoomKey }: { frame: Frame; onPick: (id: string) 
             {full.state === "ready" && full.url ? <img className="stage-full" src={full.url} alt="" draggable={false} /> : null}
             {showBoxes && !zoomed && obs && frame.sent ? (
               <div className="boxes">
-                {obs.subjects.filter((x) => x.box).map((x, i) => {
+                {obs.subjects.filter((x) => x.box).map((x) => {
                   const [x1, y1, x2, y2] = x.box!;
                   const sx = 100 / frame.sent!.width, sy = 100 / frame.sent!.height;
                   const id = frame.identities.find((k) => k.subjectId === x.id);
@@ -334,7 +336,7 @@ function Stage({ frame, onPick, zoomKey }: { frame: Frame; onPick: (id: string) 
                       style={{ left: `${x1 * sx}%`, top: `${y1 * sy}%`, width: `${Math.max(0.5, (x2 - x1) * sx)}%`, height: `${Math.max(0.5, (y2 - y1) * sy)}%` }}>
                       <span className={`box-label${under.has(x.id) ? " box-label-under" : ""}`}>
                         {p ? <>{p.role === "staff" ? null : <i>{p.number}</i>}{p.lastName}{id?.status === "likely" ? "?" : ""}</>
-                          : x.number ? <><i>{x.number.replace(/\?/g, "_")}</i>?</> : <><i>{i + 1}</i>{x.kind === "athlete" ? "?" : x.role || x.kind}</>}
+                          : x.number ? <><i>{x.number.replace(/\?/g, "_")}</i>?</> : x.kind === "athlete" ? "?" : cap(x.role || x.kind)}
                       </span>
                     </button>
                   );
@@ -456,6 +458,10 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
                 const meta = [p?.number ? `#${p.number}` : !p && x.number ? `#${x.number.replace(/\?/g, "_")}` : "", role, team?.school ?? (x.kind === "athlete" ? "team not known" : "")].filter(Boolean).join(" · ");
                 const open = id && id.status !== "confirmed" && x.kind === "athlete";
                 const alts = open ? id.alternatives.filter((a) => a.id !== p?.id).slice(0, p ? 2 : 3) : [];
+                // Someone the roster photos resemble, offered for a click when no one is named.
+                const byFace = open && !p && matchup ? (frame.faceHints[x.id] ?? []).filter((h) => h.score >= FACE_SUGGEST)
+                  .map((h) => ({ h, who: (["A", "B"] as const).map((k) => ({ k, pl: Matchup.team(matchup, k).players.find((q) => q.id === h.playerID) })).find((w) => w.pl) }))
+                  .filter((c) => c.who && !alts.some((a) => a.id === c.h.playerID)).slice(0, 2) : [];
                 return (
                   <div key={x.id} className={`who-row who-${st.cls}${inClause.has(x.id) ? "" : " who-unused"}`}>
                     <button type="button" className="who-main" onClick={() => onPick(x.id)} title="Change who this is">
@@ -471,7 +477,13 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
                       <div className="alts">
                         {p && id.teamKey ? <button type="button" className="chip chip-on" onClick={() => s.setManual(frame.id, x.id, { teamKey: id.teamKey, playerID: p.id })}>✓ {p.lastName}</button> : null}
                         {alts.map((a) => <button key={a.id} type="button" className="chip" onClick={() => s.setManual(frame.id, x.id, { teamKey: id.teamKey, playerID: a.id })}><span className="mono">{a.number}</span>{a.lastName}</button>)}
-                        <button type="button" className="chip" onClick={() => onPick(x.id)}>Someone else…</button>
+                        {byFace.map(({ h, who }) => (
+                          <button key={h.playerID} type="button" className="chip chip-face" title={`The face resembles ${Player.fullName(who!.pl!)}'s roster photo (${likeness(h.score)}), on this computer`}
+                            onClick={() => s.setManual(frame.id, x.id, { teamKey: who!.k, playerID: h.playerID })}>
+                            <Headshot url={who!.pl!.headshotURL} size="sm" /><span className="mono">{who!.pl!.number}</span>{who!.pl!.lastName}?
+                          </button>
+                        ))}
+                        <button type="button" className="chip" onClick={() => onPick(x.id)}>{p || alts.length || byFace.length ? "Someone else…" : "Choose a player…"}</button>
                       </div>
                     ) : null}
                   </div>
@@ -496,7 +508,8 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
           ? <Button large block onClick={() => s.setApproved(frame.id, false)}>Unapprove</Button>
           : <Button kind="primary" large block disabled={!frame.caption} onClick={() => s.approveAndNext()}>Approve</Button>}
         <div className="insp-meta">
-          <span>{frame.model ? `${modelName(frame.model)} ·${Cost.dollars(frame.dollars)}${frame.zooms.length ? ` · ${frame.zooms.length} close look${frame.zooms.length > 1 ? "s" : ""}` : ""}` : frame.state === "done" ? "Caption from an earlier session" : ""}</span>
+          <span>{frame.model ? `${modelName(frame.model)} ·${Cost.dollars(frame.dollars)}${frame.zooms.length ? ` · ${frame.zooms.length} close look${frame.zooms.length > 1 ? "s" : ""}` : ""}` : frame.state === "done" ? (frame.captionEdited && !frame.observation ? "Written by hand" : "Caption from an earlier session") : ""}</span>
+
           <span className={frame.writeError ? "error" : ""}>{writeState}</span>
         </div>
       </div>
@@ -507,7 +520,8 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
 function subjectStatus(id: Identity | undefined, x: Subject): { cls: "ok" | "check" | "unnamed" | "other"; word: string } {
   if (id?.player?.role === "staff") return { cls: "ok", word: "Coach" };
   if (x.kind !== "athlete") return { cls: "other", word: cap(x.kind) };
-  if (id?.player && id.status === "confirmed") return { cls: "ok", word: id.source === "manual" ? "Set" : "Sure" };
+  if (id?.player && id.status === "confirmed") return { cls: "ok", word: id.source === "manual" || id.source === "note" ? "Set" : "Sure" };
+
   if (id?.player) return { cls: "check", word: "Check" };
   return { cls: "unnamed", word: "Unnamed" };
 }

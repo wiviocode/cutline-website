@@ -43,7 +43,8 @@ export function SettingsPanel() {
           <h3>Byline and style</h3>
           <div className="grid-2">
             <Field label="Your name"><TextInput value={s.settings.photographer} onChange={(e) => set({ photographer: e.target.value })} /></Field>
-            <Field label="Credit to" hint={`Blank for "${Styles.defaultHouse(s.settings.style) ?? "none"}"`}><TextInput value={s.settings.house} onChange={(e) => set({ house: e.target.value })} /></Field>
+            <Field label="Credit to" hint={`Blank for "${Styles.defaultHouse(s.settings.style) ?? "none"}"`}><TextInput placeholder={Styles.defaultHouse(s.settings.style) ?? ""} value={s.settings.house} onChange={(e) => set({ house: e.target.value })} /></Field>
+
             <Field label="House style"><Select<CaptionStyle> value={s.settings.style} onChange={(v) => set({ style: v })} options={CAPTION_STYLES.map((v) => ({ value: v, label: Styles.displayName(v) }))} /></Field>
             <Field label="A player who can't be named">
               <Segmented value={s.settings.unnamed} onChange={(v) => set({ unnamed: v })} options={[{ value: "placeholder", label: "XXXXX" }, { value: "describe", label: "“a Nebraska player”" }]} />

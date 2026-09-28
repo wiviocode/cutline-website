@@ -67,22 +67,44 @@ export const Compose = {
 function renderClause(obs: Observation, ids: Identity[], ctx: CaptionContext, named: Set<TeamKey>): string {
   let clause = obs.clause.trim().replace(/[.\s]+$/, "");
   if (!clause) clause = fallbackClause(obs);
+  // The tail says "before the game" from the timing; the model saying it too would double it.
+  clause = clause.replace(/,?\s+(?:before|after|during)\s+the\s+(?:game|match|meet|contest)\b/gi, "").trim();
   const pieces: string[] = [];
   let last = 0;
   let prevTeam: TeamKey | null = null; // the team of the named player just before, if the last token was one
+  const athleteTeams = new Set<TeamKey>(); // the sides of the athletes already in the sentence
+  const coachTeams = new Set<TeamKey>();
   for (const m of clause.matchAll(/\{(P\d+|A|B|A:players|B:players|venue)\}/g)) {
     let before = clause.slice(last, m.index);
     const token = m[1];
     let rendered = renderToken(token, obs, ids, ctx, named);
-    // "North Carolina outside hitter Safi Hampton (22) and middle blocker Jackie Taylor (21)":
-    // a teammate listed right after is not given the school again.
     const team = namedPlayerTeam(token, ids);
-    if (team && team === prevTeam && ctx.matchup && /^\s*(,\s*)?(and\s+)?$/.test(before)) {
+    if (team && ctx.matchup) {
       const t = Matchup.team(ctx.matchup, team);
-      for (const prefix of [`${teamName(t, ctx.style)} `, `${possessive(t.school)} `]) {
-        if (rendered.startsWith(prefix)) { rendered = rendered.slice(prefix.length); break; }
+      const listed = team === prevTeam && /^\s*(,\s*)?(and\s+)?$/.test(before);
+      // Only this side is in the sentence so far: a teammate needs no school again.
+      const onlySide = athleteTeams.size === 1 && athleteTeams.has(team);
+      if (listed || onlySide) {
+        for (const prefix of [`${teamName(t, ctx.style)} `, `${possessive(t.school)} `]) {
+          if (!rendered.startsWith(prefix)) continue;
+          rendered = rendered.slice(prefix.length);
+          // "celebrates with teammate Logan Jazbec (22)" where there is no position to lead with.
+          const name = ids.find((i) => i.subjectId === token)?.player;
+          if (!listed && name && rendered.startsWith(Player.fullName(name))) rendered = `teammate ${rendered}`;
+          break;
+        }
       }
     }
+    // "{P1} celebrates with {A:players}": the players are the subject's teammates.
+    if ((token === "A:players" || token === "B:players") && ctx.matchup) {
+      const k = token[0] as TeamKey;
+      if (athleteTeams.size === 1 && athleteTeams.has(k)) rendered = "teammates";
+      else if (!athleteTeams.size && coachTeams.size === 1 && coachTeams.has(k)) rendered = "players";
+      if (rendered === "teammates" || rendered === "players") before = before.replace(/\bthe\s+$/i, "");
+    }
+    const subject = obs.subjects.find((x) => x.id === token);
+    const side = ids.find((i) => i.subjectId === token)?.teamKey ?? (subject?.team === "A" || subject?.team === "B" ? subject.team : null);
+    if (subject && side) (subject.kind === "athlete" ? athleteTeams : subject.kind === "coach" ? coachTeams : new Set<TeamKey>()).add(side);
     prevTeam = team;
     // "a {A} coach" → "an Indiana coach": the article agrees with what the token became.
     const art = /(^|\s)(a|an|A|An)\s+$/.exec(before);
@@ -175,7 +197,9 @@ function renderSubject(s: Subject, id: Identity | undefined, ctx: CaptionContext
   const num = formatNumber(number, ctx.style);
   if (!team) return num ? `${UNIDENTIFIED} ${num}` : UNIDENTIFIED;
   if (Styles.usesOfTheTeamForm(ctx.style)) return `${UNIDENTIFIED}${num ? ` ${num}` : ""} of ${Team.withArticle(team)}`;
-  return `${teamName(team, ctx.style)} ${UNIDENTIFIED}${num ? ` ${num}` : ""}`;
+  // Hurrdat names a player with the team singular — "Waverly Viking XXXXX", as it would a named one.
+  const label = Styles.usesSingularTeamBeforeName(ctx.style) ? TeamNoun.singularTeamLabel(team.school, team.nickname) ?? Team.fullName(team) : teamName(team, ctx.style);
+  return `${label} ${UNIDENTIFIED}${num ? ` ${num}` : ""}`;
 }
 
 /** "Nebraska wide receiver Jacory Barney Jr. (2)", "Waverly Viking Gracie Lauenstein (3)", "Jane Doe #5 of the Iowa Hawkeyes". */
@@ -299,7 +323,16 @@ function gameTail(body: string, obs: Observation, ctx: CaptionContext, named: Se
   let teamClause = "";
   if (named.size === 0) teamClause = `between ${nameWithArticle(m.a)} and ${nameWithArticle(m.b)}`;
   else if (named.size === 1) teamClause = `against ${nameWithArticle(Matchup.team(m, Matchup.other([...named][0])))}`;
-  const gameClause = `${timingWord(obs)} ${eventNoun(ctx)}`;
+  // "during a timeout in an NCAA college football game", not "during … during" (Hurrdat keeps its
+  // own template there); "before taking the field ahead of", not "before … before".
+  const word = timingWord(obs);
+  const timing = word === "during" && /\bduring\b/i.test(body) && !Styles.opponentPrecedesGameClause(style) ? "in"
+    : word === "before" && /\bbefore\b/i.test(body) ? "ahead of"
+    : word === "after" && /\bafter\b/i.test(body) ? "following"
+    : word;
+
+  const gameClause = `${timing} ${eventNoun(ctx)}`;
+
   return assemble(body, gameClause, teamClause, ctx);
 }
 

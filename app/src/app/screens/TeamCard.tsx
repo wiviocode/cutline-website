@@ -38,7 +38,7 @@ export function TeamCard({ slot }: { slot: TeamKey }) {
         <span className="team-swatch" style={colour ? { background: colour } : undefined} title={team?.colors.map((c) => (/^[0-9a-f]{6}$/i.test(c) ? colourName(c) : c)).join(", ") || "School colours not known"} />
         <div className="team-name-inputs">
           <input className="input input-bare input-school" aria-label={`${label} school`} placeholder={slot === "A" ? "School (Nebraska)" : "School (Bowling Green)"} value={team?.school ?? ""} onChange={(e) => s.editTeam(slot, { school: e.target.value })} spellCheck={false} />
-          <input className="input input-bare input-nick" aria-label={`${label} nickname`} placeholder={slot === "A" ? "Nickname (Cornhuskers)" : "Nickname (Falcons)"} value={team?.nickname ?? ""} onChange={(e) => s.editTeam(slot, { nickname: e.target.value || null })} spellCheck={false} />
+          <input className="input input-bare input-nick" aria-label={`${label} nickname`} placeholder={team?.school ? "Nickname" : slot === "A" ? "Nickname (Cornhuskers)" : "Nickname (Falcons)"} value={team?.nickname ?? ""} onChange={(e) => s.editTeam(slot, { nickname: e.target.value || null })} spellCheck={false} />
         </div>
       </div>
 
@@ -102,7 +102,8 @@ export function TeamCard({ slot }: { slot: TeamKey }) {
       {st.error ? <p className="error small">{st.error}</p> : null}
 
       {team ? (
-        <Field label="Wearing today" hint={team.uniform ? undefined : "Read from three of your photos when the run starts — or describe it"}>
+        <Field label="Wearing today" hint={team.uniform ? undefined : "Read from a few of your photos when the run starts — or describe it"}>
+
           <textarea className="input textarea uniform" rows={2} placeholder="red jerseys, white numbers" value={team.uniform} onChange={(e) => s.editTeam(slot, { uniform: e.target.value })} />
         </Field>
       ) : null}

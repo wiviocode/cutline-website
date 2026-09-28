@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useStore, derive, type Frame } from "../store";
 import { Button, Segmented, TextInput } from "../components";
 import { Team, Player, Staff, type TeamKey } from "@core/roster/Roster";
+import { likeness } from "@core/vision/FaceEvidence";
+
 
 /**
  * Choosing who a subject is, in a panel over the caption column so the photograph stays in view.
@@ -45,11 +47,13 @@ export function PlayerPicker({ frame, subjectID, onClose }: { frame: Frame; subj
   const faces = !!team && [...team.players, ...(team.staff ?? [])].some((p) => p.headshotURL);
   const choose = (p: Player | null) => { void s.setManual(frame.id, subjectID, { teamKey, playerID: p?.id ?? null }); onClose(); };
   const read = subject.number ? `#${subject.number.replace(/\?/g, "_")} (${subject.clarity})` : "no number seen";
+  const noun = subject.kind === "athlete" ? "player" : subject.kind === "other" ? "person" : subject.kind;
+
 
   return (
-    <div className="picker" role="dialog" aria-label={`Who is ${subject.id.replace("P", "subject ")}?`}>
+    <div className="picker" role="dialog" aria-label={`Who is this ${noun}?`}>
       <div className="picker-top">
-        <b>Who is {subject.id.replace("P", "#")}?</b>
+        <b>Who is this {noun}?</b>
         <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
       </div>
       {matchup ? (
@@ -72,7 +76,7 @@ export function PlayerPicker({ frame, subjectID, onClose }: { frame: Frame; subj
                 {faces ? (p.headshotURL ? <img className="pick-face" src={p.headshotURL} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="pick-face" />) : null}
                 <span className="pick-num">{staff ? "" : p.number || "–"}</span>
                 <span className="pick-name">{Player.fullName(p) || "(no name)"}</span>
-                <span className="pick-pos">{staff ? p.positionAbbr || p.position : p.positionAbbr || p.position}{hint ? ` · looks like (${hint.distance.toFixed(2)})` : ""}</span>
+                <span className="pick-pos">{staff ? p.positionAbbr || p.position : p.positionAbbr || p.position}{hint ? <span className="pick-face-hint"> · {likeness(hint.score)}</span> : null}</span>
               </button>
             </div>
           );

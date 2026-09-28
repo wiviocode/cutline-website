@@ -23,7 +23,7 @@ export function Setup() {
           <PhotosCard />
           <section className="card" aria-label="The game">
             <div className="card-head"><b>Game</b>{s.photoHeadline ? <span className="faint">Filled in from the headline</span> : null}</div>
-            <div className="grid-3">
+            <div className="grid-3 grid-game">
               <Field label="Level">
                 <Select value={s.setup.levelId} onChange={(v) => s.setSetup({ levelId: v })} options={Levels.all.map((l) => ({ value: l.id, label: l.name }))} />
               </Field>
@@ -38,7 +38,8 @@ export function Setup() {
             </div>
             <Field label="Venue"><TextInput placeholder="Memorial Stadium" value={s.setup.venue} onChange={(e) => s.setSetup({ venue: e.target.value })} /></Field>
             <div className="grid-city">
-              <Field label="City"><TextInput placeholder="Lincoln" value={s.setup.city} onChange={(e) => s.setSetup({ city: e.target.value })} /></Field>
+              <Field label="City" hint={s.setup.city.trim() ? undefined : "Captions end with the city and state."}><TextInput placeholder="Lincoln" value={s.setup.city} onChange={(e) => s.setSetup({ city: e.target.value })} /></Field>
+
               <Field label="State"><TextInput placeholder="Neb." value={s.setup.state} onChange={(e) => s.setSetup({ state: e.target.value })} /></Field>
             </div>
           </section>
@@ -64,8 +65,10 @@ export function Setup() {
                 <button type="button" className="link" onClick={() => s.swapTeams()} title="Swap which team is yours">Swap sides</button>
               </div>
               <div className="teams">
-                <TeamCard slot="A" />
-                <TeamCard slot="B" />
+                {/* Each shoot starts its cards afresh: no paste or open roster carries over from the last. */}
+                <TeamCard key={`A:${s.recentID ?? ""}`} slot="A" />
+                <TeamCard key={`B:${s.recentID ?? ""}`} slot="B" />
+
               </div>
               {s.slots.A.team && s.slots.B.team && s.frames.length && (!s.slots.A.team.uniform || !s.slots.B.team.uniform) ? (
                 <p className="faint small">What each team is wearing is read from a few of your photos when the run starts. {s.scouting ? <Spinner /> : <button type="button" className="link" onClick={() => s.scoutUniforms()}>Read it now</button>}</p>
@@ -89,7 +92,8 @@ function MeetFields() {
   const s = useStore();
   return (
     <>
-      <Field label="Meet" hint="As a caption names it: “the Nebraska Class A state cross country championships”."><TextInput placeholder="Waverly Invitational" value={s.setup.eventName} onChange={(e) => s.setSetup({ eventName: e.target.value })} /></Field>
+      <Field label="Meet" hint={`As a caption names it: “${s.setup.sport === "crossCountry" ? "the Nebraska Class A state cross country championships" : "the Big Ten indoor track and field championships"}”.`}><TextInput
+ placeholder="Waverly Invitational" value={s.setup.eventName} onChange={(e) => s.setSetup({ eventName: e.target.value })} /></Field>
       <Field label="Entry list (optional)" hint={`One per line: bib, name, school. ${derive.entries(s).length ? `${derive.entries(s).length} entries read.` : "Without one, athletes are described by school lettering."}`}>
         <textarea className="input textarea" rows={8} placeholder={"1204, Jane Doe, Waverly\n1311, Ann Roe, Gretna"} value={s.setup.entriesText} onChange={(e) => s.setSetup({ entriesText: e.target.value })} />
       </Field>
@@ -189,7 +193,10 @@ function RunBar() {
       <span className="runbar-est">{blocker ?? (todo ? `${todo} photo${todo === 1 ? "" : "s"} · about ${Cost.dollars(derive.estimate(s))}` : s.frames.length ? "Every photo has been read" : "")}</span>
       {counts.done ? <Button onClick={() => s.setScreen("review")}>Review</Button> : null}
       {legacy.length && !blocker ? <Button disabled={s.running} onClick={() => s.startRun({ ids: legacy })} title="These have captions from the first Cutline, without players to correct. Reading them again costs about the same as new photos.">Re-read {legacy.length} from the first Cutline</Button> : null}
-      <Button kind="primary" large disabled={!!blocker || s.running || (!todo)} onClick={() => s.startRun()}>{s.running ? "Reading…" : !s.frames.length ? "Caption photos" : !todo ? "All read" : todo === s.frames.length ? `Caption ${todo} photos` : `Caption ${todo} more`}</Button>
+      <Button kind="primary" large disabled={!!blocker || s.running || s.starting || (!todo)} onClick={() => s.startRun()}>
+        {s.starting ? <><Spinner /> {s.scouting ? "Reading uniforms…" : s.faces.status === "preparing" ? "Reading roster photos…" : "Starting…"}</> : s.running ? "Reading…" : !s.frames.length ? "Caption photos" : !todo ? "All read" : todo === s.frames.length ? `Caption ${todo} photos` : `Caption ${todo} more`}
+      </Button>
+
     </footer>
   );
 }
