@@ -238,9 +238,13 @@ export const derive = {
     return s.settings.faces && derive.facesAvailable(s);
   },
 
-  /** Faces can be looked at, on demand or automatically: a college roster with headshots. */
+  /**
+   * Faces can be looked at, on demand or automatically: a college roster with headshots — and
+   * not football, where helmets and facemasks leave too little of a face to compare (in testing
+   * every football face that was matched was matched wrongly).
+   */
   facesAvailable(s: Pick<State, "setup" | "slots">): boolean {
-    return Levels.info(s.setup.levelId).kind === "college"
+    return Levels.info(s.setup.levelId).kind === "college" && s.setup.sport !== "football"
       && [s.slots.A.team, s.slots.B.team].some((t) => t?.players.some((p) => p.headshotURL));
   },
 
@@ -834,7 +838,10 @@ export const useStore = create<State>((set, get) => {
           const candidates = targets.map((t) => (t.team === "A" || t.team === "B" ? [st.slots[t.team].team] : [st.slots.A.team, st.slots.B.team]).flatMap((team) => team?.players.map((p) => p.id) ?? []));
           const looks = await matcher.match(await decodableBlob(await f.photo.file()), targets.map((t) => t.box!), f.sent!, candidates);
           const hints: Record<string, FaceHint[]> = { ...f.faceHints };
-          targets.forEach((t, i) => { hints[t.id] = looks[i].hints; });
+          // Two faces in one photograph most like the same player: at least one is wrong, and
+          // neither is trusted.
+          const tops = looks.map((l) => l.hints[0]?.playerID);
+          targets.forEach((t, i) => { hints[t.id] = tops[i] && tops.filter((p) => p === tops[i]).length > 1 ? [] : looks[i].hints; });
           tally.subjects += targets.length;
           tally.faces += looks.filter((l) => l.found).length;
           patchFrame(f.id, { faceHints: hints });

@@ -204,6 +204,14 @@ function FaceStatus() {
   const s = useStore();
   const college = Levels.info(s.setup.levelId).kind === "college";
   if (!college) return null;
+  if (s.setup.sport === "football") {
+    return (
+      <div className="faces">
+        <span><b>Face matching</b> · not for football</span>
+        <span className="faint">Helmets and facemasks leave too little of a face to compare with a roster photo, so football is named by number alone.</span>
+      </div>
+    );
+  }
   const f = s.faces;
   let state: string, action = null as React.ReactNode;
   if (!s.settings.faces) { state = "off"; action = <button type="button" className="link" onClick={async () => { await s.updateSettings({ faces: true }); void useStore.getState().prepareFaces(); }}>Turn on</button>; }
