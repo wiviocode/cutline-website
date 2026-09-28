@@ -259,6 +259,11 @@ p { margin: 0; }
 .stage-foot { display: flex; align-items: center; gap: 16px; height: 40px; padding: 0 16px; flex: none; border-top: 1px solid var(--line); background: var(--ink-0); color: var(--text-3); font-size: 12px; }
 .stage-foot .mono { font-size: 11.5px; }
 .stage-foot .faint { font-size: 11.5px; }
+/* One line whatever the width: the name gives way first, the controls never. */
+.stage-foot > * { white-space: nowrap; flex: none; }
+.stage-foot > .mono:first-child { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.stage-foot > .spacer { flex: 1 1 0; }
+@media (max-width: 1180px) { .stage-foot .exposure { display: none; } }
 .boxes { position: absolute; inset: 0; pointer-events: none; }
 .box { position: absolute; pointer-events: auto; border: 1.5px solid var(--c); border-radius: 3px; background: transparent; cursor: pointer; padding: 0; --c: var(--unnamed); }
 .box-confirmed { --c: var(--ok); }

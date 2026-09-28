@@ -351,7 +351,7 @@ function Stage({ frame, onPick, zoomKey }: { frame: Frame; onPick: (id: string) 
       <div className="stage-foot">
         <span className="mono">{frame.name}</span>
         {frame.exif?.captureDate ? <span>{frame.exif.captureDate.toLocaleTimeString()}</span> : null}
-        {exposure ? <span className="mono faint">{exposure}</span> : null}
+        {exposure ? <span className="mono faint exposure">{exposure}</span> : null}
         <span className="spacer" />
         {zoomed && actual ? <span className="mono faint">{actual}%</span> : null}
         <Segmented small value={!zoomed ? "fit" : atFull ? "full" : "other"} onChange={(v) => { if (v === "fit") setView({ z: 1, x: 0, y: 0 }); else if (fit && originalWidth) zoomAbout(originalWidth / fit.w, fit.w / 2, fit.h / 2); }}
