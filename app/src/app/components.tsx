@@ -2,7 +2,7 @@
  * The handful of controls every screen uses, drawn from the design system's tokens.
  */
 
-import { useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
+import { Children, isValidElement, useEffect, useId, useRef, useState, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
 import { thumbnails, previews, type Frame } from "./store";
 
 type ButtonKind = "primary" | "secondary" | "ghost" | "danger";
@@ -35,8 +35,21 @@ export function Overline({ children }: { children: ReactNode }) {
 }
 
 export function Field({ label, hint, children, wide }: { label: string; hint?: ReactNode; children: ReactNode; wide?: boolean }) {
+  const id = useId();
+  // A label wrapped round a row of buttons would give the first button the whole label as its
+  // name; the row is a group named by the label instead.
+  if (Children.toArray(children).some((c) => isValidElement(c) && c.type === Segmented)) {
+    return (
+      <div className={`field${wide ? " field-wide" : ""}`} role="group" aria-labelledby={id}>
+        <span className="field-label" id={id}>{label}</span>
+        {children}
+        {hint ? <span className="field-hint">{hint}</span> : null}
+      </div>
+    );
+  }
   return (
     <label className={`field${wide ? " field-wide" : ""}`}>
+
       <span className="field-label">{label}</span>
       {children}
       {hint ? <span className="field-hint">{hint}</span> : null}
