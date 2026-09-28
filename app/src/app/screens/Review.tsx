@@ -512,7 +512,7 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
           ? <Button large block onClick={() => s.setApproved(frame.id, false)}>Unapprove</Button>
           : <Button kind="primary" large block disabled={!frame.caption} onClick={() => s.approveAndNext()}>Approve</Button>}
         <div className="insp-meta">
-          <span>{frame.model ? `${modelName(frame.model)} ·${Cost.dollars(frame.dollars)}${frame.zooms.length ? ` · ${frame.zooms.length} close look${frame.zooms.length > 1 ? "s" : ""}` : ""}` : frame.state === "done" ? (frame.captionEdited && !frame.observation ? "Written by hand" : "Caption from an earlier session") : ""}</span>
+          <span>{frame.model ? `${modelName(frame.model)} · ${Cost.dollars(frame.dollars)}${frame.zooms.length ? ` · ${frame.zooms.length} close look${frame.zooms.length > 1 ? "s" : ""}` : ""}` : frame.state === "done" ? (frame.captionEdited && !frame.observation ? "Written by hand" : "Caption from an earlier session") : ""}</span>
 
           <span className={frame.writeError ? "error" : ""}>
             {writeState}

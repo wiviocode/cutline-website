@@ -36,12 +36,12 @@ export function Welcome() {
         <section className="welcome-step">
           <h2><span className="step-n">1</span> Your Anthropic API key</h2>
           <p className="muted">Photographs go from this browser straight to Anthropic and nowhere else. The key is kept in this browser only. <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Get a key</a></p>
-          <div className="row">
-            <TextInput type="password" placeholder={s.apiKey ? `Saved key …${s.apiKey.slice(-4)}` : "sk-ant-…"} value={key} onChange={(e) => setKey(e.target.value)} aria-label="Anthropic API key" />
-            <Button kind={ok ? "secondary" : "primary"} onClick={() => s.saveKey(key)} disabled={!key.trim() || s.keyStatus === "checking"}>
+          <form className="row" onSubmit={(e) => { e.preventDefault(); if (key.trim() && s.keyStatus !== "checking") void s.saveKey(key); }}>
+            <TextInput type="password" autoComplete="off" placeholder={s.apiKey ? `Saved key …${s.apiKey.slice(-4)}` : "sk-ant-…"} value={key} onChange={(e) => setKey(e.target.value)} aria-label="Anthropic API key" />
+            <Button type="submit" kind={ok ? "secondary" : "primary"} disabled={!key.trim() || s.keyStatus === "checking"}>
               {s.keyStatus === "checking" ? <Spinner /> : ok ? "Checked" : "Check key"}
             </Button>
-          </div>
+          </form>
           {s.keyStatus === "bad" && s.keyError ? <p className="error">{s.keyError}</p> : null}
           {ok ? <p className="ok">The key works.</p> : null}
         </section>

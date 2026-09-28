@@ -32,10 +32,10 @@ export function SettingsPanel() {
         <section>
           <h3>Anthropic API key</h3>
           <p className="muted small">{s.apiKey ? `A key ending …${s.apiKey.slice(-4)} is saved in this browser.` : "No key saved."} It is sent only to api.anthropic.com. Anything else running in this browser profile could read it — use a key you can revoke. </p>
-          <div className="row">
-            <TextInput type="password" placeholder="sk-ant-… to replace it" value={key} onChange={(e) => setKey(e.target.value)} />
-            <Button onClick={async () => { if (await s.saveKey(key)) setKey(""); }} disabled={!key.trim() || s.keyStatus === "checking"}>{s.keyStatus === "checking" ? <Spinner /> : "Check and save"}</Button>
-          </div>
+          <form className="row" onSubmit={async (e) => { e.preventDefault(); if (key.trim() && s.keyStatus !== "checking" && await s.saveKey(key)) setKey(""); }}>
+            <TextInput type="password" autoComplete="off" placeholder="sk-ant-… to replace it" value={key} onChange={(e) => setKey(e.target.value)} aria-label="New Anthropic API key" />
+            <Button type="submit" disabled={!key.trim() || s.keyStatus === "checking"}>{s.keyStatus === "checking" ? <Spinner /> : "Check and save"}</Button>
+          </form>
           {s.keyStatus === "bad" && s.keyError ? <p className="error small">{s.keyError}</p> : null}
         </section>
 
