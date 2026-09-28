@@ -85,7 +85,6 @@ export interface Frame {
   /** A write into the file is under way. Not saved. */
   writing?: boolean;
   /** What a copied caption replaced, until the next edit — so the copy can be undone. Not saved. */
-
   copyUndo?: { caption: string; captionEdited: boolean; state: FrameState } | null;
 }
 
@@ -421,6 +420,8 @@ async function packetFor(s: State, f: Frame): Promise<string> {
 
 let matcher = new FaceMatcher();
 let matcherKey = "";
+/** A reading of the roster photos under way, so a second request waits for it instead of starting over. */
+let preparing: { key: string; done: Promise<boolean> } | null = null;
 /** Which players, with which headshots, the roster faces were read for. */
 const faceKey = (s: Pick<State, "slots">) => [...(s.slots.A.team?.players ?? []), ...(s.slots.B.team?.players ?? [])].map((p) => p.id + (p.headshotURL ?? "")).join(",");
 
@@ -810,19 +811,28 @@ export const useStore = create<State>((set, get) => {
         set({ faces: { status: "ready", done: matcher.size, total: players.filter((p) => p.headshotURL).length, error: null } });
         return true;
       }
+      // "Match faces" pressed while the run is still reading the roster photos waits for that reading.
+      if (preparing?.key === key) return preparing.done;
       set({ faces: { status: "preparing", done: 0, total: players.filter((p) => p.headshotURL).length, error: null } });
-      try {
-        matcher = new FaceMatcher();
-        const r = await matcher.prepare(players, (done, total) => set({ faces: { ...get().faces, done, total } }));
-        matcherKey = key;
-        set({ faces: { status: r.ready ? "ready" : "unavailable", done: r.ready, total: r.total, error: r.ready ? null : "No faces could be found in the roster photos." } });
-        // Photographs read before face matching was on get their look now, on this device, at no cost.
-        if (r.ready && derive.facesOn(get())) void get().matchFaces(get().frames.filter((f) => f.observation && f.sent && !Object.keys(f.faceHints).length).map((f) => f.id));
-        return r.ready > 0;
-      } catch (e) {
-        set({ faces: { status: "unavailable", done: 0, total: 0, error: `Face matching could not start: ${(e as Error).message}` } });
-        return false;
-      }
+      const next = new FaceMatcher();
+      const done = (async () => {
+        try {
+          const r = await next.prepare(players, (n, total) => set({ faces: { ...get().faces, done: n, total } }));
+          matcher = next;
+          matcherKey = key;
+          set({ faces: { status: r.ready ? "ready" : "unavailable", done: r.ready, total: r.total, error: r.ready ? null : "No faces could be found in the roster photos." } });
+          // Photographs read before face matching was on get their look now, on this device, at no cost.
+          if (r.ready && derive.facesOn(get())) void get().matchFaces(get().frames.filter((f) => f.observation && f.sent && !Object.keys(f.faceHints).length).map((f) => f.id));
+          return r.ready > 0;
+        } catch (e) {
+          set({ faces: { status: "unavailable", done: 0, total: 0, error: `Face matching could not start: ${(e as Error).message}` } });
+          return false;
+        } finally {
+          if (preparing?.key === key) preparing = null;
+        }
+      })();
+      preparing = { key, done };
+      return done;
     },
 
     async matchFaces(ids, onDemand = false) {

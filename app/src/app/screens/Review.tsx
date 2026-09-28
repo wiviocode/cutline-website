@@ -3,7 +3,6 @@ import { useStore, derive, thumbnails, previews, type Frame } from "../store";
 import { Button, Headshot, Segmented, Spinner, Switch } from "../components";
 import { PlayerPicker } from "./PlayerPicker";
 import { RenameDialog } from "./Rename";
-import { Compose } from "@core/caption/Compose";
 import { Styles } from "@core/caption/Styles";
 import { Cost } from "@core/ai/Models";
 import { Matchup, Player } from "@core/roster/Roster";
