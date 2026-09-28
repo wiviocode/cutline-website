@@ -103,6 +103,7 @@ function PhotosCard() {
   const s = useStore();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
+  const [allRecents, setAllRecents] = useState(false);
   const writable = supportsWritableFolders();
 
   const onDrop = async (e: DragEvent) => {
@@ -141,7 +142,7 @@ function PhotosCard() {
         {s.recents.length ? (
           <div className="recents">
             <div className="overline">Recent shoots</div>
-            {s.recents.map((r) => (
+            {(allRecents ? s.recents : s.recents.slice(0, 5)).map((r) => (
               <div key={r.id} className="recent">
                 <button type="button" className="recent-open" onClick={() => s.openRecent(r)}>
                   <span className="recent-title">{r.title}</span>
@@ -150,6 +151,7 @@ function PhotosCard() {
                 <button type="button" className="icon-btn" aria-label={`Forget ${r.folderName}`} onClick={() => s.forgetRecent(r.id)}>×</button>
               </div>
             ))}
+            {s.recents.length > 5 ? <button type="button" className="link small" onClick={() => setAllRecents((v) => !v)}>{allRecents ? "Fewer" : `All ${s.recents.length} shoots`}</button> : null}
           </div>
         ) : null}
       </section>
@@ -205,6 +207,7 @@ function FaceStatus() {
   const f = s.faces;
   let state: string, action = null as React.ReactNode;
   if (!s.settings.faces) { state = "off"; action = <button type="button" className="link" onClick={async () => { await s.updateSettings({ faces: true }); void useStore.getState().prepareFaces(); }}>Turn on</button>; }
+  else if (![s.slots.A.team, s.slots.B.team].some((t) => t?.players.length)) state = "on · waiting for the rosters";
   else if (!derive.facesOn(s)) state = "on · neither roster has headshots";
   else if (f.status === "ready") state = `on · ${f.done} of ${f.total} roster photos ready`;
   else if (f.status === "preparing") state = `on · reading roster photos ${f.done}/${f.total}`;
@@ -213,7 +216,7 @@ function FaceStatus() {
   return (
     <div className="faces">
       <span><b>Automatic face matching</b> · {state}{f.status === "preparing" ? <> <Spinner /></> : null}</span>
-      <span className="faint">Names a player whose number is hidden, from the roster headshots. Off, “Match faces” on the review screen still looks at one photo when you ask. On this computer only.</span>
+      <span className="faint">Names a player whose number is hidden by comparing faces with the roster headshots, on this computer — no face leaves it. When this is off, “Match faces” on the review screen still checks one photo at a time.</span>
       <span className="spacer" />
       {action}
     </div>

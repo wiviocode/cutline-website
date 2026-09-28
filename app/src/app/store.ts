@@ -417,6 +417,8 @@ async function packetFor(s: State, f: Frame): Promise<string> {
 
 let matcher = new FaceMatcher();
 let matcherKey = "";
+/** Which players, with which headshots, the roster faces were read for. */
+const faceKey = (s: Pick<State, "slots">) => [...(s.slots.A.team?.players ?? []), ...(s.slots.B.team?.players ?? [])].map((p) => p.id + (p.headshotURL ?? "")).join(",");
 
 let templateCache: { name: string; template: IPTCTemplate } | null = null;
 async function template(s: State): Promise<IPTCTemplate | null> {
@@ -446,7 +448,13 @@ export const useStore = create<State>((set, get) => {
     return { ...f, ...next, ...(f.approved && f.written && next.caption !== f.caption ? { written: false } : {}) };
   }) }));
   const slotPatch = (slot: TeamKey, patch: Partial<SlotState>) => set((s) => ({ slots: { ...s.slots, [slot]: { ...s.slots[slot], ...patch } } }));
-  const setTeam = (slot: TeamKey, team: Team | null) => { slotPatch(slot, { team }); recomposeAll(); persistRecent(); };
+  const setTeam = (slot: TeamKey, team: Team | null) => {
+    slotPatch(slot, { team });
+    // Roster faces belong to the rosters they were read from: new players are read again when wanted.
+    if (get().faces.status !== "preparing" && get().faces.status !== "off" && faceKey(get()) !== matcherKey) set({ faces: { status: "off", done: 0, total: 0, error: null } });
+    recomposeAll();
+    persistRecent();
+  };
 
   let persistTimer: ReturnType<typeof setTimeout> | null = null;
   const persistRecent = () => {
@@ -621,6 +629,7 @@ export const useStore = create<State>((set, get) => {
       thumbnails.clear(); previews.clear();
       // The next shoot starts clean: nothing of this one's teams, place or house style carries over.
       set((s) => ({ folder: null, frames: [], selectedID: null, keep: null, recentID: null, screen: "setup", spent: 0, slots: { A: emptySlot(), B: emptySlot() }, photoHeadline: null,
+        faces: { status: "off", done: 0, total: 0, error: null },
         setup: freshSetup(s.setup.levelId), cancelRequested: s.running || s.cancelRequested, filter: "all" }));
     },
 
@@ -792,8 +801,11 @@ export const useStore = create<State>((set, get) => {
       const s = get();
       if (!(onDemand ? derive.facesAvailable(s) : derive.facesOn(s))) return false;
       const players = [...(s.slots.A.team?.players ?? []), ...(s.slots.B.team?.players ?? [])];
-      const key = players.map((p) => p.id + (p.headshotURL ?? "")).join(",");
-      if (key === matcherKey && matcher.size) return true;
+      const key = faceKey(s);
+      if (key === matcherKey && matcher.size) {
+        set({ faces: { status: "ready", done: matcher.size, total: players.filter((p) => p.headshotURL).length, error: null } });
+        return true;
+      }
       set({ faces: { status: "preparing", done: 0, total: players.filter((p) => p.headshotURL).length, error: null } });
       try {
         matcher = new FaceMatcher();

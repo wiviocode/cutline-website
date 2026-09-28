@@ -172,6 +172,7 @@ p { margin: 0; }
 .drop-title { font-size: 15px; font-weight: 600; }
 .recents { display: flex; flex-direction: column; }
 .recents .overline { margin-bottom: 4px; }
+.recents > .link { align-self: flex-start; margin-top: 8px; }
 .recent { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); }
 .recent-open { flex: 1; text-align: left; background: none; border: 0; padding: 9px 2px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .recent-open:hover .recent-title { color: var(--gold-text); }

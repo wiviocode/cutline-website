@@ -38,6 +38,18 @@ Optional, off by default: **face matching** against college roster headshots, en
 device. It never overrules a number that was read; it can name an athlete whose number is hidden
 (marked *check*) and settles a partial read it agrees with.
 
+How: [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) (MIT)
+finds the face in the upper part of each subject's box, in the full-resolution original, and
+[SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface)
+(Apache-2.0) describes it after a five-point alignment; both run in onnxruntime-web's WebAssembly
+build, in a worker, from files this site serves (`public/models`, about 11 MB, and the 14 MB
+runtime, each downloaded once). Faces are compared by cosine similarity with flip-averaged
+headshot embeddings: a hidden number is named at 0.47 with a lead of 0.10 over the next player,
+from a face whose eyes are at least 20 pixels apart; between 0.40 and 0.47 the player is offered
+as a one-click suggestion. On the Nebraska volleyball and soccer frames the right player ranked
+first for 20 of 26 number-confirmed faces, with no wrong name at those thresholds. About half a
+second a photograph on a desktop.
+
 ## Accuracy and cost
 
 Measured on 35 hand-checked frames from six real shoots (college and high-school football,
