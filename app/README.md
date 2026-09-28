@@ -45,10 +45,11 @@ finds the face in the upper part of each subject's box, in the full-resolution o
 build, in a worker, from files this site serves (`public/models`, about 11 MB, and the 14 MB
 runtime, each downloaded once). Faces are compared by cosine similarity with flip-averaged
 headshot embeddings: a hidden number is named at 0.47 with a lead of 0.10 over the next player,
-from a face whose eyes are at least 20 pixels apart; between 0.40 and 0.47 the player is offered
-as a one-click suggestion. On the Nebraska volleyball and soccer frames the right player ranked
-first for 20 of 26 number-confirmed faces, with no wrong name at those thresholds. About half a
-second a photograph on a desktop.
+from a face whose eyes are at least 20 pixels apart, and never from a crowded face (another face
+in the same box nearly as likely); between 0.40 and 0.47 the player is offered as a one-click
+suggestion. Tested on 71 hand-labeled faces from a volleyball and a soccer game against 87 roster
+headshots: 27 named unasked and 13 suggested, none wrong; 109 fans from the student section, none
+named. About 0.17 s to decode a 24-megapixel frame and 0.13 s a face on a desktop.
 
 ## Accuracy and cost
 

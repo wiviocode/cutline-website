@@ -123,7 +123,8 @@ export class FaceMatcher {
     const faces = await ask({ kind: "subjects", blob: photo, boxes, sent });
     return faces.map((face, i) => {
       if (!face || !usable(face.quality)) return { hints: [], found: false };
-      const good = goodFace(face.quality);
+      // A face that may be someone else's is shown as a likeness, never used to name anyone unasked.
+      const good = goodFace(face.quality) && !face.crowded;
       const hints = candidates[i].filter((id) => this.refs.has(id))
         .map((id) => ({ playerID: id, score: +cosine(face.embedding, this.refs.get(id)!).toFixed(3), good }))
         .sort((a, b) => b.score - a.score)

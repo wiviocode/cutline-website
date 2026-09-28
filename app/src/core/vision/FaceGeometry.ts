@@ -91,23 +91,32 @@ export function headRegion(box: [number, number, number, number], imageW: number
   return { x: left, y: top, w: Math.max(1, right - left), h: Math.max(1, bottom - top) };
 }
 
+/** A runner-up face this close to the chosen one makes the choice a guess. */
+export const CROWDED = 0.6;
+
 /**
  * The face in a region that belongs to the subject whose box it is: inside the box's width and
  * its upper part, large, confident and near the middle — at the net two faces can share a crop,
  * and the neighbour's is usually off to one side.
+ *
+ * `crowded` when another face in the box is nearly as likely: a player straight behind another
+ * puts two heads in one box, and which is whose cannot be told from where they are. Such a face
+ * is still compared, but never names anyone unasked — in testing, every wrong name that reached
+ * a caption came from one.
  */
-export function pickSubjectFace(faces: DetectedFace[], box: [number, number, number, number]): DetectedFace | null {
+export function pickSubjectFace(faces: DetectedFace[], box: [number, number, number, number]): { face: DetectedFace | null; crowded: boolean } {
   const [x1, y1, x2, y2] = box;
   const bw = x2 - x1, bh = y2 - y1, mid = (x1 + x2) / 2;
-  let best: DetectedFace | null = null, bestWeight = 0;
+  let best: DetectedFace | null = null, bestWeight = 0, second = 0;
   for (const f of faces) {
     const cx = f.x + f.w / 2, cy = f.y + f.h / 2;
     if (cx < x1 - bw * 0.1 || cx > x2 + bw * 0.1 || cy < y1 - bh * 0.15 || cy > y1 + bh * 0.75) continue;
     const off = Math.min(1, Math.abs(cx - mid) / (bw / 2 || 1));
     const weight = f.score * Math.sqrt(f.w * f.h) * (1 - 0.7 * off);
-    if (weight > bestWeight) { best = f; bestWeight = weight; }
+    if (weight > bestWeight) { second = bestWeight; best = f; bestWeight = weight; }
+    else if (weight > second) second = weight;
   }
-  return best;
+  return { face: best, crowded: !!best && second >= CROWDED * bestWeight };
 }
 
 /** The face in a roster headshot: the largest confident one. */

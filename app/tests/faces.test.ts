@@ -117,7 +117,10 @@ describe("face geometry", () => {
   it("takes the face in the subject's box, not a neighbour's at its edge", () => {
     const box: [number, number, number, number] = [100, 100, 300, 600];
     const mine = face(180, 150, 50, 0.8), neighbour = face(290, 160, 60, 0.95), below = face(180, 520, 60, 0.99);
-    expect(pickSubjectFace([neighbour, mine, below], box)).toBe(mine);
+    expect(pickSubjectFace([neighbour, mine, below], box)).toEqual({ face: mine, crowded: false });
+    // A player straight behind another: two heads in one box, and no telling which is whose.
+    const behind = face(185, 110, 48, 0.8);
+    expect(pickSubjectFace([mine, behind], box).crowded).toBe(true);
     const r = headRegion(box, 1000, 1000);
     expect(r.y).toBeLessThan(100);
     expect(r.y + r.h).toBeLessThan(600);

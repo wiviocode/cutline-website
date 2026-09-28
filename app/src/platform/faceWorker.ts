@@ -10,7 +10,7 @@
 import * as ort from "onnxruntime-web/wasm";
 import wasmURL from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
 import {
-  decodeYuNet, mapFace, headRegion, pickSubjectFace, pickPortraitFace, alignmentTransform, flipAverage, quality, padTo32,
+  decodeYuNet, mapFace, headRegion, pickSubjectFace, pickPortraitFace, alignmentTransform, flipAverage, quality, padTo32, iou,
   type DetectedFace, type FaceQuality,
 } from "@core/vision/FaceGeometry";
 
@@ -19,7 +19,8 @@ export type FaceRequest =
   | { id: number; kind: "portrait"; blob: Blob }
   | { id: number; kind: "subjects"; blob: Blob; boxes: [number, number, number, number][]; sent: { width: number; height: number } };
 
-export interface FaceFound { embedding: Float32Array; quality: FaceQuality }
+/** `crowded`: another face was nearly as likely to be this subject's, or another subject's box chose the same face. */
+export interface FaceFound { embedding: Float32Array; quality: FaceQuality; crowded: boolean }
 export type FaceReply =
   | { id: number; ok: true; faces: (FaceFound | null)[] }
   | { id: number; ok: false; error: string };
@@ -128,17 +129,23 @@ async function handle(req: FaceRequest): Promise<(FaceFound | null)[]> {
   try {
     if (req.kind === "portrait") {
       const face = pickPortraitFace(await detect(bitmap, { x: 0, y: 0, w: bitmap.width, h: bitmap.height }, detector));
-      return [face ? { embedding: await embed(bitmap, face, recognizer), quality: quality(face) } : null];
+      return [face ? { embedding: await embed(bitmap, face, recognizer), quality: quality(face), crowded: false } : null];
     }
     // The reading's boxes are in the frame as it was sent; this is the original.
     const kx = bitmap.width / req.sent.width, ky = bitmap.height / req.sent.height;
     const found: (FaceFound | null)[] = [];
+    const chosen: (DetectedFace | null)[] = [];
     for (const b of req.boxes) {
       const box: [number, number, number, number] = [b[0] * kx, b[1] * ky, b[2] * kx, b[3] * ky];
       const region = headRegion(box, bitmap.width, bitmap.height);
-      const face = pickSubjectFace(await detect(bitmap, region, detector), box);
-      found.push(face ? { embedding: await embed(bitmap, face, recognizer), quality: quality(face) } : null);
+      const { face, crowded } = pickSubjectFace(await detect(bitmap, region, detector), box);
+      chosen.push(face);
+      found.push(face ? { embedding: await embed(bitmap, face, recognizer), quality: quality(face), crowded } : null);
     }
+    // One face cannot be two subjects': where two boxes chose the same face, neither may rely on it.
+    chosen.forEach((a, i) => chosen.forEach((b, j) => {
+      if (i < j && a && b && iou(a, b) > 0.5) { found[i]!.crowded = true; found[j]!.crowded = true; }
+    }));
     return found;
   } finally {
     bitmap.close();
