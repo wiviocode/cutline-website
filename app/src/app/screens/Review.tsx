@@ -11,7 +11,6 @@ import { PhotoMetadata } from "@core/images/PhotoMetadata";
 import { decodableBlob } from "@platform/images";
 import { Identify, type Identity } from "@core/vision/Identify";
 import { FACE_SUGGEST, likeness } from "@core/vision/FaceEvidence";
-
 import type { Subject } from "@core/vision/Observation";
 
 /**
@@ -517,7 +516,6 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
             {writeState}
             {frame.approved && !frame.written && !frame.writing && s.folder?.writable ? <> · <button type="button" className="link" onClick={() => void s.setApproved(frame.id, true)}>Write it</button></> : null}
           </span>
-
         </div>
       </div>
     </aside>
@@ -528,7 +526,6 @@ function subjectStatus(id: Identity | undefined, x: Subject): { cls: "ok" | "che
   if (id?.player?.role === "staff") return { cls: "ok", word: "Coach" };
   if (x.kind !== "athlete") return { cls: "other", word: cap(x.kind) };
   if (id?.player && id.status === "confirmed") return { cls: "ok", word: id.source === "manual" || id.source === "note" ? "Set" : "Sure" };
-
   if (id?.player) return { cls: "check", word: "Check" };
   return { cls: "unnamed", word: "Unnamed" };
 }

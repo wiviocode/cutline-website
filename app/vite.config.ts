@@ -58,7 +58,6 @@ export default defineConfig({
   // pre-bundling would move.
   worker: { format: "es" },
   optimizeDeps: { exclude: ["onnxruntime-web"] },
-
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",

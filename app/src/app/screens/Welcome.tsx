@@ -70,7 +70,6 @@ export function Welcome() {
           {!ok ? <span className="muted small">Check your API key to start.</span>
             : !name.trim() ? <span className="muted small">Add your name as it is credited to start.</span>
             : wantTemplate && !templateReady ? <span className="muted small">Give the template a name and at least one field, or choose Not now.</span> : null}
-
           <Button kind="primary" onClick={finish} disabled={!ok || !name.trim() || !templateReady}>Start</Button>
         </div>
       </div>

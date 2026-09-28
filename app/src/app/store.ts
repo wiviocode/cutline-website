@@ -252,7 +252,6 @@ export const derive = {
     const blank = (name: string) => Team.make({ school: name });
     // A side not set yet has no name, and a caption leaves out what it cannot name.
     return { a: s.slots.A.team ?? blank(""), b: s.slots.B.team ?? blank("") };
-
   },
 
   entries(s: Pick<State, "setup">): MeetEntry[] {
@@ -506,7 +505,6 @@ export const useStore = create<State>((set, get) => {
         // Opus declines the odd frame its safety checks misjudge; Sonnet reads it instead.
         if (describeError(e).kind === "refusal" && TIERS[tier].model !== "claude-sonnet-5") {
           return readPhoto({ claude: c, tier, model: "claude-sonnet-5", system: Prompt.system(derive.shoot(s)), identify: { matchup, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport), note: f.note }, source: browserSource(f.photo), note: f.note || null, sportName: Sports.info(s.setup.sport).noun });
-
         }
         throw e;
       });
@@ -612,7 +610,6 @@ export const useStore = create<State>((set, get) => {
         get().notify(`Choose "${r.folderName}" again with Open read-only — its teams and setup come back with it.`, "info");
         return;
       }
-
       const folder = await reopenFolder(handle).catch(() => null);
       if (!folder) { get().notify("Permission to open the folder was not given."); return; }
       await openFolder(folder, r);
@@ -658,7 +655,6 @@ export const useStore = create<State>((set, get) => {
         const kind = Levels.info(get().setup.levelId).kind;
         if (r.source === "maxpreps" && kind !== "highSchool") { get().setSetup({ levelId: "hs" }); get().notify("Level set to high school — that roster is from MaxPreps.", "info"); }
         else if (/^(sidearm|wmt)/.test(r.source) && kind === "highSchool") { get().setSetup({ levelId: "ncaa-d1" }); get().notify("Level set to NCAA Division I — that roster is from a college athletics site. Change it if the division differs.", "info"); }
-
       } catch (e) {
         slotPatch(slot, { busy: false, status: "", error: (e as Error).message });
       }
@@ -852,7 +848,6 @@ export const useStore = create<State>((set, get) => {
           : near ? "No face was a close enough match to name. The nearest players are listed first when you change a player."
           : t.faces ? "The faces here don't resemble anyone on the roster closely enough to suggest."
           : "No face here was clear enough to compare — turned away, too small or covered.", "info");
-
       } finally { set({ faceBusy: null }); }
     },
 
@@ -872,12 +867,10 @@ export const useStore = create<State>((set, get) => {
       // Roster faces are read alongside the photographs, not before them; frames finished first are
       // looked at when the faces are ready.
       if (derive.facesOn(get())) void get().prepareFaces();
-
       const ids = (opts.ids ?? get().frames.filter((f) => opts.redo || f.state === "pending" || f.state === "failed").map((f) => f.id));
       if (!ids.length) { set({ screen: "review" }); return; }
       const sel = get().selectedID ?? ids[0];
       set({ running: true, cancelRequested: false, runDone: 0, runTotal: ids.length, screen: "review", selectedID: sel, keep: sel });
-
       const queue = [...ids];
       // The first photograph goes alone so the rest read its cached prompt.
       const first = queue.shift()!;
@@ -897,7 +890,6 @@ export const useStore = create<State>((set, get) => {
       const c2 = derive.counts(get());
       const left = c2.pending ? `, ${c2.pending} not read` : "";
       get().notify(`${stopped ? "Stopped" : "Done"}: ${c2.done} read${left}${c2.failed ? `, ${c2.failed} failed` : ""}${c2.review ? ` · ${c2.review} to check` : ""}.`, "info");
-
     },
 
     cancelRun() { set({ cancelRequested: true }); },
@@ -1055,7 +1047,6 @@ export const useStore = create<State>((set, get) => {
           observation: rec?.observation ?? null, sent: rec?.sent ?? null, original: rec?.original ?? null, zooms: rec?.zooms ?? [], model: rec?.model ?? null, dollars: rec?.dollars ?? 0,
           manual: rec?.manual ?? {}, note: rec?.note ?? "", identities: [], caption: rec?.caption ?? "", captionEdited: rec?.captionEdited ?? false,
           approved: rec?.approved ?? false, written: rec?.approved ?? false, writeError: null, faceHints: currentHints(rec?.faceMatches),
-
         });
       }
       const id = recent?.id ?? `${folder.name}:${photos.length}:${photos[0].name}`;

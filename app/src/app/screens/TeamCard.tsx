@@ -103,7 +103,6 @@ export function TeamCard({ slot }: { slot: TeamKey }) {
 
       {team ? (
         <Field label="Wearing today" hint={team.uniform ? undefined : "Read from a few of your photos when the run starts — or describe it"}>
-
           <textarea className="input textarea uniform" rows={2} placeholder="red jerseys, white numbers" value={team.uniform} onChange={(e) => s.editTeam(slot, { uniform: e.target.value })} />
         </Field>
       ) : null}

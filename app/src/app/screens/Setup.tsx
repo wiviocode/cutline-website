@@ -39,7 +39,6 @@ export function Setup() {
             <Field label="Venue"><TextInput placeholder="Memorial Stadium" value={s.setup.venue} onChange={(e) => s.setSetup({ venue: e.target.value })} /></Field>
             <div className="grid-city">
               <Field label="City" hint={s.setup.city.trim() ? undefined : "Captions end with the city and state."}><TextInput placeholder="Lincoln" value={s.setup.city} onChange={(e) => s.setSetup({ city: e.target.value })} /></Field>
-
               <Field label="State"><TextInput placeholder="Neb." value={s.setup.state} onChange={(e) => s.setSetup({ state: e.target.value })} /></Field>
             </div>
           </section>
@@ -68,7 +67,6 @@ export function Setup() {
                 {/* Each shoot starts its cards afresh: no paste or open roster carries over from the last. */}
                 <TeamCard key={`A:${s.recentID ?? ""}`} slot="A" />
                 <TeamCard key={`B:${s.recentID ?? ""}`} slot="B" />
-
               </div>
               {s.slots.A.team && s.slots.B.team && s.frames.length && (!s.slots.A.team.uniform || !s.slots.B.team.uniform) ? (
                 <p className="faint small">What each team is wearing is read from a few of your photos when the run starts. {s.scouting ? <Spinner /> : <button type="button" className="link" onClick={() => s.scoutUniforms()}>Read it now</button>}</p>
@@ -196,7 +194,6 @@ function RunBar() {
       <Button kind="primary" large disabled={!!blocker || s.running || s.starting || (!todo)} onClick={() => s.startRun()}>
         {s.starting ? <><Spinner /> {s.scouting ? "Reading uniforms…" : s.faces.status === "preparing" ? "Reading roster photos…" : "Starting…"}</> : s.running ? "Reading…" : !s.frames.length ? "Caption photos" : !todo ? "All read" : todo === s.frames.length ? `Caption ${todo} photos` : `Caption ${todo} more`}
       </Button>
-
     </footer>
   );
 }

@@ -4,7 +4,6 @@ import { Button, Segmented, TextInput } from "../components";
 import { Team, Player, Staff, type TeamKey } from "@core/roster/Roster";
 import { likeness } from "@core/vision/FaceEvidence";
 
-
 /**
  * Choosing who a subject is, in a panel over the caption column so the photograph stays in view.
  * One list per team — players by number, then the coaches — filtered by whatever is typed: a
@@ -48,7 +47,6 @@ export function PlayerPicker({ frame, subjectID, onClose }: { frame: Frame; subj
   const choose = (p: Player | null) => { void s.setManual(frame.id, subjectID, { teamKey, playerID: p?.id ?? null }); onClose(); };
   const read = subject.number ? `#${subject.number.replace(/\?/g, "_")} (${subject.clarity})` : "no number seen";
   const noun = subject.kind === "athlete" ? "player" : subject.kind === "other" ? "person" : subject.kind;
-
 
   return (
     <div className="picker" role="dialog" aria-label={`Who is this ${noun}?`}>

@@ -343,7 +343,6 @@ function gameTail(body: string, obs: Observation, ctx: CaptionContext, named: Se
     : word;
 
   const gameClause = `${timing} ${eventNoun(ctx)}`;
-
   return assemble(body, gameClause, teamClause, ctx);
 }
 

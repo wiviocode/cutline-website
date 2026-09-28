@@ -69,7 +69,6 @@ export const FrameRecord = {
         captionEdited: !!raw.captionEdited,
         approved: !!raw.approved,
         faceMatches: (raw.faceMatches as FrameRecord["faceMatches"]) ?? {},
-
         generatedAt: str(raw.generatedAt),
       };
     }

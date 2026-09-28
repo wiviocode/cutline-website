@@ -87,7 +87,6 @@ p { margin: 0; }
 .chip-face { padding-left: 3px; }
 .chip-face .hs { width: 18px; height: 20px; border-radius: 4px; }
 
-
 .switch { display: inline-flex; align-items: center; gap: 7px; background: none; border: 0; padding: 0; color: var(--text-3); cursor: pointer; font-size: 12px; }
 .switch i { width: 26px; height: 15px; border-radius: 8px; background: var(--line-strong); position: relative; transition: background 0.15s; }
 .switch i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--text-3); transition: transform 0.15s, background 0.15s; }
@@ -101,8 +100,6 @@ p { margin: 0; }
 /* "NCAA Division III" needs the room; sport and gender take what is left. */
 .grid-game { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) max-content; }
 .grid-game .segment { white-space: nowrap; }
-
-
 .grid-city { display: grid; grid-template-columns: 1fr 96px; gap: 10px; }
 
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--ink-5); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }

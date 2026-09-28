@@ -148,7 +148,6 @@ export const RosterImport = {
       genderCheck(identity, req, notes);
       // A Sidearm or WMT site is a college's own, whatever level the game is set to.
       if ((!identity.nickname || !identity.school) && claude && (req.level === "college" || exact.source !== "maxpreps")) {
-
         try {
           const g = await claude.identifyTeam({ model: TEXT_MODEL, siteName: identity.school ?? "", url, sport: Sports.info(req.sport).noun });
           dollars += Cost.of(TEXT_MODEL, g.usage);

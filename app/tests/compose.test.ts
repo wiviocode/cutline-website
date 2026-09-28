@@ -112,8 +112,6 @@ describe("captions in the desk's own style", () => {
   });
 
   it("AP: an unreadable number becomes the desk's placeholder, with the team", () => {
-
-
     const obs: Observation = { scene: "action", timing: "during", clause: "{P1} blocks the spike", subjects: [subject({ id: "P1", team: "B", number: "", clarity: "hidden" })] };
     expect(compose(obs, apCtx(vb, "volleyball", sept18))).toMatch(/^North Carolina XXXXX blocks the spike during an NCAA college volleyball match against Nebraska,/);
   });
