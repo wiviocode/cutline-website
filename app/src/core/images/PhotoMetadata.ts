@@ -27,6 +27,19 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 export const PhotoMetadata = {
   empty(): PhotoMetadata { return {}; },
 
+  /**
+   * Whether the camera was a drone's. DJI also makes handheld cameras (Osmo, Pocket, Action),
+   * which are not; Hasselblad's L1D and L2D are the Mavic's cameras, which are.
+   */
+  isDrone(m: PhotoMetadata | null | undefined): boolean {
+    const make = (m?.cameraMake ?? "").trim().toLowerCase();
+    const model = (m?.cameraModel ?? "").trim().toLowerCase();
+    if (/\b(autel|skydio|parrot|yuneec)\b/.test(make)) return true;
+    if (make.startsWith("dji")) return !/osmo|pocket|action|^ot-|^ac0/.test(model);
+    if (make.startsWith("hasselblad")) return /^l[12]d/.test(model);
+    return false;
+  },
+
   /** "181 mm · 1/1250 · f/2.8 · ISO 3200", from whatever the camera recorded. */
   exposure(m: PhotoMetadata | null | undefined): string {
     if (!m) return "";

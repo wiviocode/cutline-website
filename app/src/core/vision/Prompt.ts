@@ -72,6 +72,8 @@ Examples of clauses:
 scene is one of: action (play in progress), celebration, huddle, bench, coach, portrait (one athlete not in play: walking, warming up, standing for the anthem), crowd, cheer, band, mascot, wide (the venue, no identifiable subject), ceremony, other.
 timing is "before" for warm-ups, introductions, the anthem, a team taking the field or a flyover before play starts; "after" only when the whole game is over — handshake lines, trophies, the final celebration; "during" for everything in between, including celebrating a touchdown, a goal or a point, and timeouts. The software writes "before the game" or "after the game" from timing, so the clause never says it too.
 
+aerial is true only when the photograph was plainly taken from the air by a drone: looking down on the field, the court or the venue from well above it, higher than any stand, press box, roof or catwalk could put a camera. An overhead shot from a catwalk, a press box or the top row of the stands is not aerial. When it is aerial, write the clause as for any other photograph; the software says it was taken with a drone, so the clause never says "aerial", "drone" or "from above".
+
 Return only the JSON object.`;
 
 /** A few lines per sport on where numbers are, who wears another colour, and the verbs a desk uses. */
@@ -125,8 +127,9 @@ export const Prompt = {
   },
 
   /** The text sent beside each photograph. */
-  photoText(p: { name: string; note?: string | null; hint?: string | null }): string {
+  photoText(p: { name: string; note?: string | null; hint?: string | null; drone?: boolean }): string {
     const parts = [`Photograph: ${p.name}`];
+    if (p.drone) parts.push("The camera that took this photograph is a drone: it is aerial.");
     if (p.hint) parts.push(p.hint);
     if (p.note?.trim()) {
       parts.push(`The photographer's note for this frame, which outranks your own reading where they conflict: ${p.note.trim()}`);

@@ -271,6 +271,7 @@ export const derive = {
       style: derive.style(s), sport: s.setup.sport, gender: s.setup.gender, level: Levels.info(s.setup.levelId), matchup: derive.matchup(s),
       eventName: s.setup.eventName.trim() || undefined, venue: s.setup.venue.trim() || undefined, city: s.setup.city.trim() || undefined, state: s.setup.state.trim() || undefined,
       captureDate: frame?.exif?.captureDate ?? null, photographer: s.settings.photographer, house: derive.house(s), unnamed: s.settings.unnamed,
+      drone: PhotoMetadata.isDrone(frame?.exif),
     };
   },
 
@@ -513,11 +514,11 @@ export const useStore = create<State>((set, get) => {
       const reading = await readPhoto({
         claude: c, tier, system: Prompt.system(derive.shoot(s)),
         identify: { matchup, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport), note: f.note },
-        source: browserSource(f.photo), note: f.note || null, sportName: Sports.info(s.setup.sport).noun,
+        source: browserSource(f.photo), note: f.note || null, drone: PhotoMetadata.isDrone(f.exif), sportName: Sports.info(s.setup.sport).noun,
       }).catch(async (e) => {
         // Opus declines the odd frame its safety checks misjudge; Sonnet reads it instead.
         if (describeError(e).kind === "refusal" && TIERS[tier].model !== "claude-sonnet-5") {
-          return readPhoto({ claude: c, tier, model: "claude-sonnet-5", system: Prompt.system(derive.shoot(s)), identify: { matchup, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport), note: f.note }, source: browserSource(f.photo), note: f.note || null, sportName: Sports.info(s.setup.sport).noun });
+          return readPhoto({ claude: c, tier, model: "claude-sonnet-5", system: Prompt.system(derive.shoot(s)), identify: { matchup, entries: derive.entries(s), unitSport: Sports.hasUnits(s.setup.sport), note: f.note }, source: browserSource(f.photo), note: f.note || null, drone: PhotoMetadata.isDrone(f.exif), sportName: Sports.info(s.setup.sport).noun });
         }
         throw e;
       });

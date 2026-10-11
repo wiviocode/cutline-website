@@ -499,3 +499,14 @@ describe("A template made in the app", () => {
     expect(TemplateBuilder.suggest({ photographer: "", house: "" }).name).toBe("My desk");
   });
 });
+
+describe("drone cameras", () => {
+  it("knows a drone's camera from a handheld one", () => {
+    expect(PhotoMetadata.isDrone({ cameraMake: "DJI", cameraModel: "FC3582" })).toBe(true);
+    expect(PhotoMetadata.isDrone({ cameraMake: "Hasselblad", cameraModel: "L2D-20c" })).toBe(true);
+    expect(PhotoMetadata.isDrone({ cameraMake: "Autel Robotics", cameraModel: "XT705" })).toBe(true);
+    expect(PhotoMetadata.isDrone({ cameraMake: "DJI", cameraModel: "OSMO POCKET 3" })).toBe(false);
+    expect(PhotoMetadata.isDrone({ cameraMake: "Canon", cameraModel: "Canon EOS R3" })).toBe(false);
+    expect(PhotoMetadata.isDrone(null)).toBe(false);
+  });
+});
