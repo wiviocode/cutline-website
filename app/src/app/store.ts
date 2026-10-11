@@ -796,8 +796,9 @@ export const useStore = create<State>((set, get) => {
         }));
         const r = await c.scoutUniforms({ model: SCOUT_MODEL, images, sport: Sports.info(s.setup.sport).noun, teamA: Team.fullName(a), teamB: Team.fullName(b), colorsA: a.colors.join(", "), colorsB: b.colors.join(", ") });
         set((st) => ({ spent: st.spent + Cost.of(SCOUT_MODEL, r.usage) }));
-        if (r.a) get().editTeam("A", { uniform: r.a });
-        if (r.b) get().editTeam("B", { uniform: r.b });
+        // Only into a blank: what the photographer typed, before or while this ran, stands.
+        if (r.a && !get().slots.A.team?.uniform.trim()) get().editTeam("A", { uniform: r.a });
+        if (r.b && !get().slots.B.team?.uniform.trim()) get().editTeam("B", { uniform: r.b });
       } catch (e) {
         get().notify(`Could not read the uniforms: ${describeError(e).message}`);
       } finally { set({ scouting: false }); }
