@@ -54,6 +54,8 @@ export interface ReadOptions {
   source: PhotoSource;
   note?: string | null;
   hint?: string | null;
+  /** The file says a drone took it. */
+  drone?: boolean;
   sportName: string;
   /** Overrides the tier's model (a retry after a refusal, an evaluation). */
   model?: string;
@@ -73,7 +75,7 @@ export async function readPhoto(o: ReadOptions): Promise<PhotoReading> {
   const [w, h] = resizedSize(original.width, original.height, info.maxEdge, budget);
   const image = await o.source.frame(w, h);
 
-  const first = await o.claude.observe({ model, system: o.system, image, text: Prompt.photoText({ name: o.source.name, note: o.note, hint: o.hint }) });
+  const first = await o.claude.observe({ model, system: o.system, image, text: Prompt.photoText({ name: o.source.name, note: o.note, hint: o.hint, drone: o.drone }) });
   let usage = first.usage;
   const observation = first.observation;
   let identities = Identify.all(observation, o.identify);

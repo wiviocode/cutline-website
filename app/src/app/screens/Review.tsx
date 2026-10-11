@@ -27,6 +27,20 @@ export function Review() {
   const counts = derive.counts(s);
   useEffect(() => { setPicking(null); }, [selected?.id]);
 
+  // Once the last photograph is approved and written, offer the rename — once per folder, and
+  // only after something in it was still to approve, so reopening a finished shoot stays quiet.
+  const canRename = !!s.folder?.writable && derive.usesRosters(s);
+  const allApproved = counts.total > 0 && counts.approved === counts.total;
+  const settled = allApproved && !s.frames.some((f) => f.writing);
+  const armed = useRef<{ folder: unknown; on: boolean }>({ folder: s.folder, on: false });
+  if (armed.current.folder !== s.folder) armed.current = { folder: s.folder, on: false };
+  if (counts.total > 0 && !allApproved) armed.current.on = true;
+  useEffect(() => {
+    if (!settled || !canRename || !armed.current.on || s.running) return;
+    armed.current.on = false;
+    setRenaming(true);
+  }, [settled, canRename, s.running]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -65,7 +79,7 @@ export function Review() {
           ) : (
             <>
               {counts.pending + counts.failed ? <Button onClick={() => s.startRun()} title={`About ${Cost.dollars((counts.pending + counts.failed) * Cost.perPhoto(s.settings.tier))} at ${s.settings.tier}`}>Read {counts.pending + counts.failed} remaining · {Cost.dollars((counts.pending + counts.failed) * Cost.perPhoto(s.settings.tier))}</Button> : null}
-              {s.folder?.writable && derive.usesRosters(s) ? <Button kind="ghost" onClick={() => setRenaming(true)}>Rename…</Button> : null}
+              {s.folder?.writable && derive.usesRosters(s) ? <Button kind={allApproved ? "primary" : "secondary"} onClick={() => setRenaming(true)} title="Rename the photographs to the desk's naming convention">Rename photos…</Button> : null}
               {s.frames.some((f) => f.approved && !f.written) && s.folder?.writable ? <Button onClick={() => s.writeAllApproved()}>Write {s.frames.filter((f) => f.approved && !f.written).length} approved</Button> : null}
               {s.folder && !s.folder.writable && s.frames.some((f) => f.approved) ? <Button onClick={() => s.downloadSidecars()} title="This browser cannot write into the photographs; take the captions as .xmp sidecars instead">Download captions (.xmp)</Button> : null}
             </>
@@ -423,7 +437,7 @@ function Inspector({ frame, onPick }: { frame: Frame; onPick: (id: string) => vo
           {editing || !frame.caption ? (
             <textarea id="caption-edit" className="input textarea caption-edit" rows={7} value={draft} autoFocus={editing}
               onChange={(e) => setDraft(e.target.value)} onBlur={commit}
-              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } if (e.key === "Escape") { setDraft(frame.caption); setEditing(false); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } if (e.key === "Escape") { setDraft(frame.caption); setEditing(false); } }}
               placeholder={frame.state === "pending" ? "Not read yet. Read it, copy the previous caption, or write one here." : frame.state === "working" ? "Reading…" : ""} />
           ) : (
             <div id="caption-view" className="caption-view" role="button" tabIndex={0} title="Click to edit" onClick={() => setEditing(true)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); setEditing(true); } }}>

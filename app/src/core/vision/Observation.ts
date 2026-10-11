@@ -39,6 +39,8 @@ export interface Subject {
 
 export interface Observation {
   scene: Scene;
+  /** Taken from the air by a drone. Missing in records read before it was asked. */
+  aerial?: boolean;
   subjects: Subject[];
   /** One present-tense clause with tokens: "{P1} catches a pass over {P2}". */
   clause: string;
@@ -86,12 +88,13 @@ export const Observation = {
       };
     });
     const timing = (["during", "before", "after"] as const).find((t) => t === s(o.timing)) ?? "during";
-    return { scene, subjects, clause: s(o.clause), timing };
+    return { scene, aerial: o.aerial === true, subjects, clause: s(o.clause), timing };
   },
 
   toJSON(v: Observation): Record<string, unknown> {
     return {
       scene: v.scene,
+      aerial: !!v.aerial,
       subjects: v.subjects.map((p) => ({
         id: p.id, kind: p.kind, team: p.team, number: p.number, clarity: p.clarity, player: p.player,
         role: p.role, uniform_text: p.uniformText, number_on: p.numberOn, box: p.box,
@@ -111,9 +114,10 @@ export const Observation = {
 export const OBSERVATION_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["scene", "subjects", "clause", "timing"],
+  required: ["scene", "aerial", "subjects", "clause", "timing"],
   properties: {
     scene: { type: "string", enum: [...SCENES] },
+    aerial: { type: "boolean" },
     subjects: {
       type: "array",
       items: {

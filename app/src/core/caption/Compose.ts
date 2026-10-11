@@ -35,6 +35,8 @@ export interface CaptionContext {
   photographer?: string;
   house?: string;
   unnamed: UnnamedMode;
+  /** The file says a drone took the photograph, whatever the model made of it. */
+  drone?: boolean;
 }
 
 export interface Composed {
@@ -47,7 +49,8 @@ export interface Composed {
 export const Compose = {
   caption(obs: Observation, ids: Identity[], ctx: CaptionContext): Composed {
     const named = new Set<TeamKey>();
-    const body = renderClause(obs, ids, ctx, named);
+    let body = renderClause(obs, ids, ctx, named);
+    if (obs.aerial || ctx.drone) body = aerial(body, obs.clause);
     const tail = ctx.matchup ? gameTail(body, obs, ctx, named) : meetTail(body, obs, ctx);
     return { caption: tidy(tail), body, named: [...named] };
   },
@@ -284,6 +287,18 @@ function fallbackClause(obs: Observation): string {
     case "celebration": return obs.subjects.length ? "{P1} celebrates" : "Players celebrate";
     default: return obs.subjects.length ? "{P1} competes" : "Game action";
   }
+}
+
+/**
+ * A drone's photograph says so up front: "In this photo taken with a drone, fans fill …". A
+ * general view becomes "An aerial view of …", which already says it.
+ */
+function aerial(body: string, clause: string): string {
+  if (/^an aerial view\b/i.test(body) || /\bdrone\b/i.test(body)) return body;
+  if (/^a general view of\b/i.test(body)) return body.replace(/^a general view of\b/i, "An aerial view of");
+  // The model's own first word is a common noun ("Fans", "The"); a token's is usually a name.
+  const lead = clause.trim().startsWith("{") ? body : body.replace(/^([A-Z])(?=[a-z])/, (c) => c.toLowerCase());
+  return `In this photo taken with a drone, ${lead}`;
 }
 
 // ---------------------------------------------------------------- the tail

@@ -317,3 +317,32 @@ describe("identification against the roster", () => {
     expect(Identify.isPlausibleMisread("12", "45")).toBe(false);
   });
 });
+
+describe("drone photographs", () => {
+  const sept18 = new Date(2026, 8, 18, 19, 0);
+  const ctx = { ...apCtx(vb, "volleyball", sept18), venue: "Memorial Stadium" };
+
+  it("say so up front, keeping a name's capital and lowering a common word's", () => {
+    const fans: Observation = { scene: "crowd", aerial: true, timing: "before", clause: "Fans fill {venue}", subjects: [] };
+    expect(compose(fans, ctx)).toMatch(/^In this photo taken with a drone, fans fill Memorial Stadium before an NCAA college volleyball match between Nebraska and North Carolina/);
+    const team: Observation = { scene: "huddle", aerial: true, timing: "during", clause: "{A:players} huddle between points", subjects: [] };
+    expect(compose(team, ctx)).toMatch(/^In this photo taken with a drone, Nebraska players huddle between points during/);
+  });
+
+  it("turn a general view into an aerial view", () => {
+    const wide: Observation = { scene: "wide", aerial: true, timing: "during", clause: "A general view of {venue}", subjects: [] };
+    expect(compose(wide, ctx)).toMatch(/^An aerial view of Memorial Stadium during/);
+  });
+
+  it("follow the camera when the model missed it, and leave a ground-level photograph alone", () => {
+    const wide: Observation = { scene: "wide", timing: "during", clause: "A general view of {venue}", subjects: [] };
+    expect(compose(wide, { ...ctx, drone: true })).toMatch(/^An aerial view of/);
+    expect(compose(wide, ctx)).toMatch(/^A general view of/);
+  });
+
+  it("are read from the model's reply and kept in the record", () => {
+    expect(Observation.fromJSON({ scene: "wide", aerial: true, clause: "", subjects: [] }).aerial).toBe(true);
+    expect(Observation.fromJSON({ scene: "wide", clause: "", subjects: [] }).aerial).toBe(false);
+    expect(Observation.toJSON(Observation.fromJSON({ aerial: true })).aerial).toBe(true);
+  });
+});
