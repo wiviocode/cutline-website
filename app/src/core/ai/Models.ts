@@ -68,8 +68,11 @@ export const TIERS: Record<Tier, TierInfo> = {
 
 /** The model that does text-only jobs: reading a roster page, naming a team. */
 export const TEXT_MODEL = "claude-haiku-4-5";
-/** The model that looks at a few frames to describe what each team is wearing. */
-export const SCOUT_MODEL = "claude-sonnet-5";
+/**
+ * The model that looks at a few frames to describe what each team is wearing. The cheap one: it
+ * runs on its own as soon as both teams are in, and jersey colours are not a hard read.
+ */
+export const SCOUT_MODEL = "claude-haiku-4-5";
 
 export interface Usage {
   input: number;
