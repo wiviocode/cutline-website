@@ -53,7 +53,7 @@ Two things follow from composing the caption here rather than asking for it:
   Imagn, Icon Sportswire, Hurrdat, and plain — each written the way that desk writes it, with
   its own date form, state form, and credit line.
 
-Six team sports in depth — football, basketball, volleyball, soccer, baseball and softball — at
+Seven team sports in depth — football, basketball, volleyball, soccer, baseball, softball and hockey — at
 college and high-school level, plus track and field and cross country, captioned by meet, bib and
 school without rosters.
 

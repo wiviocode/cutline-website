@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useStore, derive } from "../store";
 import { Button, Field, Segmented, Select, TextInput, Thumb, Spinner } from "../components";
 import { TeamCard } from "./TeamCard";
@@ -16,6 +16,17 @@ export function Setup() {
   const s = useStore();
   const usesRosters = derive.usesRosters(s);
   const kind = Levels.info(s.setup.levelId).kind;
+  const a = s.slots.A.team, b = s.slots.B.team;
+  const needsUniforms = usesRosters && !!a?.school.trim() && !!b?.school.trim() && s.frames.length > 0 && (!a.uniform.trim() || !b.uniform.trim());
+  // Once both teams are in, read what they are wearing — once per pairing, after a moment for a
+  // roster still loading to bring its colours. A failure leaves the link to try again by hand.
+  const scouted = useRef<string | null>(null);
+  const pairing = `${s.recentID ?? ""}|${a?.id ?? ""}|${b?.id ?? ""}`;
+  useEffect(() => {
+    if (!needsUniforms || !s.apiKey || s.keyStatus === "bad" || s.scouting || scouted.current === pairing) return;
+    const t = setTimeout(() => { scouted.current = pairing; void useStore.getState().scoutUniforms(); }, 1500);
+    return () => clearTimeout(t);
+  }, [needsUniforms, pairing, s.apiKey, s.keyStatus, s.scouting]);
   return (
     <div className="setup">
       <div className="setup-body">
@@ -68,8 +79,8 @@ export function Setup() {
                 <TeamCard key={`A:${s.recentID ?? ""}`} slot="A" />
                 <TeamCard key={`B:${s.recentID ?? ""}`} slot="B" />
               </div>
-              {s.slots.A.team && s.slots.B.team && s.frames.length && (!s.slots.A.team.uniform || !s.slots.B.team.uniform) ? (
-                <p className="faint small">What each team is wearing is read from a few of your photos when the run starts. {s.scouting ? <Spinner /> : <button type="button" className="link" onClick={() => s.scoutUniforms()}>Read it now</button>}</p>
+              {needsUniforms || s.scouting ? (
+                <p className="faint small">{s.scouting ? <>Reading what each team is wearing from a few of your photos… <Spinner /></> : <>What each team is wearing is read from a few of your photos. <button type="button" className="link" onClick={() => s.scoutUniforms()}>Read it now</button></>}</p>
               ) : null}
               <FaceStatus />
             </>

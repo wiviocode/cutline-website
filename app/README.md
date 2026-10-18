@@ -15,8 +15,8 @@ players by jersey number, writes the caption in your desk's house style and file
 photograph where Photo Mechanic and every wire ingest can read it. The photographs go from your
 browser to Anthropic with your own key, and nowhere else.
 
-Built for the six team sports a college or high-school desk shoots most — football, basketball,
-volleyball, soccer, baseball and softball — plus track and field and cross country, which have no
+Built for the seven team sports a college or high-school desk shoots most — football, basketball,
+volleyball, soccer, baseball, softball and hockey — plus track and field and cross country, which have no
 rosters and are captioned by meet, bib and school.
 
 ## How a photograph is read

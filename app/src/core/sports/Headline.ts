@@ -17,7 +17,7 @@ export interface HeadlineGuess {
 
 const SPORT_WORDS: [RegExp, SportID][] = [
   [/football/i, "football"], [/basketball/i, "basketball"], [/volleyball/i, "volleyball"], [/soccer/i, "soccer"],
-  [/softball/i, "softball"], [/baseball/i, "baseball"], [/cross[- ]country/i, "crossCountry"], [/track/i, "trackAndField"],
+  [/softball/i, "softball"], [/(?<!field\s)hockey/i, "hockey"], [/baseball/i, "baseball"], [/cross[- ]country/i, "crossCountry"], [/track/i, "trackAndField"],
 ];
 
 export function parseHeadline(headline: string): HeadlineGuess | null {
@@ -27,7 +27,7 @@ export function parseHeadline(headline: string): HeadlineGuess | null {
   const left = m[1].trim(), away = m[2].trim();
   const hit = SPORT_WORDS.find(([re]) => re.test(left));
   if (!hit) return null;
-  const idx = left.search(/\b(men'?s|women'?s|boys'?|girls'?)?\s*(football|basketball|volleyball|soccer|softball|baseball|cross[- ]country|track)/i);
+  const idx = left.search(/\b(men'?s|women'?s|boys'?|girls'?)?\s*(football|basketball|volleyball|soccer|softball|baseball|(?:ice\s+)?hockey|cross[- ]country|track)/i);
   const home = (idx > 0 ? left.slice(0, idx) : left).trim();
   const gender: Gender | null = /\b(women'?s|girls'?)\b/i.test(left) ? "womens" : /\b(men'?s|boys'?)\b/i.test(left) ? "mens" : null;
   if (!home || !away) return null;

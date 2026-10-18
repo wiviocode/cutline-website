@@ -275,6 +275,7 @@ function athleteNoun(sport: SportID): string {
 
 function genericVenue(sport: SportID, level: Level): string {
   if (sport === "basketball" || sport === "volleyball") return level.kind === "highSchool" ? "the gym" : "the arena";
+  if (sport === "hockey") return "the arena";
   if (sport === "baseball" || sport === "softball") return "the ballpark";
   if (sport === "crossCountry") return "the course";
   return "the stadium";

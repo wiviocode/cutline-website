@@ -12,6 +12,8 @@ describe("what the photographs already say", () => {
     expect(parseHeadline("Nebraska Football v Bowling Green State University - 2026-09-12")).toEqual({ home: "Nebraska", away: "Bowling Green State University", sport: "football", gender: null, level: null });
     expect(parseHeadline("Nebraska Women's Soccer v Indiana University - 2026-09-10")).toMatchObject({ home: "Nebraska", away: "Indiana University", sport: "soccer", gender: "womens", level: "college" });
     expect(parseHeadline("Waverly Girls Volleyball v Gretna - 2026-09-24")).toMatchObject({ home: "Waverly", away: "Gretna", sport: "volleyball", gender: "womens", level: "highSchool" });
+    expect(parseHeadline("Omaha Men's Ice Hockey v Denver - 2026-10-17")).toMatchObject({ home: "Omaha", away: "Denver", sport: "hockey", gender: "mens", level: "college" });
+    expect(parseHeadline("Nebraska Field Hockey v Iowa - 2026-10-17")).toBeNull();
     expect(parseHeadline("Media day portraits")).toBeNull();
   });
 });
