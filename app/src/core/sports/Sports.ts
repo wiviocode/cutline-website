@@ -1,14 +1,14 @@
 /**
  * The sports Cutline captions, in one table.
  *
- * The rebuild is deliberately narrow: the six team sports a college or high-school desk shoots
- * most — football, basketball, volleyball, soccer, baseball, softball — read against rosters,
+ * The rebuild is deliberately narrow: the team sports a college or high-school desk shoots
+ * most — football, basketball, volleyball, soccer, baseball, softball, hockey — read against rosters,
  * plus track and field and cross country, which have no rosters and are captioned by event,
  * bib and uniform instead. Everything sport-specific elsewhere reads from here.
  */
 
 export type SportID =
-  | "football" | "basketball" | "volleyball" | "soccer" | "baseball" | "softball"
+  | "football" | "basketball" | "volleyball" | "soccer" | "baseball" | "softball" | "hockey"
   | "trackAndField" | "crossCountry";
 
 export type Gender = "mens" | "womens";
@@ -54,6 +54,9 @@ export const SPORTS: SportInfo[] = [
     collegeSlugs: { mens: ["baseball"], womens: ["baseball"] }, code: () => "BB" },
   { id: "softball", name: "Softball", noun: "softball", event: "game", rosters: true, genders: ["womens"], maxPreps: "softball",
     collegeSlugs: { mens: ["softball"], womens: ["softball"] }, code: () => "SB" },
+  // Ice hockey, which AP calls plain "hockey"; field hockey is not this.
+  { id: "hockey", name: "Hockey", noun: "hockey", event: "game", rosters: true, genders: both, maxPreps: "ice-hockey",
+    collegeSlugs: { mens: ["mens-ice-hockey", "mens-hockey", "ice-hockey"], womens: ["womens-ice-hockey", "womens-hockey", "ice-hockey"] }, code: (g) => (g === "mens" ? "MHKY" : "WHKY") },
   { id: "trackAndField", name: "Track & Field", noun: "track and field", event: "meet", rosters: false, genders: both, maxPreps: "track-field",
     collegeSlugs: { mens: ["track-and-field", "mens-track-and-field"], womens: ["track-and-field", "womens-track-and-field"] }, code: () => "TF" },
   { id: "crossCountry", name: "Cross Country", noun: "cross country", event: "meet", rosters: false, genders: both, maxPreps: "cross-country",

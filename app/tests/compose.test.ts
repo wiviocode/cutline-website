@@ -346,3 +346,18 @@ describe("drone photographs", () => {
     expect(Observation.toJSON(Observation.fromJSON({ aerial: true })).aerial).toBe(true);
   });
 });
+
+describe("hockey", () => {
+  const omaha = Team.make({ school: "Omaha", nickname: "Mavericks", players: [p("19", "Jack", "Randl", "forward", "F"), p("35", "Simon", "Latkoczy", "goaltender", "G")] });
+  const denver = Team.make({ school: "Denver", nickname: "Pioneers", players: [p("8", "Zeev", "Buium", "defenseman", "D")] });
+  const ctx: CaptionContext = { ...apCtx({ a: omaha, b: denver }, "hockey", new Date(2026, 9, 17, 19, 0)), gender: "mens", city: "Omaha" };
+
+  it("is a hockey game in the arena, with its positions written out", () => {
+    const obs: Observation = { scene: "action", timing: "during", clause: "{P1} shoots as {P2} defends", subjects: [
+      subject({ id: "P1", team: "A", number: "19" }), subject({ id: "P2", team: "B", number: "8" }),
+    ] };
+    expect(compose(obs, ctx)).toMatch(/^Omaha forward Jack Randl \(19\) shoots as Denver defenseman Zeev Buium \(8\) defends during an NCAA college hockey game, Saturday, Oct\. 17, 2026, in Omaha, Neb\./);
+    const wide: Observation = { scene: "wide", timing: "during", clause: "A general view of {venue}", subjects: [] };
+    expect(compose(wide, { ...ctx, venue: undefined })).toMatch(/^A general view of the arena during an NCAA college hockey game between Omaha and Denver/);
+  });
+});
