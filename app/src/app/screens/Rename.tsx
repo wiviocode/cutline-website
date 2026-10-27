@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
-import { Button, Modal, Segmented, Spinner } from "../components";
+import { Button, Modal, Segmented, Spinner, Switch } from "../components";
+import { NamingPattern } from "@core/naming/NamingPattern";
 import type { RenamePlan } from "@core/naming/PhotoRenamer";
 
 /**
@@ -24,6 +25,9 @@ export function RenameDialog({ onClose }: { onClose: () => void }) {
         { value: "home", label: `${s.slots.A.team?.school ?? "Your team"} at home` },
         { value: "away", label: `${s.slots.A.team?.school ?? "Your team"} away` },
       ]} />
+      <Switch on={NamingPattern.usesAlt(s.settings.namingPattern)} onChange={(on) => void s.updateSettings({ namingPattern: NamingPattern.withAlt(s.settings.namingPattern, on) })}>
+        Add who and what from the alt text to each name
+      </Switch>
       {plan === undefined ? <Spinner /> : plan === null ? <p className="error small">Renaming needs both teams. Set them on the setup screen first.</p> : (
         <>
           <div className="rename-list">

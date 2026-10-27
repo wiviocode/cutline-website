@@ -44,6 +44,8 @@ export const PhotoRenamer = {
     existingNames: Set<string>;
     /** Names inside `.caption-data`. */
     recordNames?: Set<string>;
+    /** Each photo's alt text, in the same order, for a pattern with `{alt}`. */
+    alts?: (string | null)[];
   }): RenamePlan {
     const pattern = opts.pattern ?? NamingPattern.hurrdat;
     const first = opts.startingAt ?? 1;
@@ -53,7 +55,7 @@ export const PhotoRenamer = {
 
     opts.photos.forEach((photo, offset) => {
       const ext = extension(photo);
-      const name = NamingPattern.filename(pattern, opts.fixture, first + offset, ext);
+      const name = NamingPattern.filename(pattern, opts.fixture, first + offset, ext, opts.alts?.[offset] ?? "");
       if (destinations.has(name)) problems.push(`Two frames would both become ${name}.`);
       destinations.add(name);
 

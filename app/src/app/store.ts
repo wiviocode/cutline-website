@@ -398,13 +398,20 @@ function stripNumbers(s: string): string {
   return s.replace(/\s\(\d+\)/g, "").replace(/\s#\d+/g, "");
 }
 
-/** Alt text built from the reading at no cost: who and what, without credit or date. */
-function altText(s: State, f: Frame): string | null {
+/** Who and what, from the reading: the alt text without its closing "in a … game". */
+function altBody(s: State, f: Frame): string | null {
   if (!f.observation) return null;
   const c = Compose.caption(f.observation, f.identities, { ...derive.captionContext(s, f), style: "simple" });
-  const sport = Sports.info(s.setup.sport);
   const body = stripNumbers(c.body).replace(/XXXXX/g, "a player");
-  return `${body[0]?.toUpperCase() ?? ""}${body.slice(1)} in a ${Levels.info(s.setup.levelId).qualifier} ${sport.noun} ${sport.event}.`;
+  return `${body[0]?.toUpperCase() ?? ""}${body.slice(1)}`;
+}
+
+/** Alt text built from the reading at no cost: who and what, without credit or date. */
+function altText(s: State, f: Frame): string | null {
+  const body = altBody(s, f);
+  if (body === null) return null;
+  const sport = Sports.info(s.setup.sport);
+  return `${body} in a ${Levels.info(s.setup.levelId).qualifier} ${sport.noun} ${sport.event}.`;
 }
 
 /** The XMP packet for a frame, exactly as it will be written into the file or beside it. */
@@ -1024,7 +1031,7 @@ export const useStore = create<State>((set, get) => {
       const date = ordered.find((f) => f.exif?.captureDate)?.exif?.captureDate ?? new Date();
       const fixture: Fixture = { initials: HDSNaming.initials(s.settings.photographer), date, sportCode, covered: Team.fullName(s.slots.A.team), opponent: Team.fullName(s.slots.B.team), coveredIsHome };
       const recordDir = await s.folder.sub(FrameRecord.folder, false).catch(() => null);
-      return PhotoRenamer.plan({ photos: ordered.map((f) => f.name), fixture, pattern: s.settings.namingPattern, existingNames: await s.folder.listNames(), recordNames: recordDir ? await recordDir.listNames() : new Set() });
+      return PhotoRenamer.plan({ photos: ordered.map((f) => f.name), fixture, pattern: s.settings.namingPattern, existingNames: await s.folder.listNames(), recordNames: recordDir ? await recordDir.listNames() : new Set(), alts: ordered.map((f) => altBody(s, f)) });
     },
 
     async applyRename(plan) {

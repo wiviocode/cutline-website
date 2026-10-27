@@ -136,3 +136,32 @@ describe("The rename plan", () => {
     expect(clash.problems.some((p) => p.includes("already exists"))).toBe(true);
   });
 });
+
+describe("Alt text in the name", () => {
+  const fixture: Fixture = { initials: "EL", date: sept9, sportCode: "WSOC", covered: "Nebraska", opponent: "Creighton", coveredIsHome: true };
+  const withAlt = NamingPattern.withAlt(NamingPattern.hurrdat, true);
+
+  it("is a switch on the pattern, added once and taken out cleanly", () => {
+    expect(withAlt).toBe(`${NamingPattern.hurrdat}_{alt}`);
+    expect(NamingPattern.withAlt(withAlt, true)).toBe(withAlt);
+    expect(NamingPattern.withAlt(withAlt, false)).toBe(NamingPattern.hurrdat);
+    expect(NamingPattern.usesAlt(withAlt)).toBe(true);
+    expect(NamingPattern.unknownTokens(withAlt)).toEqual([]);
+  });
+
+  it("becomes plain words joined by hyphens, cut at a word", () => {
+    expect(NamingPattern.slug("Nebraska's Sami Bjorklund celebrates a goal with teammates")).toBe("Nebraskas-Sami-Bjorklund-celebrates-a-goal-with-teammates");
+    expect(NamingPattern.slug("Jérôme Doe: heads / the ball?")).toBe("Jerome-Doe-heads-the-ball");
+    const long = NamingPattern.slug("Nebraska outside hitter Teraya Sigler spikes the ball past North Carolina middle blocker Jackie Taylor");
+    expect(long.length).toBeLessThanOrEqual(60);
+    expect(long.endsWith("-")).toBe(false);
+    expect("Nebraska outside hitter Teraya Sigler spikes the ball past North Carolina".replace(/ /g, "-").startsWith(long)).toBe(true);
+  });
+
+  it("goes after the frame number, and a frame with none yet keeps the plain name", () => {
+    const plan = PhotoRenamer.plan({ photos: ["a.jpg", "b.jpg"], fixture, pattern: withAlt, existingNames: new Set(["a.jpg", "b.jpg"]),
+      alts: ["Nebraska forward Sami Bjorklund heads the ball", null] });
+    expect(plan.items[0].destination).toBe("EL20230909_WSOC_NU_v_CU_0001_Nebraska-forward-Sami-Bjorklund-heads-the-ball.jpg");
+    expect(plan.items[1].destination).toBe("EL20230909_WSOC_NU_v_CU_0002.jpg");
+  });
+});
