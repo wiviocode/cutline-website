@@ -358,7 +358,7 @@ p { margin: 0; }
 
 .rename-list { display: flex; flex-direction: column; gap: 4px; background: var(--surface-well); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .rename-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.rename-to { color: var(--text-1); }
+.rename-to { color: var(--text-1); overflow-wrap: anywhere; }
 
 @media (max-width: 1180px) {
   .teams { grid-template-columns: 1fr; }
